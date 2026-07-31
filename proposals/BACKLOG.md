@@ -1,6 +1,7 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-07-31 against `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
+Reconciled 2026-07-31 (twice — second pass after the flourish layer) against
+`HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
 Ordered by how much each would improve the thing a player actually sees.
@@ -64,6 +65,38 @@ owner's "note it and move on" rule):
   owed** — but a satyr splashing in a spring would be a delight. Additive.
 - **Cave interiors.** Mouths only, deliberately. Out of scope, not forgotten.
 
+## 4b · The idle life (new, 2026-07-31)
+
+The flourish layer shipped with exactly two entries, both the satyr's. It is
+built to take more; see `docs/FLOURISHES.md` for the shape.
+
+- **The other four creatures have no flourish.** The satyr pipes and drinks; the
+  centaur, naiad, unicorn and Pan do nothing but wander between ceremonies. The
+  obvious ones, in rough order of how much they would add:
+  - the **naiad** trailing a hand in still water she is standing beside
+  - the **centaur** at a physic bed *outside* his graze hour — he crops it once
+    as a ceremony and then never touches it again, which is odd
+  - the **unicorn** lowering its horn to a fountain (art exists: its beat pose is
+    already `drink`)
+  Each needs art, and the art is the expensive half — budget four or five
+  rebuilds per pose, not one.
+- **Nothing reacts to the recital.** Three minutes of piping happens beside
+  creatures who ignore it. Having others drift a tile closer and go idle for its
+  duration would be cheap and would land, but it wants care: a creature that
+  *walks somewhere* because of it starts to look like a system, and this should
+  stay a thing you notice rather than a thing you can use.
+- **The pipes are a hidden prop, not an item.** The syrinx he plays is drawn into
+  the pose. The catalogue's `syrinx` tag is Pan's capstone site and the proposed
+  four-way tile — worth deciding whether the satyr's pipes should relate to
+  either, or stay purely his.
+- **`piping` fires once a session and is never armed on a restore.** That is
+  right for the arrival. If it ever wants to recur, it needs a cooldown and a
+  reason — not just a flag flip.
+- **The drink is silent.** There is no audio hook on a flourish at all. A single
+  soft sound on the sip would probably be lovely and would equally probably get
+  annoying at the fifth repeat; if tried, tie it to the one-shot's start, not to
+  a frame.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
@@ -83,3 +116,8 @@ connectors, caves and waterfalls · grass-type zoning with occluders · the
 130-item catalogue · five creatures and the four-rung ladder · the tomb set with
 curated epitaphs · the composed score on the satyr trigger · 274 tests · the
 playtest, anchor audit and snap instruments · live on Pages.
+
+Then, same day: the **flourish layer** — poses beyond idle/walk/beat, one-shot
+gestures played off the agent's own clock, the piping satyr on the music trigger
+and the drinking satyr on the vessel scheduler · `docs/FLOURISHES.md` ·
+`tools/poseshot.mjs` · 283 tests, 46 playtest checks.

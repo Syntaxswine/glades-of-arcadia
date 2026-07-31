@@ -142,12 +142,20 @@ function mirrorRelit(rows) {
  * Compose one frame. `layers` is a back-to-front list of [part, x, y] — the
  * draw order is the occlusion order, which is why off-side legs come before
  * the barrel that hides their tops.
+ *
+ * `ox`/`oy` shift every layer by a constant. It exists so a pose that needs a
+ * BIGGER canvas than the creature's base size — the piping satyr needs sky over
+ * his head for the notes to rise into — can still be authored in the same
+ * coordinates as every other pose of that creature. A note drawn at y = -10 is
+ * ten pixels above the top of the ordinary sprite, which is exactly how you
+ * want to think about it while writing it. `stamp` clips, so a layer that
+ * overhangs the grown canvas is dropped rather than throwing.
  */
-function composeRows(w, h, layers) {
+function composeRows(w, h, layers, ox = 0, oy = 0) {
   const g = blank(w, h);
   for (const [art, x, y] of layers) {
     if (!art) continue;
-    stamp(g, art, x | 0, y | 0);
+    stamp(g, art, (x | 0) + ox, (y | 0) + oy);
   }
   return toRows(g);
 }
@@ -1190,6 +1198,213 @@ const P_LEGS_C = goat([
 ]);
 
 // ---------------------------------------------------------------------------
+// THE PIPING SATYR.
+// ---------------------------------------------------------------------------
+//
+// He stands and plays when the music starts. The brief was "very limited
+// animation ... just standing and moving the flute around", which is also the
+// truthful animation: a piper's hands stay put and the INSTRUMENT travels
+// across the lips. Moving his head instead would read as a man chewing.
+
+// The chest without its hanging arms — they are raised, and drawn separately.
+// A satyr piping is still. The dance torso would have him capering, which is
+// the wrong register: this is the one moment he is doing something carefully.
+const S_TORSO_PIPE = part([
+  '.....ttss.....',
+  '.....stts.....',
+  '...ssttuuts...',
+  '..tsttuuutts..',
+  '...suuuuuuts..',
+  '...surrruus...',
+  '...surqrrus...',
+  '...surrrrus...',
+  '...sstrrtus...',
+  '....ssstttss..',
+  '.....sstttts..',
+  '......sttts...',
+  '......ssts....',
+  '......ssss....',
+]);
+
+// Arms bent, ELBOWS OUT. This is the whole silhouette of the pose and the
+// first attempt got it wrong: forearms tucked against the ribs put the pipes
+// inside the head's outline, and in flat black he read as a blob holding
+// nothing. The elbows have to break the body line and the fists have to stand
+// proud of the ends of the reeds, or there is no instrument.
+//
+// Left is the lit side (earth light), right is in shadow. Light upper-left.
+// Forearms sloping up and inward to the reeds, elbows DOWN and OUT past the
+// ribs. The elbow is the whole reason the pose reads at all: hands tucked
+// against the chest put both arms inside the body's outline and he goes back to
+// being a satyr with a green smudge on his chin.
+const S_ARM_PIPE_L = part([
+  '...uu',
+  '..uut',
+  '.uut.',
+  'uut..',
+  'ut...',
+]);
+
+const S_ARM_PIPE_R = part([
+  'ss...',
+  'tss..',
+  '.tss.',
+  '..tss',
+  '...ts',
+]);
+
+// Cut cane bound with cord.
+//
+// OLIVE, not earth. The third attempt authored the reeds in the same ramp as
+// his skin and the instrument simply disappeared — a satyr with a faint texture
+// on his face. Cane is a plant; it belongs in a plant ramp, and the value
+// break against flesh is what makes it an object he is HOLDING rather than a
+// marking he is wearing.
+//
+// FACE WIDTH, not shoulder width: an earlier pass made it fourteen by nine and
+// he wore it like a washboard bib.
+//
+// Held AT THE LIPS, and narrow enough that the beard shows either side of it.
+// An earlier pass dropped the reeds to the collarbone to spare the beard and
+// he wore them like a necklace — a gap between the mouth and the instrument
+// reads as jewellery, not as playing. Six wide is the number that touches the
+// mouth and still leaves beard at both edges.
+//
+// The tubes alternate the LIGHTEST and a DARK olive, not two neighbouring
+// ones. Olive light and flesh mid are 132 and 129 in luminance — within three
+// units, so `ihihih` differed from his skin in hue alone and at this size hue
+// alone is not a read. Striping i against g is a 63-unit break, which means the
+// instrument carries its own contrast and stays legible against both the pale
+// chest and the dark beard rather than depending on what is behind it.
+const S_SYRINX = part([
+  'ffffff',
+  'igigig',
+  'igigig',
+  'ffffff',
+  'igig..',
+  'ig....',
+]);
+
+// The notes.
+//
+// Marble, not gold: this is breath through cut reed, not treasure — gold is
+// the game's divine/precious register and would promise a reward. The fade as
+// they rise is done in VALUE (E -> C -> B), never in alpha, because alpha puts
+// colours in the frame that the palette never authored. Same law as the
+// creature dissolve.
+const NOTE_NEAR = part([
+  '.EE',
+  '.ED',
+  '.E.',
+  'EE.',
+  'EE.',
+]);
+
+const NOTE_MID = part([
+  '.CC',
+  '.C.',
+  'CC.',
+  'CC.',
+]);
+
+const NOTE_FAR = part([
+  '.B',
+  'BB',
+]);
+
+const NOTE_GLYPHS = [NOTE_NEAR, NOTE_NEAR, NOTE_MID, NOTE_MID, NOTE_FAR, NOTE_FAR];
+
+/**
+ * Where a note is, `age` frames after it left the pipes. Returns null once it
+ * has gone. Three of these are in flight at once at staggered ages, which is
+ * what makes a stream rather than a pulse — and the stagger is uneven (0, 3, 5)
+ * for the same reason the HOLDS are uneven: regular spacing reads as a machine.
+ *
+ * They rise SLOWLY and stay near him. The first pass sent them up three pixels
+ * a frame and they were off over his horns and gone before the eye found them,
+ * which read as specks of dust rather than as music.
+ */
+function noteAt(age) {
+  if (age < 0 || age >= NOTE_GLYPHS.length) return null;
+  // They leave from the RIGHT end of the reeds — where the short tubes are and
+  // where the breath is going — and climb away over his shoulder. Starting
+  // them level with his horns made them read as feathers in his hair.
+  return [NOTE_GLYPHS[age], 16 + Math.round(age * 1.2), 7 - Math.round(age * 2.4)];
+}
+
+// ---------------------------------------------------------------------------
+// THE DRINKING SATYR.
+// ---------------------------------------------------------------------------
+
+// A kantharos — the deep two-handled cup a satyr is holding on almost every
+// Attic vase that has a satyr on it. The handles stand proud of the rim, which
+// is the one detail that makes it a kantharos and not a bucket, and it is worth
+// two pixels a side to keep.
+//
+// Dark body, light rim. The first pass filled it with the bright end of the
+// terracotta ramp and it read as a red blob against his chest — a cup is an
+// object he is holding, so it wants an outline and an interior, not a colour.
+const S_CUP = part([
+  'P....P',
+  'PSSSRP',
+  'PSRRQP',
+  '.SRRQ.',
+  '..RQ..',
+  '.PPPP.',
+]);
+
+// The cup as seen while he is drinking OUT of it: upended, foot uppermost, rim
+// at the lips. Five wide, and the two pixels that decide the frame are the ones
+// either side of it — his eyes stay visible, so it reads as a satyr behind a
+// cup rather than as a satyr wearing one.
+//
+// The pass before this tilted the full six-wide cup on a diagonal and it lay
+// across his face like a bandana. Same lesson the syrinx taught: at this size
+// an object at the mouth must be NARROW enough for the face to survive it.
+const S_CUP_SIP = part([
+  '.PPP.',
+  'PQRQP',
+  'PSRQP',
+  '.PPP.',
+]);
+
+// The forearm that lifts it. Only drawn while the cup is up — with the cup at
+// his side the torso's own hanging arm already reads, and a second forearm
+// there gives him three.
+const S_ARM_CUP = part([
+  '.uu',
+  '.ut',
+  '.ut',
+  '.ut',
+  '.st',
+  '.s.',
+]);
+
+// Eyes shut. This is the whole tell for the drink, and it is two pixels.
+//
+// The first attempt re-authored the entire head tipped back — jutting beard,
+// chin up — and it read as his head shrinking, because at fourteen rows tall
+// there is no room for a rotation to look like anything but a different head.
+// Closing his eyes and lifting him one pixel says the same thing and keeps the
+// face he has.
+const S_HEAD_SHUT = part([
+  '..yy.....yy.',
+  '..yx.....xy.',
+  '.qqxqqqqqxq.',
+  'qqrcdcqqcdcq',
+  'qrrrrrrrrrrq',
+  'qrutttttttsq',
+  'qrustttttsts',
+  'qrstttttttus',
+  'qrsttttttuuu',
+  '.qsttt6ttuu.',
+  '.qqrrrrrrq..',
+  '..qrrrrrq...',
+  '..6qrrrq....',
+  '...qqqq.....',
+]);
+
+// ---------------------------------------------------------------------------
 // Frame assembly.
 // ---------------------------------------------------------------------------
 
@@ -1210,6 +1425,48 @@ function satyrLayers(kind, i, back) {
       [legs, 5, 24],
       [S_TORSO, 5, 11 + rise],
       [head, 6, 0 + rise],
+    ];
+  }
+  if (kind === 'pipe') {
+    // The pipes sweep across the lips and back over eight frames; the body
+    // only breathes. `sweep` is the instrument, `breath` is the chest, and the
+    // head follows the pipes by HALF as much — enough to look like he is
+    // following his own hands, not enough to look like he is nodding.
+    const sweep = [0, 1, 2, 2, 1, 0, -1, -1][i];
+    const breath = [0, 0, -1, 0, 0, -1, 0, 0][i];
+    const tilt = [0, 0, 1, 1, 0, 0, 0, 1][i];
+    const notes = [0, 3, 5]
+      .map((off) => noteAt((i + off) % 8))
+      .filter(Boolean)
+      .map(([g, x, y]) => [g, x + sweep, y]);
+    return [
+      [S_LEGS_STAND, 5, 24],
+      [S_TORSO_PIPE, 5, 11 + breath],
+      [head, 6, 0 + breath + tilt],
+      [S_ARM_PIPE_L, 5 + sweep, 10 + breath],
+      [S_ARM_PIPE_R, 14 + sweep, 10 + breath],
+      [S_SYRINX, 9 + sweep, 9 + breath + tilt],
+      ...notes,
+    ];
+  }
+  if (kind === 'drink') {
+    // Six frames, played ONCE: appear, raise, sip, sip, lower, stand. The cup
+    // exists from frame 0 — it "appears in his hand" because his hand is empty
+    // in every other pose he has, which is a cleaner read than an animated
+    // fade-in and costs nothing.
+    //
+    // The body is the ORDINARY standing torso. Only the cup, one forearm and
+    // his eyelids change; everything the player already recognises stays put.
+    const sip = i === 2 || i === 3;
+    const cupX = [14, 12, 10, 10, 12, 14][i];
+    const cupY = [19, 14, 7, 6, 14, 19][i];
+    const raised = cupY < 17;
+    return [
+      [S_LEGS_STAND, 5, 24],
+      [S_TORSO, 5, 11],
+      [sip && !back ? S_HEAD_SHUT : head, 6, 0],
+      [raised ? S_ARM_CUP : null, cupX + 3, cupY + (sip ? 4 : 6)],
+      [sip ? S_CUP_SIP : S_CUP, cupX, cupY],
     ];
   }
   // The hop lifts the WHOLE creature — legs included. Shifting the legs down
@@ -1422,13 +1679,41 @@ function panLayers(kind, i, back) {
 // The catalogue.
 // ---------------------------------------------------------------------------
 
+/**
+ * `extra` declares poses beyond the universal idle/walk/beat. Each names its
+ * own frame count, because a slow act wants a longer cycle than a four-beat
+ * walk, and may `grow` the canvas by [width, height] — width symmetrically,
+ * height added at the TOP so the feet stay put and the anchor stays at the
+ * bottom centre. Growing downward would push the creature into the ground.
+ */
 const SPECS = {
-  satyr: { w: SATYR_W, h: SATYR_H, layers: satyrLayers, beat: 'dances' },
+  satyr: {
+    w: SATYR_W,
+    h: SATYR_H,
+    layers: satyrLayers,
+    beat: 'dances',
+    extra: {
+      // Sky over his head for the notes to rise into, and a little width for
+      // the ones that drift off to the right before they go.
+      pipe: { frames: 8, grow: [12, 14] },
+      // `once`: not a cycle but a gesture with a beginning and an end. It is
+      // played from the elapsed time in the pose and CLAMPS on the last frame
+      // rather than snapping back to the cup half-raised.
+      drink: { frames: 6, once: true },
+    },
+  },
   centaur: { w: CENTAUR_W, h: CENTAUR_H, layers: centaurLayers, beat: 'grazes' },
   naiad: { w: NAIAD_W, h: NAIAD_H, layers: naiadLayers, beat: 'pours' },
   unicorn: { w: UNICORN_W, h: UNICORN_H, layers: unicornLayers, beat: 'dips-horn' },
   pan: { w: PAN_W, h: PAN_H, layers: panLayers, beat: 'pipes' },
 };
+
+/** Every pose this creature has art for, in a stable order. */
+export function creaturePoses(id) {
+  const spec = SPECS[id];
+  if (!spec) return [];
+  return ['idle', 'walk', 'beat', ...Object.keys(spec.extra || {})];
+}
 
 export const FACINGS = Object.freeze(['se', 'sw', 'ne', 'nw']);
 const BACK_FACING = { se: false, sw: false, ne: true, nw: true };
@@ -1443,6 +1728,22 @@ export const HOLDS = Object.freeze({
   idle: Object.freeze([520, 180, 300, 220]),
   walk: Object.freeze([150, 130, 150, 130]),
   beat: Object.freeze([360, 200, 420, 240]),
+  /**
+   * Piping is eight frames and nearly three seconds round. It has to be: he
+   * does this for three minutes, and anything that scans as a loop inside the
+   * first ten seconds will scan as a stuck sprite for the remaining hundred and
+   * seventy. The long holds are the two where he is only breathing; the short
+   * ones carry the notes, which need to move steadily or they read as blinking
+   * rather than rising.
+   */
+  pipe: Object.freeze([300, 340, 300, 380, 300, 340, 300, 420]),
+  /**
+   * Drinking is a gesture with a shape — raise, tip, hold, hold, lower, done —
+   * so the holds are not a cycle. `drinkFrameAt` walks it ONCE and clamps on
+   * the last frame; these are the segment lengths of that single pass and they
+   * sum to 3.1 s, the floor of the owner's 3-5 s.
+   */
+  drink: Object.freeze([420, 380, 700, 620, 480, 500]),
 });
 
 function buildFrames(id) {
@@ -1467,6 +1768,28 @@ function buildFrames(id) {
         tags: ['creature', id, 'beat', spec.beat],
       })
     );
+  }
+
+  // The extra poses. Each may stand on a bigger canvas than the creature's
+  // base size; the anchor moves with it so the hooves land in the same place.
+  for (const [pose, cfg] of Object.entries(spec.extra || {})) {
+    const [gw, gh] = cfg.grow || [0, 0];
+    const w = spec.w + gw;
+    const h = spec.h + gh;
+    const ox = gw >> 1;
+    const oy = gh;
+    const poseAnchor = [(spec.w >> 1) + ox, h - 1];
+    out[pose] = [];
+    for (let i = 0; i < cfg.frames; i++) {
+      out[pose].push(
+        defineSprite({
+          name: `${id}-${pose}-${i}`,
+          anchor: poseAnchor,
+          rows: composeRows(w, h, spec.layers(pose, i, false), ox, oy),
+          tags: ['creature', id, pose],
+        })
+      );
+    }
   }
 
   for (const facing of FACINGS) {
@@ -1511,8 +1834,9 @@ export const CREATURE_ART = Object.freeze(
 export const CREATURE_IDS = Object.freeze(Object.keys(SPECS));
 
 /**
- * One frame. `anim` is 'idle' | 'walk' | 'beat'. `facing` is ignored for idle
- * and beat, which are authored front-facing only — period games did the same.
+ * One frame. `anim` is 'idle' | 'walk' | 'beat' | any pose in the creature's
+ * `extra`. `facing` is ignored for everything but walk — the rest are authored
+ * front-facing only, as period games did.
  */
 export function creatureFrame(id, anim = 'idle', facing = 'se', i = 0) {
   const art = CREATURE_ART[id];
@@ -1522,13 +1846,39 @@ export function creatureFrame(id, anim = 'idle', facing = 'se', i = 0) {
   return set[((i % set.length) + set.length) % set.length];
 }
 
-/** Pick a frame from elapsed milliseconds, honouring the irregular holds. */
-export function creatureFrameAt(id, anim, facing, ms) {
+/** Does this creature have art for this pose? Cheap enough to call per frame. */
+export function hasPose(id, pose) {
+  const art = CREATURE_ART[id];
+  if (!art) return false;
+  return pose === 'walk' ? !!art.frames.walk : !!art.frames[pose];
+}
+
+/** True if the pose is a one-shot gesture rather than a cycle. */
+export function poseIsOnce(id, pose) {
+  const spec = SPECS[id];
+  return !!(spec && spec.extra && spec.extra[pose] && spec.extra[pose].once);
+}
+
+/**
+ * Pick a frame from elapsed milliseconds, honouring the irregular holds.
+ *
+ * A CYCLE wraps. A one-shot (`once`) is played from the time elapsed *in the
+ * pose* and clamps on its last frame — so a satyr who finishes drinking before
+ * the behaviour layer takes the pose away stands there holding an empty cup,
+ * which is right, instead of raising a fresh one every 3.1 seconds forever.
+ */
+export function creatureFrameAt(id, anim, facing, ms, once = false) {
   const holds = HOLDS[anim] || HOLDS.idle;
   const total = holds.reduce((a, b) => a + b, 0);
-  let t = ((ms % total) + total) % total;
+  let t;
+  if (once) {
+    t = Math.max(0, ms);
+    if (t >= total) return creatureFrame(id, anim, facing, holds.length - 1);
+  } else {
+    t = ((ms % total) + total) % total;
+  }
   let i = 0;
-  while (t >= holds[i]) {
+  while (i < holds.length - 1 && t >= holds[i]) {
     t -= holds[i];
     i++;
   }
@@ -1542,6 +1892,7 @@ export function allCreatureSprites() {
     const f = CREATURE_ART[id].frames;
     out.push(...f.idle, ...f.beat);
     for (const facing of FACINGS) out.push(...f.walk[facing]);
+    for (const pose of Object.keys(SPECS[id].extra || {})) out.push(...f[pose]);
   }
   return out;
 }

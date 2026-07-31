@@ -237,8 +237,8 @@ or failed track logs one line, and the glade keeps its birds.
 ## The instruments
 
 ```
-npm test                 # node --test — 269 tests, ~9s
-npm run playtest         # does the DESIGN work?  41 checks, ~40s
+npm test                 # node --test — 283 tests, ~9s
+npm run playtest         # does the DESIGN work?  46 checks, ~40s
 npm run build            # single-file dist + a self-audit
 npm run check            # all three
 ```
@@ -319,6 +319,15 @@ rasterise itself to a PNG on disk to be looked at:
 node tools/snap.mjs --port 8794 --out docs/shots
 ```
 
+An animation cannot be judged one frame at a time, so `tools/poseshot.mjs` lays a
+whole cycle out side by side on real ground, with each frame's hold printed:
+
+```
+node tools/poseshot.mjs --id satyr --pose pipe --zoom 6
+node tools/poseshot.mjs --id satyr --pose pipe --sil          # silhouette first
+node tools/poseshot.mjs --id satyr --pose drink --only 1,2,3 --zoom 14
+```
+
 `docs/shots/` is the scratch pad — contact sheets and working frames — and is
 **gitignored**, so nothing there may be linked from this file. The four frames
 that ship with the repository are in `docs/img/`, all captured from the running
@@ -354,13 +363,18 @@ js/art/tiles.js     ground tiles, all sixteen shorelines, grass sets, cliff band
 js/art/props.js     52 hand-authored sculptures, structures and affinity pieces
 js/art/decor.js     38 furniture, architecture, hedges, fountains, connectors
 js/art/extras.js    the two props the catalogue named and nobody drew
-js/art/creatures.js 120 creature frames: idle, four facings of walk, one beat each
+js/art/creatures.js 134 creature frames: idle, four facings of walk, one beat each,
+                    plus the satyr piping (8) and drinking (6)
 ```
 
 `SPEC.md` is the build contract; `docs/ELEVATION.md`, `docs/ZONING.md` and
 `docs/DECOR.md` are addenda written after it and supersede it where they
 overlap — ZONING.md replaces SPEC §6's five abstract axes with the four species
 affinities, and DECOR.md supersedes SPEC §5's "roughly 45–60 placeables".
+`docs/FLOURISHES.md` adds a layer rather than replacing one: the *idle life*, in
+which a settled creature goes and uses a prop. Read it before adding a pose —
+poses beyond idle/walk/beat are per-creature, and the rules about grown canvases
+and one-shot gestures are the sort that fail silently.
 `docs/RESEARCH.md` is the pixel-art craft, the sourced myth lore and the
 cosy-builder design work behind all of it — read it before authoring art or
 creature requirements.

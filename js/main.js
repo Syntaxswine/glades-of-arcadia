@@ -823,6 +823,8 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
   const TERRAIN = tiles.TERRAIN || {};
   const variantFor = bind(tiles, ['variantFor']);
   const creatureFrameAt = bind(mods.artCreatures, ['creatureFrameAt']);
+  const hasPose = bind(mods.artCreatures, ['hasPose']);
+  const poseIsOnce = bind(mods.artCreatures, ['poseIsOnce']);
   const CREATURE_SHADOWS = (mods.artCreatures && mods.artCreatures.CREATURE_SHADOWS) || {};
   const FACINGS = (mods.artCreatures && mods.artCreatures.FACINGS) || ['se', 'sw', 'ne', 'nw'];
 
@@ -958,12 +960,29 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
       // from costing a sort slot and a raster lookup every frame.
       const fade = v.fade == null ? 1 : v.fade;
       if (fade <= 0) continue;
-      const pose = v.pose === 'walk' ? 'walk' : v.pose === 'idle' ? 'idle' : 'beat';
+      // Poses beyond the universal three are per-creature: the satyr has `pipe`
+      // and `drink`, nobody else has either. Ask the art whether it can draw
+      // what the behaviour asked for and fall back to the generic beat frames
+      // if it cannot, so a pose added to creatures.js before its sprites exist
+      // degrades to the old animation instead of to nothing.
+      const pose =
+        hasPose && hasPose(v.creature, v.pose)
+          ? v.pose
+          : v.pose === 'walk'
+            ? 'walk'
+            : v.pose === 'idle'
+              ? 'idle'
+              : 'beat';
       const facing = FACINGS[(v.facing >> 1) % FACINGS.length] || 'se';
+      // A one-shot gesture is played from the creature's own pose clock, not
+      // from the shared wall clock — otherwise the drink starts at whatever
+      // frame the clock happens to be on and the cup is already at his lips.
+      const once = !!(poseIsOnce && poseIsOnce(v.creature, pose));
+      const at = once ? (v.poseT || 0) * 1000 : ms + (v.phase || 0) * 1000;
       let art = null;
       if (creatureFrameAt) {
         try {
-          art = creatureFrameAt(v.creature, pose, facing, ms + (v.phase || 0) * 1000);
+          art = creatureFrameAt(v.creature, pose, facing, at, once);
         } catch (_) {
           art = null; // an unfinished creature draws nothing rather than throwing
         }
@@ -1639,6 +1658,27 @@ async function bootOnce(shell = {}) {
   const MUSICIAN = 'satyr';
   let musicUnlocked = false;
 
+  /**
+   * THE PERFORMANCE.
+   *
+   * When the score starts, the satyr who caused it stands and plays for three
+   * minutes. He is the musician of the myth; the music arriving with him is
+   * only half the idea, and the other half is seeing him make it.
+   *
+   * `pendingPipe` rather than a call, because at the moment the music unlocks
+   * he is still walking in from the map rim, half dissolved into the dusk, and
+   * a creature out there has nowhere to stand. `askFlourish` refuses politely
+   * in that state, so this simply keeps asking on the frame loop until he has
+   * both feet on the grass — which is one flag and one line in the tick, rather
+   * than a second state machine listening for his arrival.
+   *
+   * It is asked ONCE and then dropped whether it took or not: if a satyr
+   * somehow never lands, the garden is quietly no worse off, and a flag that
+   * retried for ever would have him strike up again every time he happened to
+   * be idle for the rest of the session.
+   */
+  let pendingPipe = false;
+
   const unlockSong = guard('music', (restoring) => {
     if (musicUnlocked) return;
     musicUnlocked = true;
@@ -1649,6 +1689,10 @@ async function bootOnce(shell = {}) {
     // that the call site says which of the two stories this is.
     if (restoring) audio.setMusicUnlocked(true);
     else audio.unlockMusic();
+    // Not on a restore. Reloading a garden that already has a satyr in it
+    // resumes the track, and a three-minute recital every time the page is
+    // refreshed would turn the arrival into a chore.
+    if (!restoring) pendingPipe = true;
   });
 
   // Restore. Two sources, because a save written before this feature existed
@@ -1806,9 +1850,16 @@ async function bootOnce(shell = {}) {
     if (delta && delta.origin) builder.setGrassCause(delta.origin);
     if (world.cacheGrassGrid(fields.grassGrid())) dirty = true;
   });
-  const stepCreatures = guard('bestiary.update', (dt) =>
-    invoke(bestiary, ['update'], dt, { reducedMotion })
-  );
+  const stepCreatures = guard('bestiary.update', (dt) => {
+    const events = invoke(bestiary, ['update'], dt, { reducedMotion });
+    // Ask AFTER the step, so the arrival that ended this tick counts. He
+    // refuses while he is still out over the rim; the first tick he is standing
+    // on grass, he takes it and starts to play.
+    if (pendingPipe && typeof bestiary.askFlourish === 'function') {
+      if (bestiary.askFlourish(MUSICIAN, 'piping')) pendingPipe = false;
+    }
+    return events;
+  });
   const stepInput = guard('input.update', (dt) => invoke(input, ['update'], dt));
   // ui.js documents two signatures and picks by the first argument's type;
   // (dtSeconds, game) is the one it names as main.js's.

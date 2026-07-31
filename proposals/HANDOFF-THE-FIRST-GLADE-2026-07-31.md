@@ -12,8 +12,8 @@ Reconciled against `proposals/BACKLOG.md` in the same pass, per the standing rul
 Repo `Syntaxswine/glades-of-arcadia`. Deployed and verified at HEAD, not merely pushed.
 
 ```
-274 tests            node --test "test/*.test.mjs"
-42 playtest checks   node tools/playtest.mjs        no structural faults
+283 tests            node --test "test/*.test.mjs"
+46 playtest checks   node tools/playtest.mjs        no structural faults
 anchor audit         node tools/anchor-audit.mjs --strict     exit 0
 art debt             ZERO   (was 28 understudy sprites)
 placeables           130
@@ -42,6 +42,7 @@ BACKLOG.
 | `TOMBS.md` | Tombs grant maturity; nullifiers; the hidden ET IN ARCADIA EGO. |
 | `AUDIO.md` | Relaxes "zero external assets" to exactly one. The satyr trigger. |
 | `CREATURE-MOVEMENT.md` | The off-map invariant and per-species water rules. |
+| `FLOURISHES.md` | Adds the idle life — repeatable acts that are NOT beats. Poses beyond idle/walk/beat, one-shot gestures, and why a flourish must never reach the journal. |
 
 **SPEC.md §5 still says "45–60 placeables". It is stale.** There are 130. The
 test asserting the old range was corrected, not suppressed.
@@ -92,6 +93,20 @@ wrong, read its comment before changing it; they carry the measurements.
   bug wearing a hat. The test has a ceiling for exactly that.
 - **The load-bearing grass rule bites back.** Asphodel's strap leaves came out at
   grass mid and were invisible *on grass*. It moved to the `olive` ramp.
+- **An object held at the face must be narrow enough for the face to survive
+  it.** Both of the satyr's flourish poses were rebuilt four or five times and
+  every failure was this one. A syrinx fourteen pixels wide is a washboard bib;
+  hung below the beard to spare it, a necklace. Six wide at the lips, with beard
+  showing either side, reads as playing. Same for the cup.
+- **Hue is not a read at this size; LUMINANCE is.** The syrinx moved from the
+  earth ramp (his own skin) to olive and *still* vanished — olive light and flesh
+  mid are 132 and 129. It took striping the lightest olive against a dark one, a
+  63-unit break, so the instrument carries its own contrast rather than borrowing
+  it from whatever is behind it.
+- **Two pixels can be the whole animation.** The tell for the drink is his eyes
+  closing. An earlier pass re-authored the head tipped back and it read as his
+  head *shrinking* — fourteen rows is not enough for a rotation to look like
+  anything but a different head.
 
 **Engine**
 
@@ -129,6 +144,7 @@ Build the tool that proves the thing; the tool is part of the deliverable.
 | `tools/playtest.mjs` | an unreachable creature · an hour that could deal nothing · a placeable drawing an understudy sprite (it names each and what it wants) |
 | `tools/anchor-audit.mjs --strict` | a sprite floating above its own footprint. Multi-tile only, on purpose — a herm correctly stands at its tile centre |
 | `tools/snap.mjs` + `serve.mjs` | art authored without ever looking at it |
+| `tools/poseshot.mjs` | an animation judged one frame at a time. Lays a whole cycle out on real ground with each frame's hold printed. `--sil` first, always; `--only 0,3` to magnify past the ~2000px ceiling where a full strip stops getting bigger |
 | `tools/spritelab.html` | every sprite and composer at 1×/4×/8× with anchors marked |
 
 `npm run check` runs the lot.
@@ -142,6 +158,11 @@ and it must keep saying so.
 **It starts when the first satyr walks onto the map, not before.** Satyrs are the
 musicians of the myth. Autoplay policy means it is primed silently on the first
 gesture and *played* on his arrival; `musicUnlocked` persists in the save.
+
+**And he plays it.** When the score starts he stands and pipes for three minutes,
+with notes rising off the reeds. See `docs/FLOURISHES.md` — the recital is
+hand-started by `main.js` and nothing else may start it. Not armed on a restore:
+a three-minute recital on every page refresh would turn the arrival into a chore.
 
 ## Open work
 
@@ -171,6 +192,58 @@ Everything beautiful here is downstream of that.
 
 **The forward dream:** that someone opens this, plants a vine because it looks
 right rather than because a card told them to, and hears the pipes start.
+
+*— Claude Opus 5, 2026-07-31*
+
+*(Add below this line. Never overwrite a prior builder.)*
+
+---
+
+## The idle life — 2026-07-31, later
+
+Two animations, asked for in one sentence each: the satyr playing his pipes when
+the music cuts in, and a cup appearing in his hand at a drinking vessel.
+
+They needed a layer that did not exist. Poses collapsed to exactly three
+(`idle`/`walk`/`beat`) in two places, and the settling **beat** — once, gated,
+journal-writing — was the only thing a creature could walk somewhere and do. So
+this adds `FLOURISHES` beside `BEATS`: same machinery, opposite contract. It
+repeats, it asks nothing of the garden, and it leaves no record. The line that
+matters is that a flourish emits `flourish-done` and never `beat-done`, because
+`beat-done` is what writes the journal — and a journal entry that fills over and
+over would cheapen the one that does not.
+
+**`docs/FLOURISHES.md` is the addendum.** Read it before adding a pose.
+
+What this cost, and what it taught: the art was rebuilt four or five times and
+every single failure was the same one — *an object held at the face must be
+narrow enough for the face to survive it*. The syrinx was a washboard bib at
+fourteen wide, a necklace when I dropped it below the beard to spare him, and an
+instrument at six, at the lips, with beard showing either side. Under that sat a
+subtler one: I moved the reeds out of his own skin ramp into olive and they
+**still** disappeared, because olive light and flesh mid are 132 and 129 in
+luminance. Hue is not a read at 24 pixels. It took striping the lightest olive
+against a dark one so the thing carried its own contrast instead of borrowing it
+from whatever was behind it.
+
+`tools/poseshot.mjs` is the new instrument and it is the reason any of that got
+found. `snap.mjs` let an agent see a picture; this lets one see a *cycle* — the
+whole loop on real ground with each frame's hold printed, because a sweep and a
+jitter look identical one frame at a time.
+
+Two bugs the work turned up, both fixed:
+
+- `poseT` reset only inside `update()`, so a gesture begun from the frame loop
+  rendered one frame on the previous pose's clock. For a one-shot that one frame
+  is the *end* of the gesture: the cup flashed empty and then started rising.
+- The playtest check I wrote first placed the krater around the map centre and
+  then settled the satyr — who settles wherever the scan puts him, not where the
+  garden was centred. It passed by accident when he happened to land nearby. It
+  now settles him first and places the prop at the far edge of his actual reach,
+  and both halves are mutation-tested.
+
+**The forward dream:** that the pipes are the second thing the player earns
+without being told either was a reward — the music, and then the musician.
 
 *— Claude Opus 5, 2026-07-31*
 

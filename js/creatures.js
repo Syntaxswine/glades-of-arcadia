@@ -1337,6 +1337,75 @@ export const BEATS = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
+// FLOURISHES — the things a creature does that are not ceremonies.
+// ---------------------------------------------------------------------------
+//
+// A BEAT above is the settling rite: it happens ONCE, it is gated on the whole
+// garden being ready, and it writes a line in the journal that stays written.
+// That is why `st.beats` is a Set and why `_maybeBeat` refuses to run one
+// twice.
+//
+// A flourish is the opposite in every one of those respects. It repeats, it
+// asks nothing of the garden but a prop within walking distance, and it leaves
+// NO record — a journal entry that filled in over and over would cheapen the
+// one that does not, and the promise that an entry is never un-filled only
+// means anything if entries are rare.
+//
+// They share the travel/perform machinery through `ACTS` below, because
+// "walk somewhere, stand there, do a thing for N seconds, go back to what you
+// were doing" is one behaviour whatever the reason for it.
+export const FLOURISHES = Object.freeze({
+  /**
+   * He stands and plays. Started by hand, not by the scheduler: main.js fires
+   * it when the score starts, which is the moment the first satyr walks into
+   * the garden. He is the reason there is music, so he is seen to make it.
+   *
+   * Three minutes is the owner's number and it is a long time to stand still on
+   * purpose — this is the arrival, and it should feel like it is happening
+   * rather than like it has been noted. (The track itself runs 3:48, so he
+   * stops a little before the first pass of it ends.)
+   */
+  piping: Object.freeze({
+    id: 'piping',
+    flourish: true,
+    pose: 'pipe',
+    site: null, // wherever he is standing
+    seconds: 180,
+  }),
+  /**
+   * A drink from whatever is standing about. Satyrs are the reason the krater
+   * is in the catalogue at all.
+   */
+  tipple: Object.freeze({
+    id: 'tipple',
+    flourish: true,
+    // The satyr's, and only his. He is the one with the art for it, and a
+    // unicorn helping itself to the krater would undo the joke the catalogue is
+    // built on — the cup that calls satyrs is the thing the alicorn exists to
+    // purify.
+    creature: 'satyr',
+    pose: 'drink',
+    site: ['vessel', 'wine'],
+    radius: 5,
+    // The drink animation is a one-shot 3.1 s long and it CLAMPS on its last
+    // frame, so overrunning it looks like a satyr standing with an empty cup —
+    // which is exactly right, and lets this be the owner's "3 to 5 seconds"
+    // without the art and the clock having to agree to the millisecond.
+    seconds: 4,
+    // Long enough that he is not commuting between the krater and the vine all
+    // afternoon. He is meant to be enjoying himself, not employed.
+    cooldown: [140, 260],
+  }),
+});
+
+/**
+ * Everything a creature can walk somewhere and DO. The two tables stay separate
+ * above so that the difference in kind is impossible to miss; the machinery
+ * only ever needs one lookup.
+ */
+const ACTS = Object.freeze({ ...BEATS, ...FLOURISHES });
+
+// ---------------------------------------------------------------------------
 // The creatures
 //
 // Every requirement below is grounded in docs/RESEARCH.md section B. The tags
@@ -2033,6 +2102,19 @@ export class Agent {
     this.beatT = 0;
     this.homeTile = null;
     this.visitLeft = 0;
+    /**
+     * Seconds elapsed in the current pose. The renderer needs this for a
+     * one-shot gesture like the drink, which is played from its own start
+     * rather than from the wall clock — otherwise a satyr who raises his cup
+     * half a second before the frame lands starts the animation halfway
+     * through, and the cup appears already at his lips.
+     */
+    this.poseT = 0;
+    this._lastPose = 'idle';
+    /** True while the act being performed is a flourish rather than a beat. */
+    this.flourish = false;
+    /** Garden seconds until this flourish may be offered again, per id. */
+    this.cool = new Map();
 
     /**
      * How the creature is FEELING, which is a rendering hint and never a score.
@@ -2394,10 +2476,7 @@ export class Agent {
       case 'travel':
         if (this._advance(dt, rm)) {
           if (this._nextLeg(this.speed)) break;
-          this.state = 'perform';
-          this.pose = BEATS[this.beat].pose;
-          this.beatT = BEATS[this.beat].seconds;
-          env.emit({ type: 'beat-start', creature: this.creature.id, beat: this.beat, tx: this.x, ty: this.y });
+          this._beginAct(env);
         }
         break;
 
@@ -2405,11 +2484,23 @@ export class Agent {
         this.beatT -= dt;
         if (this.beatT <= 0) {
           const done = this.beat;
+          const wasFlourish = this.flourish;
           this.beat = null;
+          this.flourish = false;
           this.state = 'idle';
           this.pose = 'idle';
           this.hold = 2 + this.rng() * 2;
-          env.emit({ type: 'beat-done', creature: this.creature.id, beat: done, tx: this.x, ty: this.y });
+          // A flourish announces itself so the renderer and the tests can see
+          // it, but it is NOT a `beat-done` — that event is what writes the
+          // ceremony into the bestiary, and a repeatable act must never reach
+          // it. See recordBeat, which is the only listener that matters.
+          env.emit({
+            type: wasFlourish ? 'flourish-done' : 'beat-done',
+            creature: this.creature.id,
+            beat: done,
+            tx: this.x,
+            ty: this.y,
+          });
         }
         break;
 
@@ -2427,6 +2518,25 @@ export class Agent {
       this.visitLeft -= dt;
     }
 
+    // Cooldowns run on garden time whatever the creature is doing.
+    if (this.cool.size) {
+      for (const [id, left] of this.cool) {
+        if (left - dt <= 0) this.cool.delete(id);
+        else this.cool.set(id, left - dt);
+      }
+    }
+
+    // Time elapsed IN THE CURRENT POSE, reset on the tick the pose changes.
+    // Derived here rather than written at each of the ten places that assign
+    // `pose`, because one missed assignment is a gesture that starts halfway
+    // through and there would be no way to see which one.
+    if (this.pose !== this._lastPose) {
+      this._lastPose = this.pose;
+      this.poseT = 0;
+    } else {
+      this.poseT += dt;
+    }
+
     // THE INVARIANT, re-asserted after this tick's transitions have landed.
     // Everything above that MOVED the agent clamped as it wrote; this catches
     // the case where the state changed after the write — an arrival becoming
@@ -2436,7 +2546,46 @@ export class Agent {
     this._clampToMap();
   }
 
-  /** Send it to perform a beat at a site, by the ways up if need be. */
+  /** Arrived at the site: stand up straight and start doing the thing. */
+  _beginAct(env) {
+    const a = ACTS[this.beat];
+    if (!a) {
+      // The act was retired out from under it. Do not strand the agent in
+      // `travel` for ever waiting for a pose that no longer exists.
+      this.beat = null;
+      this.flourish = false;
+      this.state = 'idle';
+      this.pose = 'idle';
+      return;
+    }
+    this.state = 'perform';
+    this.pose = a.pose;
+    // Reset the pose clock HERE as well as in update(). The derived tracking in
+    // update() catches every ordinary transition, but an act begun between
+    // ticks — askFlourish is called from the frame loop, not from the step —
+    // would render one frame before update() noticed, and for a one-shot that
+    // one frame is the END of the gesture. The cup would flash empty and then
+    // start rising.
+    this.poseT = 0;
+    this._lastPose = a.pose;
+    this.beatT = a.seconds;
+    this.flourish = !!a.flourish;
+    if (a.cooldown) {
+      const [lo, hi] = a.cooldown;
+      this.cool.set(a.id, lo + this.rng() * (hi - lo));
+    }
+    if (env && env.emit) {
+      env.emit({
+        type: this.flourish ? 'flourish-start' : 'beat-start',
+        creature: this.creature.id,
+        beat: this.beat,
+        tx: this.x,
+        ty: this.y,
+      });
+    }
+  }
+
+  /** Send it to perform an act at a site, by the ways up if need be. */
   goPerform(beatId, site, zoning = null, passable = null) {
     this.beat = beatId;
     if (!this.goTo(site.x, site.y, AMBLE_SPEED, zoning, passable || this.passable)) {
@@ -2445,6 +2594,31 @@ export class Agent {
     }
     this.state = 'travel';
     this.pose = 'walk';
+    return true;
+  }
+
+  /**
+   * Start an act WHERE IT IS STANDING, with no journey first.
+   *
+   * This is how the piping starts: the score begins the moment he walks into
+   * the garden, and sending him off to find a spot to play in would put a
+   * thirty-second walk between the music and the musician.
+   *
+   * Refuses if it is mid-transit or already performing — a satyr who is still
+   * dissolving in over the map rim has nowhere to stand yet.
+   */
+  startFlourish(id, env) {
+    const a = FLOURISHES[id];
+    if (!a) return false;
+    if (!this.present) return false;
+    if (OFFMAP_STATES.has(this.state)) return false;
+    if (this.state === 'travel' || this.state === 'perform') return false;
+    if (this.cool.has(id)) return false;
+    this.route = [];
+    this.from = null;
+    this.to = null;
+    this.beat = id;
+    this._beginAct(env);
     return true;
   }
 
@@ -2458,6 +2632,12 @@ export class Agent {
       depth: this.x + this.y, // fractional, so it never pops past a tree
       facing: this.facing,
       pose: this.pose,
+      /**
+       * Seconds spent in this pose. The renderer plays a ONE-SHOT gesture from
+       * this rather than from the wall clock, so a drink always starts with the
+       * cup at his side instead of wherever the shared clock happened to be.
+       */
+      poseT: this.poseT,
       phase: this.phase,
       desaturated: this.desaturated,
       companion: this.companion,
@@ -2569,6 +2749,24 @@ export class Bestiary {
       this._agentFor.set(c.id, a);
     }
     this._companions = new Map();
+  }
+
+  /**
+   * Ask a creature to perform a hand-started flourish where it stands.
+   *
+   * The only caller is the music trigger in main.js: the score begins when the
+   * first satyr walks in, and this is how he is seen to be the one making it.
+   *
+   * Returns false — harmlessly, and every time it is asked — if the creature is
+   * not on the map, is already busy, or is still dissolving in over the rim.
+   * The caller is expected to keep asking rather than to check first; that is
+   * what makes "start playing once he has actually arrived" a two-line job at
+   * the call site instead of a state machine.
+   */
+  askFlourish(creatureId, flourishId) {
+    const agent = this._agentFor && this._agentFor.get(creatureId);
+    if (!agent) return false;
+    return agent.startFlourish(flourishId, { emit: (e) => this._emit(e) });
   }
 
   // ------------------------------------------------------------- passability
@@ -3014,6 +3212,7 @@ export class Bestiary {
 
       this._scheduleVisit(creature, st, agent, tod);
       this._maybeBeat(creature, st, agent, tod, env);
+      this._maybeFlourish(creature, st, agent, env);
 
       agent.update(dt, env);
       // The renderer needs to know which terrace it is standing on, or a
@@ -3155,6 +3354,42 @@ export class Bestiary {
    * pool is more evocative than standing in it, so the character decision and
    * the passability decision turn out to be the same decision.
    */
+  /**
+   * The idle life. A creature that lives here, is happy, and has a prop within
+   * a few tiles occasionally goes and uses it.
+   *
+   * Deliberately much weaker than `_maybeBeat`: no hour window, no readiness
+   * gate, no record kept. It asks only that the creature has SETTLED — a
+   * desaturated preview visitor walking over to help itself to the wine would
+   * undercut the whole point of the preview being a ghost of something not yet
+   * earned.
+   */
+  _maybeFlourish(creature, st, agent, env) {
+    if (!agent.present) return;
+    if (st.rungIndex < RUNG_INDEX.settles) return;
+    if (agent.mood !== 'content') return;
+    if (agent.state !== 'idle') return;
+    for (const f of Object.values(FLOURISHES)) {
+      if (!f.site) continue; // hand-started; not this scheduler's business
+      if (f.creature && f.creature !== creature.id) continue;
+      if (agent.cool.has(f.id)) continue;
+      const where = st.home || { tx: Math.round(agent.x), ty: Math.round(agent.y) };
+      const site = this.fields.nearest(f.site, where.tx, where.ty, f.radius);
+      if (!site) continue;
+      const pass = this.passableFor(creature.id);
+      // Same refusal as a beat: if the krater is across a cliff with no way
+      // round, he does not walk through the rock to reach it.
+      if (agent.goPerform(f.id, this._beatStand(creature, site.placement, pass), this.zoning, pass)) {
+        // Set here as well as on arrival, so a satyr who is intercepted on the
+        // way — restless, evicted from his ground — does not immediately try
+        // again on the very next scan.
+        const [lo, hi] = f.cooldown;
+        agent.cool.set(f.id, lo + this.rng() * (hi - lo));
+      }
+      return;
+    }
+  }
+
   _beatStand(creature, p, pass) {
     const on = { x: p.tx, y: p.ty + 0.7 };
     if (!pass || pass(p.tx, p.ty)) return on;

@@ -33,7 +33,7 @@ import { World, DAY_MS } from '../js/world.js';
 import { Fields, AXES, CLAIM_FLOOR } from '../js/fields.js';
 import {
   Bestiary, CREATURES, CREATURE_BY_ID, RUNGS, REQUIRED_TAGS, THESIS, proveThesis,
-  DAY_SECONDS, OFFMAP_STATES, waterRuleFor,
+  DAY_SECONDS, OFFMAP_STATES, waterRuleFor, BEATS, FLOURISHES,
 } from '../js/creatures.js';
 import * as creatureMod from '../js/creatures.js';
 import * as cat from '../js/catalog.js';
@@ -1268,6 +1268,156 @@ function checkSlopeSeam() {
 }
 
 // ---------------------------------------------------------------------------
+// 7. Do the flourishes actually happen, and do they stay out of the record?
+// ---------------------------------------------------------------------------
+
+/**
+ * A flourish is the idle life — a settled creature going and using a prop. It
+ * is easy to write one that can never fire (a gate that is never true) or one
+ * that fires constantly (no cooldown), and a unit test proves neither: both
+ * are properties of a garden running for garden-hours, not of a function.
+ *
+ * So this settles a satyr for real, stands a krater beside him, and watches.
+ */
+function checkFlourishes() {
+  head('7. Does the idle life happen?');
+
+  const satyr = CREATURE_BY_ID.get('satyr');
+  const HX = 12;
+  const HY = 12;
+  const built = buildFor(satyr, HX, HY);
+  const garden = built.garden || built;
+  const world = garden.world || built.world;
+
+  // Settle him FIRST, then stand the krater near where he actually chose to
+  // live. He settles where the scan put him, not where the garden was centred,
+  // and the flourish search runs from his home — so placing the prop before
+  // knowing his home is how the first version of this check quietly tested
+  // nothing at all, and then failed for a reason that had nothing to do with
+  // the feature.
+  const { bestiary, settledAtDay } = runLadder(garden, 'satyr', 40);
+  if (settledAtDay == null) {
+    fault('the satyr never settled', 'cannot test the idle life of a creature that does not live here');
+    return;
+  }
+
+  const agent = bestiary.agents.find((a) => a.creature.id === 'satyr' && !a.companion);
+  const st = bestiary.state.get('satyr');
+  const home = st.home || { tx: HX, ty: HY };
+
+  // Furthest free tile still inside the radius, ON PURPOSE: a krater dropped at
+  // his feet passes without ever exercising goPerform's routing, which is the
+  // part that can actually be wrong.
+  let vessel = null;
+  for (const { tx, ty } of ring(home.tx, home.ty, FLOURISHES.tipple.radius).reverse()) {
+    if (world.place('krater', tx, ty)) {
+      vessel = { tx, ty };
+      break;
+    }
+  }
+  if (!vessel) {
+    fault('nowhere to stand a krater', `no free tile within ${FLOURISHES.tipple.radius} of (${home.tx},${home.ty})`);
+    return;
+  }
+  const reach = Math.hypot(vessel.tx - home.tx, vessel.ty - home.ty);
+
+  // Two garden-days of ordinary life, at the agent's own cadence.
+  const dt = 0.25;
+  const steps = Math.round((2 * DAY_SECONDS) / dt);
+  let trips = 0;
+  let held = 0;
+  const lengths = [];
+  let piped = 0;
+  let moods = new Set();
+  for (let i = 0; i < steps; i++) {
+    world.advance((dt * DAY_MS) / DAY_SECONDS);
+    garden.fields.tick(dt);
+    bestiary.update(dt);
+    moods.add(agent.mood);
+    if (agent.pose === 'drink') held += dt;
+    else if (held > 0) {
+      trips++;
+      lengths.push(held);
+      held = 0;
+    }
+    if (agent.pose === 'pipe') piped += dt;
+  }
+
+  if (!trips && reach > FLOURISHES.tipple.radius) {
+    // Not a fault: the krater ended up outside his reach because he settled
+    // somewhere other than where the garden was built around. Say so rather
+    // than passing silently — a check that cannot see its own subject is not a
+    // passing check.
+    note(
+      `the flourish check could not place a krater within reach: he settled at ` +
+        `(${home.tx},${home.ty}), ${reach.toFixed(1)} tiles from the only free spot, ` +
+        `and tipple's radius is ${FLOURISHES.tipple.radius}. The idle life went untested this run.`
+    );
+  } else if (!trips) {
+    fault(
+      'a settled satyr never went to the krater',
+      `two garden-days with a vessel ${reach.toFixed(1)} tiles from his home at ` +
+        `(${home.tx},${home.ty}) — inside tipple's radius of ${FLOURISHES.tipple.radius} — and he ` +
+        `never took a drink. moods seen: ${[...moods].join('/')}. A flourish that cannot fire is ` +
+        'dead content; check the gates in _maybeFlourish, not the cooldown'
+    );
+  } else {
+    const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    ok(
+      'a settled satyr goes and helps himself',
+      `${trips} drinks in 2 garden-days, ${avg.toFixed(1)}s each ` +
+        `(declared ${FLOURISHES.tipple.seconds}s), vessel ${reach.toFixed(1)} tiles from his home`
+    );
+  }
+
+  // The other half, and the more important one: a flourish must leave NO mark.
+  // `st.beats` is what fills the journal and what gates the settling ceremony;
+  // a repeatable act reaching it would either write the same line for ever or
+  // consume a ceremony that has not happened.
+  const leaked = [...st.beats].filter((b) => FLOURISHES[b]);
+  if (leaked.length) {
+    fault(
+      'a flourish was recorded as a beat',
+      `st.beats contains ${leaked.join(', ')} — a repeatable act must never reach recordBeat, ` +
+        'or the journal fills with a line that means nothing'
+    );
+  } else {
+    ok('a flourish leaves no record', `st.beats = [${[...st.beats].join(', ')}] after ${trips} drinks`);
+  }
+
+  // The piping is hand-started and must NOT be something the scheduler ever
+  // picks up on its own — it belongs to the music trigger alone.
+  if (piped > 0) {
+    fault(
+      'the satyr piped without being asked',
+      'piping has no site and must only ever be started by the music trigger in main.js'
+    );
+  } else {
+    ok('piping never self-starts', 'no site, so the flourish scheduler skips it — main.js owns it');
+  }
+
+  // And it must work when it IS asked.
+  const started = bestiary.askFlourish('satyr', 'piping');
+  if (!started && agent.state === 'idle') {
+    fault('askFlourish refused an idle satyr', `state=${agent.state} pose=${agent.pose}`);
+  } else if (started) {
+    let played = 0;
+    for (let i = 0; i < Math.round((FLOURISHES.piping.seconds + 20) / dt); i++) {
+      world.advance((dt * DAY_MS) / DAY_SECONDS);
+      bestiary.update(dt);
+      if (agent.pose === 'pipe') played += dt;
+      else if (played > 0) break;
+    }
+    const want = FLOURISHES.piping.seconds;
+    if (Math.abs(played - want) > 2) {
+      fault('the recital was the wrong length', `played ${played.toFixed(1)}s, declared ${want}s`);
+    } else {
+      ok('he plays for as long as he says he will', `${played.toFixed(1)}s of ${want}s, then back to idle`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 head('ARCADIA — playtest');
 checkUnlockGraph();
@@ -1281,6 +1431,7 @@ checkCosy();
 checkRimWatch();
 checkWaterRules();
 checkSlopeSeam();
+checkFlourishes();
 
 if (AS_JSON) {
   console.log(JSON.stringify({ faults, notes, ...report }, null, 2));

@@ -322,6 +322,82 @@ test('creature frames: five creatures, every facing, every pose', () => {
   }
 });
 
+test('extra poses build, are lintable, and keep their feet under them', () => {
+  // A pose on a GROWN canvas (the piping satyr needs sky over his head for the
+  // notes) must still stand in the same place. The anchor is what guarantees
+  // that: get it wrong and he floats or sinks by however much the canvas grew,
+  // which is the multi-tile float bug wearing different clothes.
+  for (const id of creatureArt.CREATURE_IDS) {
+    const base = creatureArt.creatureFrame(id, 'idle', 'se', 0);
+    for (const pose of creatureArt.creaturePoses(id)) {
+      if (pose === 'walk' || pose === 'idle' || pose === 'beat') continue;
+      const frames = creatureArt.CREATURE_ART[id].frames[pose];
+      assert.ok(Array.isArray(frames) && frames.length > 0, `${id}/${pose} has no frames`);
+      const holds = creatureArt.HOLDS[pose];
+      assert.ok(holds, `${id}/${pose} has no HOLDS entry — it would fall back to idle timing`);
+      assert.equal(
+        holds.length,
+        frames.length,
+        `${id}/${pose}: ${frames.length} frames but ${holds.length} holds. creatureFrameAt walks ` +
+          'the holds, so a mismatch drops frames off the end of the cycle silently'
+      );
+      for (const f of frames) {
+        assert.ok(f.rows && f.anchor, `${id}/${pose} frame malformed`);
+        // Same distance from anchor to the bottom of the canvas as the idle
+        // frame, so the hooves land on the same pixel whatever the pose.
+        assert.equal(
+          f.h - 1 - f.anchor[1],
+          base.h - 1 - base.anchor[1],
+          `${id}/${pose} sits at a different height from its own idle frame`
+        );
+        assert.deepEqual(lintSprite(f, PALETTE), [], `${id}/${pose} lint`);
+      }
+    }
+  }
+});
+
+test('a one-shot pose clamps on its last frame instead of looping', () => {
+  // The drink is a gesture, not a cycle. Played past its length it must hold
+  // the final frame — a satyr standing with an empty cup — rather than snap
+  // back to raising a fresh one every three seconds for ever.
+  assert.ok(creatureArt.poseIsOnce('satyr', 'drink'), 'drink should be declared once');
+  assert.ok(!creatureArt.poseIsOnce('satyr', 'pipe'), 'pipe is a cycle, not a one-shot');
+
+  const holds = creatureArt.HOLDS.drink;
+  const total = holds.reduce((a, b) => a + b, 0);
+  const last = creatureArt.creatureFrame('satyr', 'drink', 'se', holds.length - 1);
+  for (const ms of [total, total + 1, total * 3, total * 100]) {
+    assert.equal(
+      creatureArt.creatureFrameAt('satyr', 'drink', 'se', ms, true),
+      last,
+      `drink at ${ms}ms should still be the last frame`
+    );
+  }
+  // And it starts at the beginning, which is the whole reason it is played off
+  // the agent's own pose clock rather than off the shared wall clock.
+  assert.equal(
+    creatureArt.creatureFrameAt('satyr', 'drink', 'se', 0, true),
+    creatureArt.creatureFrame('satyr', 'drink', 'se', 0)
+  );
+});
+
+test('hasPose tells the truth, so the renderer can fall back', () => {
+  assert.ok(creatureArt.hasPose('satyr', 'pipe'));
+  assert.ok(creatureArt.hasPose('satyr', 'drink'));
+  assert.ok(creatureArt.hasPose('satyr', 'idle'));
+  assert.ok(creatureArt.hasPose('satyr', 'walk'));
+  // Nobody else has the satyr's poses. main.js falls back to `beat` for these,
+  // so a pose added to creatures.js before its art exists degrades to the old
+  // animation rather than to an invisible creature.
+  for (const id of creatureArt.CREATURE_IDS) {
+    if (id === 'satyr') continue;
+    assert.ok(!creatureArt.hasPose(id, 'pipe'), `${id} unexpectedly has a pipe pose`);
+    assert.ok(!creatureArt.hasPose(id, 'drink'), `${id} unexpectedly has a drink pose`);
+  }
+  assert.ok(!creatureArt.hasPose('satyr', 'somersault'));
+  assert.ok(!creatureArt.hasPose('nobody', 'idle'));
+});
+
 test('the ghost variant introduces no new colours', () => {
   // The desaturated `visits` preview (SPEC §7) must stay inside the palette —
   // a globalAlpha ghost is what puts off-ramp pixels on screen.
