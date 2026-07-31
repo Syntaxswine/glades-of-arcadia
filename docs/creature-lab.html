@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>creature lab</title>
+<style>body{background:#20242a;color:#ccc;font:12px monospace;margin:0;padding:8px}</style>
+<canvas id="cv"></canvas>
+<pre id="log"></pre>
+<script type="module">
+import { PALETTE, resolve, RAMPS } from '../js/palette.js';
+import { decode } from '../js/art/format.js';
+import { CREATURE_ART, CREATURE_IDS, FACINGS, ghostResolve, allCreatureSprites } from '../js/art/creatures.js';
+import { lintSprite } from '../js/art/format.js';
+
+const SNAP = 'http://localhost:8863/snap?name=';
+const params = new URLSearchParams(location.search);
+const MODE = params.get('mode') || 'sheet';
+const NAME = params.get('name') || MODE;
+const ZOOM = Number(params.get('zoom') || 4);
+const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+
+// --- lint ---------------------------------------------------------------
+const problems = [];
+for (const sp of allCreatureSprites()) problems.push(...lintSprite(sp, PALETTE));
+log(problems.length ? problems.slice(0,40).join('\n') : 'lint: clean (' + allCreatureSprites().length + ' sprites)');
+
+// --- draw helpers -------------------------------------------------------
+function drawSprite(ctx, sp, ox, oy, z, res) {
+  const data = decode(sp, res);
+  for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) {
+    const i = (y * sp.w + x) * 4;
+    if (data[i+3] === 0) continue;
+    ctx.fillStyle = `rgb(${data[i]},${data[i+1]},${data[i+2]})`;
+    ctx.fillRect(ox + x*z, oy + y*z, z, z);
+  }
+}
+
+// A neutral ground: the grass ramp mid, so we judge the creature against the
+// value it will actually sit on.
+const GROUND = RAMPS.grass.hex[2];
+
+const WANT = (params.get('anim') || 'idle,se,sw,beat,extra').split(',');
+function cellsFor(id) {
+  const a = CREATURE_ART[id];
+  const cells = [];
+  if (WANT.includes('idle')) for (let i=0;i<4;i++) cells.push(['idle '+i, a.frames.idle[i], resolve]);
+  if (WANT.includes('se')) for (let i=0;i<4;i++) cells.push(['se '+i, a.frames.walk.se[i], resolve]);
+  if (WANT.includes('sw')) for (let i=0;i<4;i++) cells.push(['sw '+i, a.frames.walk.sw[i], resolve]);
+  if (WANT.includes('beat')) for (let i=0;i<4;i++) cells.push([a.beat+' '+i, a.frames.beat[i], resolve]);
+  if (WANT.includes('extra')) {
+    cells.push(['ghost', a.frames.idle[0], ghostResolve]);
+    cells.push(['ne0', a.frames.walk.ne[0], resolve]);
+  }
+  return cells;
+}
+
+function render() {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const ids = params.get('only') ? params.get('only').split(',') : CREATURE_IDS;
+  const rows = ids.map(id => ({ id, cells: cellsFor(id) }));
+  const pad = 8, label = 14;
+  let W = 0, H = pad;
+  const geo = [];
+  for (const r of rows) {
+    const a = CREATURE_ART[r.id];
+    const cw = a.w*ZOOM + pad, ch = a.h*ZOOM + label + pad;
+    geo.push({ cw, ch, y: H });
+    W = Math.max(W, pad + r.cells.length*cw);
+    H += ch;
+  }
+  // a 1x legibility strip at the bottom
+  const stripH = 190;
+  cv.width = Math.max(W, 1100); cv.height = H + stripH;
+  ctx.fillStyle = '#20242a'; ctx.fillRect(0,0,cv.width,cv.height);
+
+  rows.forEach((r, ri) => {
+    const a = CREATURE_ART[r.id];
+    const g = geo[ri];
+    r.cells.forEach((c, ci) => {
+      const x = pad + ci*g.cw, y = g.y;
+      ctx.fillStyle = GROUND;
+      ctx.fillRect(x, y+label, a.w*ZOOM, a.h*ZOOM);
+      drawSprite(ctx, c[1], x, y+label, ZOOM, c[2]);
+      // anchor mark
+      ctx.fillStyle = '#C8414A';
+      ctx.fillRect(x + a.anchor[0]*ZOOM, y+label + a.anchor[1]*ZOOM, ZOOM, ZOOM);
+      ctx.fillStyle = '#9aa'; ctx.font = '11px monospace';
+      ctx.fillText(ci===0 ? r.id+' · '+c[0] : c[0], x, y+11);
+    });
+  });
+
+  // The real test: game size. 1x is what the logical 640x400 canvas holds;
+  // 2x is what the player actually sees after integer upscale.
+  ctx.fillStyle = GROUND; ctx.fillRect(0, H, cv.width, stripH);
+  for (const z of [1, 2]) {
+    let sx = pad;
+    const base = H + (z === 1 ? 62 : 176);
+    for (const id of CREATURE_IDS) {
+      const a = CREATURE_ART[id];
+      for (const f of [a.frames.idle[0], a.frames.walk.se[1], a.frames.walk.sw[1], a.frames.beat[2]]) {
+        drawSprite(ctx, f, sx, base - a.h * z, z, resolve);
+        sx += (a.w + 3) * z;
+      }
+      drawSprite(ctx, a.frames.idle[0], sx, base - a.h * z, z, ghostResolve);
+      sx += (a.w + 10) * z;
+    }
+  }
+
+  return cv;
+}
+
+const cv = render();
+cv.toBlob(async (b) => {
+  try {
+    const r = await fetch(SNAP + encodeURIComponent(NAME), { method: 'POST', body: b });
+    log('snap: ' + await r.text());
+  } catch (e) { log('snap failed: ' + e.message); }
+});
+</script>

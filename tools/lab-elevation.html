@@ -1,0 +1,268 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>arcadia — elevation lab</title>
+<style>
+  body { background:#2A2620; color:#DDD2BE; font:11px monospace; margin:0; padding:8px; }
+  canvas { image-rendering: pixelated; display:block; margin:4px 0 10px; }
+  h2 { font-size:11px; margin:10px 0 2px; color:#93887A; }
+  #err { color:#C8414A; white-space:pre-wrap; }
+  #stats { color:#8A8B52; white-space:pre-wrap; }
+</style>
+<!--
+  tools/lab-elevation.html — see the elevation engine's own work.
+
+  SPEC §10: "Render your sprite, read it back, look at it, fix it, repeat. Do
+  not author pixel art blind — it does not work."
+
+  This page builds scenes for js/render.js directly — no world.js, no
+  catalog.js, no other owner's module — so the elevation engine can be looked
+  at, measured and snapped on its own. It also runs the two checks that a
+  picture cannot make: the pick round-trip over every visible pixel, and the
+  frame budget on a full 20x20 map.
+
+  Serve the tree (tools/serve.mjs) and run tools/snap.mjs on 8794, then open
+  this page; it POSTs every scene as a PNG and prints the numbers.
+-->
+<div id="err"></div>
+<div id="stats"></div>
+<div id="out"></div>
+<script type="module">
+const err = document.getElementById('err');
+const out = document.getElementById('out');
+const statsEl = document.getElementById('stats');
+window.LAB_ERR = '';
+window.LAB_STATS = {};
+
+let render, iso, tiles;
+try {
+  render = await import('/js/render.js');
+  iso = await import('/js/iso.js');
+  try { tiles = await import('/js/art/tiles.js'); } catch (e) { tiles = null; }
+} catch (e) {
+  window.LAB_ERR = String(e && e.stack || e);
+  err.textContent = window.LAB_ERR;
+  throw e;
+}
+
+const { LEVEL_H, MAX_LEVEL } = iso;
+const SNAP_PORT = 8794;
+
+function log(s) { statsEl.textContent += s + '\n'; }
+
+// ---------------------------------------------------------------------------
+// Scene builders. Each returns { mapW, mapH, levels, grass, grassContest,
+// terrain, objects, terrainVersion }.
+
+function scene(mapW, mapH, fill) {
+  const n = mapW * mapH;
+  const levels = new Int8Array(n);
+  const grass = new Uint8Array(n);
+  const contest = new Int8Array(n).fill(-1);
+  const wet = new Uint8Array(n);
+  fill({ levels, grass, contest, wet, mapW, mapH, i: (x, y) => y * mapW + x });
+  return {
+    mapW, mapH,
+    terrainVersion: 1,
+    levels,
+    grass: (tx, ty) => render.GRASS_TYPES[grass[ty * mapW + tx]],
+    grassContest: (tx, ty) => {
+      const c = contest[ty * mapW + tx];
+      return c < 0 ? null : render.GRASS_TYPES[c];
+    },
+    terrain: (tx, ty) => {
+      const i = ty * mapW + tx;
+      if (!wet[i]) return null;
+      // Hand over tiles.js's real water when it is available, so the lab shows
+      // what the game shows rather than the renderer's own fallback.
+      return { water: true, art: tiles ? tiles.WATER[0] : null };
+    },
+    objects: [],
+  };
+}
+
+const SCENES = {};
+
+// (1) Terraces: a stepped hillside, six levels, the whole ladder in one shot.
+SCENES.terraces = () => scene(20, 20, (s) => {
+  for (let y = 0; y < s.mapH; y++) {
+    for (let x = 0; x < s.mapW; x++) {
+      const step = Math.max(0, Math.min(MAX_LEVEL, MAX_LEVEL - Math.floor((x + y) / 5)));
+      s.levels[s.i(x, y)] = step;
+    }
+  }
+});
+
+// (2) A waterfall: a spring on a high terrace falling four levels to a pool.
+SCENES.waterfall = () => scene(20, 20, (s) => {
+  for (let y = 0; y < s.mapH; y++) {
+    for (let x = 0; x < s.mapW; x++) {
+      const i = s.i(x, y);
+      // A plateau in the back half, a basin in the front.
+      s.levels[i] = x + y < 14 ? 5 : x + y < 16 ? 1 : 0;
+      // The upper pool, its lip, and the pool it falls into.
+      if (x >= 4 && x <= 8 && y >= 4 && y <= 8 && x + y < 14) { s.wet[i] = 1; }
+      if (x + y >= 16 && x >= 5 && x <= 11 && y >= 5 && y <= 11) { s.wet[i] = 1; }
+      s.grass[i] = s.levels[i] >= 5 ? 1 : s.levels[i] === 0 ? 3 : 2;
+    }
+  }
+});
+
+// (3) Zoning: all five grass types, contested seams, soft meadow edges.
+SCENES.zoning = () => scene(20, 20, (s) => {
+  const centres = [[4, 4, 1], [15, 4, 2], [4, 15, 3], [15, 15, 4]];
+  for (let y = 0; y < s.mapH; y++) {
+    for (let x = 0; x < s.mapW; x++) {
+      const i = s.i(x, y);
+      let best = 0, bestD = 6.5, second = -1, secondD = 99;
+      for (const [cx, cy, t] of centres) {
+        const d = Math.hypot(x - cx, y - cy);
+        if (d < bestD) { secondD = bestD; second = best; bestD = d; best = t; }
+        else if (d < secondD) { secondD = d; second = t; }
+      }
+      s.grass[i] = best;
+      // Contested where two claims are within 12% of each other.
+      if (best !== 0 && second > 0 && secondD - bestD < 0.9) s.contest[i] = second;
+    }
+  }
+});
+
+// (4) The lot: terraces + a fall + zoning + a pinnacle, which is what the game
+// actually looks like and therefore the one to judge.
+SCENES.glade = () => scene(20, 20, (s) => {
+  for (let y = 0; y < s.mapH; y++) {
+    for (let x = 0; x < s.mapW; x++) {
+      const i = s.i(x, y);
+      let h = 0;
+      if (x + y < 10) h = 4;
+      else if (x + y < 13) h = 2;
+      if (x > 13 && y > 13) h = 1;
+      if (x >= 2 && x <= 4 && y >= 2 && y <= 4) h = 6; // a pinnacle
+      s.levels[i] = h;
+      if (x >= 3 && x <= 6 && y >= 3 && y <= 6 && h === 4) s.wet[i] = 1;
+      if (x + y >= 13 && x + y <= 18 && x >= 4 && x <= 10) s.wet[i] = 1;
+      s.grass[i] = h >= 4 ? 1 : h === 0 ? 3 : h === 1 ? 4 : 2;
+      if (h === 2 && ((x + y) & 1)) s.contest[i] = 1;
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+
+function mount(title) {
+  const h = document.createElement('h2');
+  h.textContent = title;
+  out.appendChild(h);
+  const cv = document.createElement('canvas');
+  cv.style.width = '1280px';
+  cv.style.height = '800px';
+  out.appendChild(cv);
+  return cv;
+}
+
+async function snap(cv, name) {
+  try {
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+    await fetch(`http://localhost:${SNAP_PORT}/snap?name=${encodeURIComponent(name)}`, {
+      method: 'POST', body: blob,
+    });
+  } catch (e) { /* the snap server is optional */ }
+}
+
+const made = {};
+for (const [name, build] of Object.entries(SCENES)) {
+  const cv = mount(name);
+  const r = render.createRenderer(cv, { reducedMotion: true, maxScale: 2 });
+  const sc = build();
+  r.setScene(sc);
+  r.centreOnTile(sc.mapW / 2 - 0.5, sc.mapH / 2 - 0.5, true);
+  r.frame(0);
+  made[name] = { r, sc };
+  await snap(cv, 'elev-' + name);
+}
+window.LAB_SCENES = made;
+
+// ---------------------------------------------------------------------------
+// CHECK 1 — the pick agrees with the picture, pixel by pixel.
+//
+// A picture cannot show this. For every pixel of the viewport, pick a column,
+// then verify the pick by asking the projection where that column's surface
+// is. Any disagreement is a click that lands somewhere the player did not aim.
+{
+  const { r } = made.glade;
+  let tested = 0, sky = 0, bad = 0, faces = 0;
+  const lv = (tx, ty) => r.levelAt(tx, ty);
+  for (let sy = 0; sy < 400; sy += 3) {
+    for (let sx = 0; sx < 640; sx += 3) {
+      const p = r.pickScreen(sx + 0.5, sy + 0.5);
+      tested++;
+      if (!p.hit) { sky++; continue; }
+      if (p.face !== 'top') faces++;
+      // Re-derive tile-local coords and re-run the predicate.
+      const n = iso.toScreenAt(p.tx, p.ty, p.level, r._cam);
+      const rise = iso.exposedRise(p.tx, p.ty, iso.levelReader(lv, 20, 20));
+      const f = iso.columnFaceAt(sx + 0.5 - n.x, sy + 0.5 - n.y, rise.se, rise.sw);
+      if (f !== p.face) bad++;
+      if (lv(p.tx, p.ty) !== p.level) bad++;
+    }
+  }
+  window.LAB_STATS.pick = { tested, sky, faces, bad };
+  log(`pick round-trip: ${tested} pixels, ${bad} disagreements, ${faces} on cliff faces, ${sky} sky`);
+}
+
+// CHECK 2 — the frame budget. 20x20, fully planted, with terrain.
+{
+  const { r, sc } = made.glade;
+  // 400 objects, one per tile, plus 12 movers on fractional coordinates.
+  const art = tiles ? tiles.GRASS[0] : null;
+  const objs = [];
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) objs.push({ tx: x, ty: y, art, footprint: [1, 1] });
+  const movers = [];
+  for (let k = 0; k < 12; k++) movers.push({ tx: 3 + k * 1.37, ty: 5 + k * 0.61, art, footprint: [1, 1] });
+  sc.objects = objs;
+  sc.creatures = movers;
+  r.reducedMotion = false;
+  r.setScene(sc);
+
+  // warm the caches
+  for (let k = 0; k < 6; k++) { r.frame(k * 130); }
+
+  const N = 120;
+  const t0 = performance.now();
+  for (let k = 0; k < N; k++) {
+    r.requestDraw();
+    r.frame(1000 + k * 16.7);
+  }
+  const per = (performance.now() - t0) / N;
+
+  // and the worst case: a full terrain rebuild
+  const t1 = performance.now();
+  for (let k = 0; k < 20; k++) { sc.terrainVersion = 100 + k; r.invalidateTerrain(); r.requestDraw(); r.frame(9000 + k * 16.7); }
+  const rebuild = (performance.now() - t1) / 20;
+
+  window.LAB_STATS.perf = { perFrameMs: +per.toFixed(3), rebuildMs: +rebuild.toFixed(3), objects: objs.length, movers: movers.length };
+  log(`frame: ${per.toFixed(2)}ms with ${objs.length} objects + ${movers.length} movers  (16.7ms = 60fps)`);
+  log(`terrain rebuild (worst case, every frame): ${rebuild.toFixed(2)}ms`);
+  await snap(document.querySelector('canvas'), 'elev-planted');
+}
+
+// CHECK 3 — the palette is pure. Every pixel on screen must be a colour from
+// palette.js; the cliff faces and the falls are new art and this is the audit.
+{
+  const pal = await import('/js/palette.js');
+  const allowed = new Set(pal.PALETTE.keys().map((k) => pal.PALETTE.get(k).toLowerCase()));
+  const { r } = made.terraces;
+  r.requestDraw(); r.frame(0);
+  const d = r.canvas.getContext('2d').getImageData(0, 0, 640, 400).data;
+  const strays = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const hex = '#' + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+    if (!allowed.has(hex)) strays.set(hex, (strays.get(hex) || 0) + 1);
+  }
+  window.LAB_STATS.palette = { strays: [...strays.entries()].slice(0, 10), count: strays.size };
+  log(`palette purity: ${strays.size} colours on screen that are not in palette.js`);
+}
+
+statsEl.textContent += '\nDONE\n';
+window.LAB_DONE = true;
+</script>

@@ -1,0 +1,19 @@
+{
+  "name": "arcadia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A cosy isometric garden. Tend a glade and the wild things come to live in it.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "serve": "node tools/serve.mjs --port 8801",
+    "test": "node --test \"test/*.test.mjs\"",
+    "playtest": "node tools/playtest.mjs",
+    "build": "node tools/build.mjs",
+    "check": "npm run test && npm run playtest && npm run build"
+  },
+  "//": "No dependencies, and there will not be any. SPEC §1: Node built-ins only, and only in tools/ and test/. The game itself needs no build step to run — tools/build.mjs exists to emit a single-file dist, not to make the source work."
+}

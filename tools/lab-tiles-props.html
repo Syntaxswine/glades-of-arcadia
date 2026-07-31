@@ -1,0 +1,245 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>arcadia — tiles/props lab</title>
+<style>
+  body { background:#2A2620; color:#DDD2BE; font:11px monospace; margin:0; padding:8px; }
+  canvas { image-rendering: pixelated; display:block; margin:4px 0 14px; }
+  h2 { font-size:11px; margin:8px 0 2px; color:#93887A; }
+  #err { color:#C8414A; white-space:pre-wrap; }
+</style>
+<div id="err"></div>
+<div id="out"></div>
+<script type="module">
+const err = document.getElementById('err');
+const out = document.getElementById('out');
+window.LAB_ERR = '';
+try {
+  var tiles = await import('/js/art/tiles.js');
+  var props = null;
+  try { props = await import('/js/art/props.js'); } catch (e) { window.LAB_ERR = 'props: ' + (e.stack || e); err.textContent = window.LAB_ERR; }
+  var pal = await import('/js/palette.js');
+  var fmt = await import('/js/art/format.js');
+} catch (e) {
+  window.LAB_ERR = String(e && e.stack || e);
+  err.textContent = window.LAB_ERR;
+  throw e;
+}
+
+const W = 64, H = 32;
+
+function newCanvas(w, h, scale, bg) {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.style.width = (w * scale) + 'px';
+  cv.style.height = (h * scale) + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h); }
+  return { cv, ctx };
+}
+
+function blitSprite(ctx, sprite, dx, dy, resolve) {
+  const r = resolve || pal.resolve;
+  const img = ctx.createImageData(sprite.w, sprite.h);
+  const d = img.data;
+  for (let y = 0; y < sprite.h; y++) {
+    const row = sprite.rows[y];
+    for (let x = 0; x < sprite.w; x++) {
+      const ch = row[x];
+      if (ch === '.') continue;
+      const hex = r(ch);
+      if (!hex) continue;
+      const i = (y * sprite.w + x) * 4;
+      d[i] = parseInt(hex.slice(1,3),16);
+      d[i+1] = parseInt(hex.slice(3,5),16);
+      d[i+2] = parseInt(hex.slice(5,7),16);
+      d[i+3] = 255;
+    }
+  }
+  // compose with transparency: use a temp canvas so '.' stays clear
+  const tmp = document.createElement('canvas');
+  tmp.width = sprite.w; tmp.height = sprite.h;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  ctx.drawImage(tmp, dx, dy);
+}
+
+const CANVASES = {};
+function section(title, w, h, scale, bg) {
+  const hh = document.createElement('h2');
+  hh.textContent = title;
+  out.appendChild(hh);
+  const { cv, ctx } = newCanvas(w, h, scale, bg);
+  out.appendChild(cv);
+  CANVASES[title] = cv;
+  return ctx;
+}
+
+// ---------------------------------------------------------------- lawn scene
+// A 12x12 patch of ground with a pond, shoreline-masked, plus a gravel path.
+function terrainAt(tx, ty) {
+  // a rough pond in the middle-right, a path down the left
+  const inPond = (tx - 8) * (tx - 8) * 0.75 + (ty - 6.5) * (ty - 6.5) < 16;
+  if (inPond) return 'water';
+  if (tx === 2 || (ty === 9 && tx < 6)) return 'gravel';
+  if (tx === 3 && ty > 6) return 'flagstone';
+  if (tx > 9 && ty < 4) return 'meadow';
+  if (tx < 2 && ty < 4) return 'moss';
+  if (tx > 8 && ty > 9) return 'earth';
+  if (tx > 5 && ty > 10) return 'sand';
+  return 'grass';
+}
+function isLandCorner(vx, vy) {
+  // A vertex is LAND if any tile touching it is land. So an interior pond tile
+  // gets mask 0 and a pond tile at the margin gets the right edge/corner.
+  for (const [dx, dy] of [[0,0],[-1,0],[0,-1],[-1,-1]]) {
+    if (terrainAt(vx + dx, vy + dy) !== 'water') return true;
+  }
+  return false;
+}
+
+function drawScene(ctx, N) {
+  // clear to sky so silhouettes read
+  ctx.fillStyle = '#2A2620';
+  ctx.fillRect(0,0,ctx.canvas.width, ctx.canvas.height);
+  const ox = ctx.canvas.width/2 - 32;
+  const oy = 8;
+  for (let ty = 0; ty < N; ty++) {
+    for (let tx = 0; tx < N; tx++) {
+      const sx = (tx - ty) * 32 + ox;
+      const sy = (tx + ty) * 16 + oy;
+      const kind = terrainAt(tx, ty);
+      let sprite;
+      if (kind === 'water') {
+        // vertices: N=(tx,ty) E=(tx+1,ty) S=(tx+1,ty+1) W=(tx,ty+1)
+        let mask = 0;
+        if (isLandCorner(tx, ty)) mask |= tiles.N;
+        if (isLandCorner(tx+1, ty)) mask |= tiles.E;
+        if (isLandCorner(tx+1, ty+1)) mask |= tiles.S;
+        if (isLandCorner(tx, ty+1)) mask |= tiles.W;
+        sprite = mask ? tiles.shoreTileFor(mask) : tiles.variantFor(tiles.WATER, tx, ty);
+      } else {
+        sprite = tiles.variantFor(tiles.TERRAIN[kind], tx, ty);
+      }
+      blitSprite(ctx, sprite, sx, sy);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- api
+window.LAB = {
+  scene(N = 13, withProps = false) {
+    const ctx = section('scene', 64 * N + 64, 32 * N + 64, 2);
+    drawScene(ctx, N);
+    if (withProps && props) {
+      const ox = ctx.canvas.width / 2 - 32, oy = 8;
+      const place = [
+        ['sleeping-satyr', 3, 3], ['column', 10, 1], ['broken-column', 11, 3],
+        ['herm', 1, 6], ['marble-torso', 5, 1], ['bench', 4, 8],
+        ['krater', 2, 4], ['urn', 6, 3], ['grotto-mouth', 11, 11],
+        ['stone-basin', 9, 4], ['ruined-arch', 8, 1], ['altar', 6, 11],
+        ['syrinx-post', 4, 11], ['satyr-mask-pole', 1, 10], ['sundial', 3, 6],
+      ];
+      const drawn = place
+        .map(([id, tx, ty]) => ({ sp: props.PROPS[id], tx, ty }))
+        .filter(o => o.sp)
+        .sort((a, b) => (a.tx + a.ty) - (b.tx + b.ty) || a.tx - b.tx);
+      for (const { sp, tx, ty } of drawn) {
+        const cx = (tx - ty) * 32 + ox + 32;
+        const cy = (tx + ty) * 16 + oy + 16;
+        blitSprite(ctx, sp, Math.round(cx - sp.anchor[0]), Math.round(cy - sp.anchor[1]));
+      }
+    }
+    return 'scene';
+  },
+  tileStrip(names, scale = 4, title = 'tiles') {
+    const list = names.map(n => tiles.TILES[n]).filter(Boolean);
+    const cols = Math.min(list.length, 6);
+    const rows = Math.ceil(list.length / cols);
+    const ctx = section(title, cols * 68, rows * 36, scale, '#2A2620');
+    list.forEach((sp, i) => {
+      blitSprite(ctx, sp, (i % cols) * 68 + 2, Math.floor(i / cols) * 36 + 2);
+    });
+    return title;
+  },
+  shoreGrid(scale = 3) {
+    const ctx = section('shore', 4 * 68, 4 * 36, scale, '#2A2620');
+    for (let m = 0; m < 16; m++) {
+      blitSprite(ctx, tiles.SHORE[m], (m % 4) * 68 + 2, Math.floor(m / 4) * 36 + 2);
+    }
+    return 'shore';
+  },
+  propSheet(scale = 3, ground = 'o', title = 'props', only = null) {
+    if (!props) return 'no props module';
+    let list = Object.values(props.PROPS);
+    if (only) list = only.map(n => props.PROPS[n]).filter(Boolean);
+    const cell = Math.max(...list.map(s => s.w)) + 10;
+    const cellH = Math.max(...list.map(s => s.h)) + 16;
+    const cols = Math.min(list.length, 6);
+    const rows = Math.ceil(list.length / cols);
+    const ctx = section(title, cols * cell, rows * cellH, scale, '#2A2620');
+    // ground diamond under each so the object sits on something
+    list.forEach((sp, i) => {
+      const cx = (i % cols) * cell + cell / 2;
+      const cy = Math.floor(i / cols) * cellH + cellH - 20;
+      const g = tiles.variantFor(tiles.GRASS, i, 0);
+      blitSprite(ctx, g, Math.round(cx - 32), Math.round(cy - 16));
+      blitSprite(ctx, sp, Math.round(cx - sp.anchor[0]), Math.round(cy - sp.anchor[1]));
+    });
+    return title;
+  },
+  propRow(names, scale = 6, title = 'zoom') {
+    if (!props) return 'no props module';
+    const list = names.map(n => props.PROPS[n]).filter(Boolean);
+    const cell = Math.max(...list.map(s => s.w)) + 12;
+    const cellH = Math.max(...list.map(s => s.h)) + 18;
+    const ctx = section(title, list.length * cell, cellH, scale, '#2A2620');
+    list.forEach((sp, i) => {
+      const cx = i * cell + cell / 2;
+      const cy = cellH - 22;
+      blitSprite(ctx, tiles.variantFor(tiles.GRASS, i, 3), Math.round(cx - 32), Math.round(cy - 16));
+      blitSprite(ctx, sp, Math.round(cx - sp.anchor[0]), Math.round(cy - sp.anchor[1]));
+    });
+    return title;
+  },
+  // RESEARCH A6: block it in one flat colour and squint. If it is not
+  // identifiable in solid black, no amount of shading saves it.
+  sil(names, title = 'sil') {
+    const list = names.map(n => props.PROPS[n]).filter(Boolean);
+    const cell = Math.max(...list.map(s => s.w)) + 6;
+    const cellH = Math.max(...list.map(s => s.h)) + 6;
+    const ctx = section(title, list.length * cell, cellH, 1, '#DDD2BE');
+    ctx.fillStyle = '#2A2620';
+    list.forEach((sp, i) => {
+      for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) {
+        const ch = sp.rows[y][x];
+        if (ch === '.' || ch === 'm') continue;
+        ctx.fillRect(i * cell + 3 + x, 3 + y, 1, 1);
+      }
+    });
+    return title;
+  },
+  lint() {
+    const all = [...Object.values(tiles.TILES), ...(props ? Object.values(props.PROPS) : [])];
+    const bad = [];
+    for (const sp of all) bad.push(...fmt.lintSprite(sp, pal.PALETTE));
+    return bad;
+  },
+  clear() { out.innerHTML = ''; for (const k in CANVASES) delete CANVASES[k]; },
+  async snap(title, name, zoom = 1) {
+    let cv = CANVASES[title];
+    if (!cv) return 'no canvas ' + title;
+    if (zoom > 1) {
+      const big = document.createElement('canvas');
+      big.width = cv.width * zoom; big.height = cv.height * zoom;
+      const bctx = big.getContext('2d');
+      bctx.imageSmoothingEnabled = false;
+      bctx.drawImage(cv, 0, 0, big.width, big.height);
+      cv = big;
+    }
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    const res = await fetch('http://localhost:8813/snap?name=' + encodeURIComponent(name || title), { method: 'POST', body: blob });
+    return res.text();
+  },
+};
+window.LAB_READY = true;
+</script>

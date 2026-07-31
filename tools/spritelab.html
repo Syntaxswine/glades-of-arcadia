@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arcadia — sprite lab</title>
+<style>
+  /* Late-90s Impressions chrome: chunky beveled panels, 2px light bevel
+     top-left and dark bevel bottom-right, inverted when pressed. System
+     monospace at an integer size — never scaled fractionally. */
+  :root {
+    --face:   #b8b0a0;
+    --face-d: #8a8375;
+    --lite:   #ded7c8;
+    --dark:   #5c564b;
+    --ink:    #2a2620;
+    --panel:  #6d6558;
+    --bad:    #7a1f1f;
+    --ok:     #2c4a24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #4a463d;
+    color: var(--ink);
+    font: 13px/1.45 ui-monospace, "DejaVu Sans Mono", Consolas, monospace;
+    image-rendering: pixelated;
+  }
+  .bevel   { border-top: 2px solid var(--lite); border-left: 2px solid var(--lite);
+             border-bottom: 2px solid var(--dark); border-right: 2px solid var(--dark); }
+  .bevel-in{ border-top: 2px solid var(--dark); border-left: 2px solid var(--dark);
+             border-bottom: 2px solid var(--lite); border-right: 2px solid var(--lite); }
+
+  header { position: sticky; top: 0; z-index: 10; background: var(--face); padding: 8px; }
+  header .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 6px; }
+  header .row:last-child { margin-bottom: 0; }
+  h1 { font-size: 14px; margin: 0 10px 0 0; letter-spacing: 1px; text-transform: uppercase; }
+  fieldset { border: 0; margin: 0; padding: 4px 8px; background: var(--face-d); display: flex;
+             gap: 8px; align-items: center; }
+  fieldset > b { font-weight: normal; opacity: .8; }
+  button { font: inherit; background: var(--face); color: var(--ink); padding: 3px 10px; cursor: pointer;
+           border-top: 2px solid var(--lite); border-left: 2px solid var(--lite);
+           border-bottom: 2px solid var(--dark); border-right: 2px solid var(--dark); }
+  button:active, button[aria-pressed="true"] {
+           border-top: 2px solid var(--dark); border-left: 2px solid var(--dark);
+           border-bottom: 2px solid var(--lite); border-right: 2px solid var(--lite);
+           background: var(--face-d); }
+  select, input[type=number], input[type=text] { font: inherit; background: var(--lite); color: var(--ink);
+           border-top: 2px solid var(--dark); border-left: 2px solid var(--dark);
+           border-bottom: 2px solid var(--lite); border-right: 2px solid var(--lite); padding: 2px 4px; }
+  input[type=range] { width: 200px; }
+  label { display: flex; gap: 4px; align-items: center; }
+
+  main { padding: 10px; }
+  section { margin-bottom: 14px; background: var(--panel); padding: 8px; }
+  section > h2 { font-size: 13px; margin: 0 0 8px; color: var(--lite); letter-spacing: 1px;
+                 text-transform: uppercase; }
+  .grid { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  .cell { background: var(--face); padding: 6px; }
+  .cell .name { font-size: 11px; margin-bottom: 4px; white-space: nowrap; }
+  .cell .meta { font-size: 10px; opacity: .7; }
+  .shots { display: flex; gap: 6px; align-items: flex-end; }
+  canvas { display: block; }
+  .lint { background: var(--lite); padding: 6px 8px; max-height: 210px; overflow: auto; font-size: 12px; }
+  .lint .f { color: var(--bad); }
+  .lint .a { color: #6a5a10; }
+  .lint .clean { color: var(--ok); }
+  .note { color: var(--lite); font-size: 11px; opacity: .8; margin: 0 0 8px; }
+  #status { color: var(--lite); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header class="bevel">
+  <div class="row">
+    <h1>Arcadia sprite lab</h1>
+    <fieldset class="bevel-in">
+      <b>seed</b>
+      <input id="seed" type="range" min="0" max="255" value="42">
+      <input id="seedN" type="number" min="0" max="99999" value="42" style="width:6em">
+      <button id="reroll">re-roll</button>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <b>stage</b>
+      <button class="stage" data-v="sprout">sprout</button>
+      <button class="stage" data-v="young">young</button>
+      <button class="stage" data-v="mature" aria-pressed="true">mature</button>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <b>palette</b>
+      <select id="variant"></select>
+    </fieldset>
+  </div>
+  <div class="row">
+    <fieldset class="bevel-in">
+      <b>zoom</b>
+      <label><input type="checkbox" class="zoom" value="1" checked>1&times;</label>
+      <label><input type="checkbox" class="zoom" value="4" checked>4&times;</label>
+      <label><input type="checkbox" class="zoom" value="8" checked>8&times;</label>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <b>ground</b>
+      <select id="ground">
+        <option value="#9a958a">neutral</option>
+        <option value="#74863C">grass</option>
+        <option value="#C0A176">earth</option>
+        <option value="#BAAF9E">marble</option>
+        <option value="#27757C">water</option>
+        <option value="#2a2620">night</option>
+      </select>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <label><input type="checkbox" id="grid" checked> pixel grid</label>
+      <label><input type="checkbox" id="anchor" checked> anchor</label>
+      <label><input type="checkbox" id="bounds"> bounds</label>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <b>snap</b>
+      <input id="snapPort" type="text" value="8794" style="width:5em">
+      <button id="snapAll">snap all</button>
+      <span id="status"></span>
+    </fieldset>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>lintSprite — whole catalogue</h2>
+    <p class="note">Faults from <code>lintSprite()</code> in js/art/format.js, plus lab advisories
+      (marked <i>adv</i>) that are not contract violations but usually mean something is off.</p>
+    <div id="lint" class="lint bevel-in">running&hellip;</div>
+  </section>
+  <div id="out"></div>
+</main>
+
+<script type="module">
+import { PALETTE, resolve, variant, RAMPS } from '../js/palette.js';
+import { lintSprite, keysUsed, TRANSPARENT } from '../js/art/format.js';
+import { CLUMPS, CLUMP_GROUPS } from '../js/art/clumps.js';
+import * as GROW from '../js/art/grow.js';
+
+/* ------------------------------------------------------------------ *
+ * State
+ * ------------------------------------------------------------------ */
+const qs = new URL(location.href).searchParams;
+const S = {
+  seed: +(qs.get('seed') ?? 42),
+  stage: qs.get('stage') || 'mature',
+  variant: 'base',
+  zooms: [1, 4, 8],
+  ground: '#9a958a',
+  grid: true,
+  anchor: true,
+  bounds: false,
+};
+if (qs.get('snap')) document.getElementById('snapPort').value = qs.get('snap');
+
+/* Palette variants — the cheap period trick: the same rows through a shifted
+   ramp gives an autumn tree or a moonlit statue for free. */
+const VARIANTS = {
+  base: null,
+  autumn: { canopy: 'terracotta', olive: 'gold' },
+  scorched: { canopy: 'olive', grass: 'olive' },
+  dead: { canopy: 'earth', olive: 'earth', grass: 'earth' },
+  moonlit: { canopy: 'cypress', grass: 'cypress', olive: 'cypress', marble: 'sky' },
+  bronze: { marble: 'gold', rock: 'gold' },
+};
+const vsel = document.getElementById('variant');
+for (const k of Object.keys(VARIANTS)) vsel.append(new Option(k, k));
+
+function resolver() {
+  return VARIANTS[S.variant] ? variant(VARIANTS[S.variant]) : resolve;
+}
+
+/* ------------------------------------------------------------------ *
+ * Discover hand-authored sprite modules.
+ *
+ * Seven people are building this game in parallel and I do not know what the
+ * other artists will call their files. So the lab probes a list of likely
+ * module paths, imports whatever exists, and walks the exports for anything
+ * sprite-shaped. Adding tiles.js or creatures.js later needs no edit here.
+ * ------------------------------------------------------------------ */
+const CANDIDATES = [
+  'clumps', 'sprites', 'tiles', 'terrain', 'ground', 'water', 'props',
+  'sculpture', 'statues', 'structures', 'buildings', 'creatures', 'figures',
+  'decals', 'edges', 'ui', 'icons', 'index',
+];
+
+function isSprite(v) {
+  return v && typeof v === 'object' && Array.isArray(v.rows) &&
+    typeof v.w === 'number' && typeof v.h === 'number' && Array.isArray(v.anchor);
+}
+
+function collectSprites(mod, modName, into) {
+  const seen = new Set();
+  const push = (sp, fallback) => {
+    if (!isSprite(sp)) return;
+    const name = sp.name || fallback;
+    if (seen.has(name)) return;
+    seen.add(name);
+    into.push({ sprite: sp, module: modName, key: fallback });
+  };
+  for (const [k, v] of Object.entries(mod)) {
+    if (isSprite(v)) push(v, k);
+    else if (Array.isArray(v)) v.forEach((s, i) => push(s, `${k}[${i}]`));
+    else if (v && typeof v === 'object' && !(v instanceof Function)) {
+      for (const [k2, v2] of Object.entries(v)) push(v2, `${k}.${k2}`);
+    }
+  }
+}
+
+async function discover() {
+  const found = [];
+  await Promise.all(CANDIDATES.map(async (n) => {
+    try {
+      const mod = await import(`../js/art/${n}.js`);
+      collectSprites(mod, n, found);
+    } catch { /* not written yet, or not mine to know about */ }
+  }));
+  return found;
+}
+
+/* ------------------------------------------------------------------ *
+ * Drawing
+ * ------------------------------------------------------------------ */
+function drawSprite(sp, scale, opts = {}) {
+  const res = opts.resolve || resolver();
+  const pad = 2;
+  const cv = document.createElement('canvas');
+  cv.width = (sp.w + pad * 2) * scale;
+  cv.height = (sp.h + pad * 2) * scale;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  ctx.fillStyle = opts.ground || S.ground;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // Pixel grid, only where a pixel is big enough for it to mean anything.
+  if (S.grid && scale >= 4) {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    for (let x = 0; x <= sp.w + pad * 2; x++) ctx.fillRect(x * scale, 0, 1, cv.height);
+    for (let y = 0; y <= sp.h + pad * 2; y++) ctx.fillRect(0, y * scale, cv.width, 1);
+  }
+
+  for (let y = 0; y < sp.h; y++) {
+    const row = sp.rows[y];
+    for (let x = 0; x < sp.w; x++) {
+      const ch = row[x];
+      if (ch === TRANSPARENT) continue;
+      const hex = res(ch);
+      // Magenta is deliberate: an unknown palette key must be impossible to
+      // miss, not silently transparent.
+      ctx.fillStyle = hex || '#ff00ff';
+      ctx.fillRect((x + pad) * scale, (y + pad) * scale, scale, scale);
+    }
+  }
+
+  if (S.bounds) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pad * scale + 0.5, pad * scale + 0.5, sp.w * scale - 1, sp.h * scale - 1);
+  }
+  if (S.anchor) {
+    const ax = (sp.anchor[0] + pad) * scale;
+    const ay = (sp.anchor[1] + pad) * scale;
+    const t = Math.max(1, Math.round(scale / 4));
+    const arm = Math.max(2, scale * 1.5);
+    ctx.fillStyle = '#C8414A';
+    ctx.fillRect(ax - arm, ay + (scale - t) / 2, arm * 2 + scale, t);
+    ctx.fillRect(ax + (scale - t) / 2, ay - arm, t, arm * 2 + scale);
+  }
+  return cv;
+}
+
+function cell(sp, subtitle) {
+  const d = document.createElement('div');
+  d.className = 'cell bevel';
+  const n = document.createElement('div');
+  n.className = 'name';
+  n.textContent = sp.name || '(unnamed)';
+  const m = document.createElement('div');
+  m.className = 'meta';
+  m.textContent = `${sp.w}×${sp.h}  anchor ${sp.anchor[0]},${sp.anchor[1]}` +
+    (subtitle ? `  ${subtitle}` : '');
+  const shots = document.createElement('div');
+  shots.className = 'shots';
+  for (const z of S.zooms) shots.append(drawSprite(sp, z));
+  d.append(n, shots, m);
+  return d;
+}
+
+function section(title, sprites, sub) {
+  const s = document.createElement('section');
+  const h = document.createElement('h2');
+  h.textContent = `${title}  (${sprites.length})`;
+  const g = document.createElement('div');
+  g.className = 'grid';
+  for (const item of sprites) {
+    const sp = item.sprite || item;
+    g.append(cell(sp, item.note || (sub ? sub(item) : '')));
+  }
+  s.append(h, g);
+  return s;
+}
+
+/* ------------------------------------------------------------------ *
+ * What to show
+ * ------------------------------------------------------------------ */
+function composerSpecs() {
+  const out = [];
+  for (const [name, info] of Object.entries(GROW.COMPOSER_INFO)) {
+    for (const v of info.variants) {
+      const params = info.key ? { [info.key]: v } : {};
+      out.push({ composer: name, variant: v, params });
+    }
+  }
+  return out;
+}
+
+function buildComposed(seedOffset = 0) {
+  const out = [];
+  for (const spec of composerSpecs()) {
+    let sp;
+    try {
+      sp = GROW.compose(spec.composer, (S.seed + seedOffset) >>> 0, { ...spec.params, stage: S.stage });
+    } catch (err) {
+      console.error(spec, err);
+      continue;
+    }
+    out.push({ sprite: sp, note: `${spec.composer}/${spec.variant}`, group: spec.composer });
+  }
+  return out;
+}
+
+let DISCOVERED = [];
+
+function render() {
+  const out = document.getElementById('out');
+  out.textContent = '';
+
+  // Composers, grouped, with three seeds each so variety is visible at a
+  // glance — one sample of a seeded generator tells you almost nothing.
+  const byComposer = new Map();
+  for (const off of [0, 101, 707]) {
+    for (const item of buildComposed(off)) {
+      if (!byComposer.has(item.group)) byComposer.set(item.group, []);
+      byComposer.get(item.group).push(item);
+    }
+  }
+  for (const [name, items] of byComposer) {
+    items.sort((a, b) => a.note.localeCompare(b.note));
+    out.append(section(`composer: ${name}`, items));
+  }
+
+  // Clumps, in their authored groups.
+  for (const [group, names] of Object.entries(CLUMP_GROUPS)) {
+    out.append(section(`clumps: ${group}`, names.map((n) => ({ sprite: CLUMPS[n] }))));
+  }
+
+  // Whatever the other artists have written.
+  const byModule = new Map();
+  for (const item of DISCOVERED) {
+    if (item.module === 'clumps') continue; // already shown above
+    if (!byModule.has(item.module)) byModule.set(item.module, []);
+    byModule.get(item.module).push(item);
+  }
+  for (const [mod, items] of byModule) out.append(section(`sprites: ${mod}.js`, items));
+  if (!byModule.size) {
+    const s = document.createElement('section');
+    s.innerHTML = '<h2>hand-authored sprites</h2><p class="note">No sprite modules found yet under ' +
+      'js/art/. The lab probes for them on every load — write one and it appears here with no edit ' +
+      'to this file.</p>';
+    out.append(s);
+  }
+
+  runLint();
+}
+
+/* ------------------------------------------------------------------ *
+ * Lint
+ * ------------------------------------------------------------------ */
+function advisories(sp) {
+  const out = [];
+  const w = sp.w, h = sp.h;
+  if (sp.rows.length !== h) out.push('rows.length does not match h');
+  for (let y = 0; y < h; y++) {
+    if (sp.rows[y].length !== w) { out.push(`row ${y} is ${sp.rows[y].length}px, expected ${w}`); break; }
+  }
+  if (sp.anchor[0] < 0 || sp.anchor[0] >= w || sp.anchor[1] < 0 || sp.anchor[1] >= h) {
+    out.push(`anchor ${sp.anchor} outside ${w}×${h}`);
+  }
+  // Stray single pixels: they dissolve at 1x and shimmer when the camera pans.
+  let strays = 0, filled = 0;
+  const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? TRANSPARENT : sp.rows[y][x]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (sp.rows[y][x] === TRANSPARENT) continue;
+    filled++;
+    let n = 0;
+    if (at(x - 1, y) !== TRANSPARENT) n++;
+    if (at(x + 1, y) !== TRANSPARENT) n++;
+    if (at(x, y - 1) !== TRANSPARENT) n++;
+    if (at(x, y + 1) !== TRANSPARENT) n++;
+    if (n === 0) strays++;
+  }
+  if (strays) out.push(`${strays} isolated pixel${strays > 1 ? 's' : ''} (fuzzy edge)`);
+  if (!filled) out.push('sprite is entirely transparent');
+  // Value structure: the "green blob" test. Foliage with fewer than three
+  // distinct values in its own ramp has no internal structure.
+  const keys = keysUsed(sp);
+  const canopyKeys = keys.filter((k) => 'abcde'.includes(k));
+  if (canopyKeys.length && canopyKeys.length < 3 && filled > 120) {
+    out.push(`only ${canopyKeys.length} canopy value(s) over ${filled}px — "green blob"?`);
+  }
+  return out;
+}
+
+function runLint() {
+  const box = document.getElementById('lint');
+  box.textContent = '';
+  const all = [
+    ...Object.values(CLUMPS).map((s) => ({ sprite: s, where: 'clumps.js' })),
+    ...buildComposed(0).map((i) => ({ sprite: i.sprite, where: 'grow.js' })),
+    ...buildComposed(101).map((i) => ({ sprite: i.sprite, where: 'grow.js' })),
+    ...DISCOVERED.filter((d) => d.module !== 'clumps').map((d) => ({ sprite: d.sprite, where: d.module + '.js' })),
+  ];
+  let faults = 0, advs = 0;
+  const frag = document.createDocumentFragment();
+  for (const { sprite, where } of all) {
+    for (const p of lintSprite(sprite, PALETTE)) {
+      const d = document.createElement('div');
+      d.className = 'f';
+      d.textContent = `FAULT  ${where}  ${p}`;
+      frag.append(d); faults++;
+    }
+    for (const p of advisories(sprite)) {
+      const d = document.createElement('div');
+      d.className = 'a';
+      d.textContent = `adv    ${where}  ${sprite.name}: ${p}`;
+      frag.append(d); advs++;
+    }
+  }
+  const head = document.createElement('div');
+  head.className = faults ? 'f' : 'clean';
+  head.textContent = `${all.length} sprites checked — ${faults} fault(s), ${advs} advisory(ies)`;
+  box.append(head, frag);
+}
+
+/* ------------------------------------------------------------------ *
+ * Contact sheets — POST to tools/snap.mjs so the art can be looked at.
+ * ------------------------------------------------------------------ */
+function sheet(items, cols, scale, label) {
+  const pad = 4;
+  let cw = 0, ch = 0;
+  for (const sp of items) { cw = Math.max(cw, sp.w); ch = Math.max(ch, sp.h); }
+  const CW = (cw + pad * 2) * scale;
+  const CH = (ch + pad * 2) * scale + 10;
+  const rows = Math.ceil(items.length / cols);
+  const cv = document.createElement('canvas');
+  cv.width = cols * CW;
+  cv.height = rows * CH;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = S.ground;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  for (let c = 1; c < cols; c++) ctx.fillRect(c * CW, 0, 1, cv.height);
+  for (let r = 1; r < rows; r++) ctx.fillRect(0, r * CH, cv.width, 1);
+  const res = resolver();
+  items.forEach((sp, i) => {
+    const c = i % cols, r = (i / cols) | 0;
+    // Sit every sprite's anchor on the same baseline, which is how they will
+    // actually meet the tile — floating each one in its own box hides exactly
+    // the anchor bugs this sheet exists to catch.
+    const ax = c * CW + CW / 2;
+    const ay = r * CH + CH - 8 * scale;
+    for (let y = 0; y < sp.h; y++) for (let x = 0; x < sp.w; x++) {
+      const chr = sp.rows[y][x];
+      if (chr === TRANSPARENT) continue;
+      ctx.fillStyle = res(chr) || '#ff00ff';
+      ctx.fillRect(ax + (x - sp.anchor[0]) * scale, ay + (y - sp.anchor[1]) * scale, scale, scale);
+    }
+    ctx.fillStyle = '#C8414A';
+    ctx.fillRect(ax - 1, ay - 1, 2, 2);
+  });
+  return cv;
+}
+
+function post(cv, name) {
+  const port = document.getElementById('snapPort').value.trim();
+  return new Promise((done) => cv.toBlob(async (b) => {
+    try {
+      await fetch(`http://localhost:${port}/snap?name=${encodeURIComponent(name)}`, { method: 'POST', body: b });
+      done(true);
+    } catch { done(false); }
+  }));
+}
+
+async function snapAll() {
+  const st = document.getElementById('status');
+  st.textContent = 'snapping…';
+  const trees = [], plants = [];
+  for (const off of [0, 101, 707, 1313]) {
+    for (const item of buildComposed(off)) {
+      (['broadleaf', 'conifer', 'olive', 'willow'].includes(item.group) ? trees : plants).push(item.sprite);
+    }
+  }
+  const jobs = [
+    [sheet(trees, 8, 3, 'trees'), 'lab-trees'],
+    [sheet(plants, 8, 4, 'plants'), 'lab-plants'],
+    [sheet(Object.values(CLUMPS), 9, 8, 'clumps'), 'lab-clumps'],
+  ];
+  const hand = DISCOVERED.filter((d) => d.module !== 'clumps').map((d) => d.sprite);
+  if (hand.length) jobs.push([sheet(hand, 8, 4, 'sprites'), 'lab-sprites']);
+  let ok = 0;
+  for (const [cv, name] of jobs) if (await post(cv, name)) ok++;
+  st.textContent = ok === jobs.length ? `snapped ${ok} sheet(s)` : `snapped ${ok}/${jobs.length} — is snap.mjs running?`;
+}
+
+/* ------------------------------------------------------------------ *
+ * Wiring
+ * ------------------------------------------------------------------ */
+const $ = (id) => document.getElementById(id);
+$('seed').addEventListener('input', (e) => { S.seed = +e.target.value; $('seedN').value = S.seed; render(); });
+$('seedN').addEventListener('change', (e) => { S.seed = +e.target.value || 0; $('seed').value = S.seed % 256; render(); });
+$('reroll').addEventListener('click', () => {
+  S.seed = (Math.random() * 4096) | 0; $('seedN').value = S.seed; $('seed').value = S.seed % 256; render();
+});
+for (const b of document.querySelectorAll('.stage')) {
+  b.addEventListener('click', () => {
+    S.stage = b.dataset.v;
+    for (const o of document.querySelectorAll('.stage')) o.setAttribute('aria-pressed', String(o === b));
+    render();
+  });
+}
+$('variant').addEventListener('change', (e) => { S.variant = e.target.value; render(); });
+$('ground').addEventListener('change', (e) => { S.ground = e.target.value; render(); });
+for (const c of document.querySelectorAll('.zoom')) {
+  c.addEventListener('change', () => {
+    S.zooms = [...document.querySelectorAll('.zoom')].filter((z) => z.checked).map((z) => +z.value);
+    render();
+  });
+}
+$('grid').addEventListener('change', (e) => { S.grid = e.target.checked; render(); });
+$('anchor').addEventListener('change', (e) => { S.anchor = e.target.checked; render(); });
+$('bounds').addEventListener('change', (e) => { S.bounds = e.target.checked; render(); });
+$('snapAll').addEventListener('click', snapAll);
+
+// Number keys jump between stages; everything reachable from the keyboard.
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const map = { 1: 'sprout', 2: 'young', 3: 'mature' };
+  if (map[e.key]) document.querySelector(`.stage[data-v="${map[e.key]}"]`).click();
+  if (e.key === 'r') $('reroll').click();
+  if (e.key === 's') snapAll();
+});
+
+DISCOVERED = await discover();
+render();
+if (qs.get('autosnap') !== null) await snapAll();
+window.__lab = { S, render, snapAll, GROW, CLUMPS };
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Arcadia — a cosy isometric garden. Tend a glade and the wild things come."
+    />
+    <title>Arcadia</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- The whole game is one 640x400 logical screen, integer-scaled and
+         letterboxed in a warm dark surround. The canvas backing store is always
+         exactly 640x400; only its CSS box changes. See ui.js fitStage(). -->
+    <div id="app">
+      <div id="stage">
+        <canvas
+          id="screen"
+          width="640"
+          height="400"
+          tabindex="0"
+          role="application"
+          aria-label="The glade. Arrow keys pan; W A S D move the tile cursor; Enter places; Tab shows the field overlay."
+        ></canvas>
+        <div id="ui" class="ui"></div>
+      </div>
+    </div>
+
+    <noscript>
+      <p style="color: #ddd2be; font-family: monospace; padding: 16px">
+        Arcadia is a small program that draws itself. It needs JavaScript.
+      </p>
+    </noscript>
+
+    <script type="module">
+      // Boot. Kept inline on purpose: this file is the only entry point, and a
+      // separate js/boot.js would be a fifth file nobody owns.
+      //
+      // The shell (scale, letterbox, resize) comes up FIRST and unconditionally,
+      // so a missing or broken sibling module still leaves a correctly scaled,
+      // correctly framed screen rather than a white page. Then:
+      //
+      //   * if js/main.js exists and exports start() (or a default function),
+      //     it is handed the shell and owns the game from there;
+      //   * if it exists and self-starts on import, we leave it alone;
+      //   * if it does not exist yet, we boot the chrome on its own in PREVIEW
+      //     mode against whatever of js/catalog.js and js/creatures.js is
+      //     already written, drawing a flat tile grid so that the pointer-to-
+      //     tile mapping and the ghost can be checked by eye.
+      import { createUI, watchStage, fitStage, LAYOUT } from './js/ui.js';
+      import { createInput, tileToScreen, TILE_W, TILE_H } from './js/input.js';
+
+      const app = document.getElementById('app');
+      const canvas = document.getElementById('screen');
+      const uiLayer = document.getElementById('ui');
+
+      // The shell is up before anything else can fail. `watchStage` keeps the
+      // scale and the `--u` unit glued to the canvas for the life of the page,
+      // including when another module re-sizes the canvas on its own.
+      let stopWatching = watchStage(app, canvas, null);
+
+      let game = null;
+      try {
+        const main = await import('./js/main.js');
+        // main.js self-boots on import and boot() is idempotent, so this awaits
+        // the boot already in flight rather than starting a second one.
+        if (typeof main.boot === 'function') game = await main.boot();
+        else if (typeof main.start === 'function') game = await main.start({ app, canvas });
+      } catch (err) {
+        console.info('[arcadia] the game did not boot — chrome preview mode.', err);
+      }
+
+      if (game) {
+        // Re-attach now that there is a renderer: it keeps its own `scale`, and
+        // its picking divides by it, so it must be the one doing the sizing.
+        stopWatching();
+        stopWatching = watchStage(app, canvas, game.renderer || null);
+      } else {
+        // A boot that fails PART WAY may already have built a UI, whose game
+        // loop never started. Clear it rather than stack a second panel on top,
+        // and come up in preview mode: a screen the player can look at beats a
+        // screen that is merely honest about being broken.
+        uiLayer.textContent = '';
+        previewBoot();
+      }
+
+      // ---------------------------------------------------------------------
+      // Preview mode — the chrome, the input and a bare grid. No simulation.
+      // ---------------------------------------------------------------------
+      async function optional(path, pick) {
+        try {
+          return pick(await import(path)) || null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function previewBoot() {
+        const placeables = await optional(
+          './js/catalog.js',
+          (m) => m.CATALOG || m.PLACEABLES || m.catalog || m.default
+        );
+        const creatures = await optional(
+          './js/creatures.js',
+          (m) => m.CREATURES || m.creatures || m.default
+        );
+
+        const ui = createUI({
+          placeables: Array.isArray(placeables) ? placeables : [],
+          creatures: Array.isArray(creatures) ? creatures : [],
+        });
+        const map = { w: 20, h: 20 };
+        const input = createInput({ canvas, ui, map, selfDrive: true });
+
+        // Preview mode only: a handle so the chrome can be driven from the
+        // console while the rest of the game is being written. The real boot
+        // never defines this.
+        window.arcadiaPreview = { ui, input, placeables, creatures };
+
+        ui.setTime('preview');
+        ui.say('Preview: js/main.js is not here yet. The chrome and the input are.', 5000);
+
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        const tile = flatTile();
+
+        (function draw() {
+          const cam = input.camera;
+          const v = LAYOUT.VIEW;
+          ctx.fillStyle = '#2a2620';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(v.x, v.y, v.w, v.h);
+          ctx.clip();
+          for (let ty = 0; ty < map.h; ty++) {
+            for (let tx = 0; tx < map.w; tx++) {
+              // tileToScreen is the diamond's north vertex; the 64x32 bitmap
+              // hangs half a tile width to the left of it.
+              const n = tileToScreen(tx, ty, cam);
+              const p = { x: n.x - TILE_W / 2, y: n.y };
+              if (p.x > v.x + v.w || p.x + TILE_W < v.x) continue;
+              if (p.y > v.y + v.h || p.y + TILE_H < v.y) continue;
+              ctx.drawImage(tile, Math.round(p.x), Math.round(p.y));
+            }
+          }
+          ctx.restore();
+          ui.drawGhost(ctx, cam);
+          requestAnimationFrame(draw);
+        })();
+      }
+
+      /** One flat grass diamond with a darker edge, composed per pixel. */
+      function flatTile() {
+        const cv = document.createElement('canvas');
+        cv.width = TILE_W;
+        cv.height = TILE_H;
+        const c = cv.getContext('2d');
+        const img = c.createImageData(TILE_W, TILE_H);
+        const put = (x, y, hex) => {
+          const i = (y * TILE_W + x) * 4;
+          img.data[i] = parseInt(hex.slice(1, 3), 16);
+          img.data[i + 1] = parseInt(hex.slice(3, 5), 16);
+          img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
+          img.data[i + 3] = 255;
+        };
+        for (let y = 0; y < TILE_H; y++) {
+          const k = y < TILE_H / 2 ? y : TILE_H - 1 - y;
+          const x0 = 30 - 2 * k;
+          const x1 = 33 + 2 * k;
+          for (let x = x0; x <= x1; x++) {
+            const edge = x <= x0 + 1 || x >= x1 - 1;
+            put(x, y, edge ? '#55672D' : '#74863C');
+          }
+        }
+        c.putImageData(img, 0, 0);
+        return cv;
+      }
+    </script>
+  </body>
+</html>

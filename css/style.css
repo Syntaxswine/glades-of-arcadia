@@ -1,0 +1,679 @@
+/* style.css — Arcadia's chrome.
+ *
+ * Late-1990s Impressions panel work: chunky warm-stone faces, a 2px light bevel
+ * top-left and a 2px dark bevel bottom-right on anything raised, inverted when
+ * pressed. Nothing in this file is rounded, gradiented, translucent or
+ * animated, because none of those existed on screen in 1999 and every one of
+ * them is a tell.
+ *
+ * THE UNIT. `--u` is one LOGICAL pixel, set by ui.js `fitStage()` to
+ * scale/devicePixelRatio CSS px. Every measurement below is a whole number
+ * times --u, so every edge in the chrome lands on the same device-pixel grid as
+ * the 640x400 canvas. Type is `8 * var(--u)` — a whole number of device pixels
+ * at 1x, 2x and 3x, never fractionally scaled.
+ *
+ * Every colour is a palette ramp entry (js/palette.js). Panels are rock,
+ * lettering is marble, the selected state is gold, legal/illegal is canopy
+ * highlight / blossom. Nothing here invents a colour.
+ */
+
+:root {
+  --u: 1px;
+
+  /* rock ramp — the panel itself */
+  --deep: #2c2823; /* rock 0 */
+  --face-lo: #474138; /* rock 1 — bottom-right bevel, sunken faces */
+  --face: #675e50; /* rock 2 — the panel face */
+  --face-hi: #8a7f6d; /* rock 3 — top-left bevel */
+
+  /* marble ramp — the lettering */
+  --ink-faint: #6b6154; /* marble 0 */
+  --ink-dim: #93887a; /* marble 1 */
+  --ink-mid: #baaf9e; /* marble 2 */
+  --ink: #ddd2be; /* marble 3 */
+  --ink-hi: #f2eada; /* marble 4 */
+
+  /* gold ramp — selection and focus */
+  --gold: #c08f2e;
+  --gold-hi: #e9c158;
+
+  --ok: #9db255; /* canopy 4 */
+  --bad: #c8414a; /* blossom accent */
+  --surround: #2a2620; /* the universal shadow mixer — the letterbox */
+
+  --bevel: calc(2 * var(--u));
+  --text: calc(8 * var(--u));
+  --line: calc(10 * var(--u));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--surround);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: "Consolas", ui-monospace, "DejaVu Sans Mono", "Liberation Mono", "Courier New",
+    monospace;
+  font-size: var(--text);
+  line-height: var(--line);
+  color: var(--ink);
+  font-synthesis: none;
+  letter-spacing: 0;
+  -webkit-font-smoothing: none; /* aliased glyphs — bitmap-ish, on purpose */
+  text-rendering: optimizeSpeed;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+/* ------------------------------------------------------------------ shell -- */
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surround);
+}
+
+#stage {
+  position: relative;
+  width: calc(640 * var(--u));
+  height: calc(400 * var(--u));
+  /* A hard stone frame around the letterboxed picture. */
+  box-shadow:
+    0 0 0 calc(1 * var(--u)) var(--deep),
+    0 0 0 calc(3 * var(--u)) var(--face-lo),
+    0 0 0 calc(4 * var(--u)) var(--deep);
+}
+
+#screen {
+  display: block;
+  width: calc(640 * var(--u));
+  height: calc(400 * var(--u));
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #123a46; /* water 0 — something warm-dark before the first draw */
+  outline: none;
+}
+
+#screen:focus-visible {
+  outline: none;
+}
+
+.pixels {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ui > * {
+  pointer-events: auto;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ bevel -- */
+
+.raised,
+.btn,
+.tab,
+.item,
+.panel,
+.bar,
+.legend,
+.journal,
+.toast,
+.jrow {
+  background: var(--face);
+  box-shadow:
+    inset var(--bevel) var(--bevel) 0 0 var(--face-hi),
+    inset calc(-1 * var(--bevel)) calc(-1 * var(--bevel)) 0 0 var(--face-lo);
+}
+
+.sunken,
+.info,
+.grid,
+.journal-list,
+.journal-card,
+.track,
+.item-chip {
+  background: var(--face-lo);
+  box-shadow:
+    inset var(--bevel) var(--bevel) 0 0 var(--deep),
+    inset calc(-1 * var(--bevel)) calc(-1 * var(--bevel)) 0 0 var(--face-hi);
+}
+
+.btn:active,
+.tab[aria-selected="true"],
+.item.is-on,
+.btn.is-on,
+.jrow.is-on {
+  box-shadow:
+    inset var(--bevel) var(--bevel) 0 0 var(--face-lo),
+    inset calc(-1 * var(--bevel)) calc(-1 * var(--bevel)) 0 0 var(--face-hi);
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+button:disabled {
+  cursor: default;
+  color: var(--ink-faint);
+}
+
+/* Visible focus, always — not only on `:focus-visible`. A player who clicks a
+ * button and then reaches for the arrow keys still needs to see where they are,
+ * and a gold ring on a bevelled stone button reads as deliberate. */
+.ui :focus,
+:focus-visible {
+  outline: calc(2 * var(--u)) solid var(--gold-hi);
+  outline-offset: calc(-2 * var(--u));
+}
+
+/* ----------------------------------------------------------------- topbar -- */
+
+.bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(640 * var(--u));
+  height: calc(14 * var(--u));
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.bar-time {
+  color: var(--ink-hi);
+}
+
+.bar-overlay {
+  color: var(--gold-hi);
+}
+
+.bar-right {
+  margin-left: auto;
+  display: flex;
+  gap: calc(2 * var(--u));
+}
+
+.bar-btn {
+  height: calc(10 * var(--u));
+  min-width: calc(38 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  line-height: calc(10 * var(--u));
+}
+
+.bar-btn.is-on {
+  color: var(--gold-hi);
+}
+
+/* ------------------------------------------------------------------ panel -- */
+
+.panel {
+  position: absolute;
+  left: 0;
+  top: calc(300 * var(--u));
+  width: calc(640 * var(--u));
+  height: calc(100 * var(--u));
+}
+
+.tabs {
+  position: absolute;
+  left: calc(4 * var(--u));
+  top: calc(4 * var(--u));
+  width: calc(632 * var(--u));
+  height: calc(18 * var(--u));
+  display: flex;
+  gap: calc(2 * var(--u));
+}
+
+.tab {
+  height: calc(18 * var(--u));
+  min-width: calc(62 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  color: var(--ink-mid);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--gold-hi);
+}
+
+.grid {
+  position: absolute;
+  left: calc(4 * var(--u));
+  top: calc(24 * var(--u));
+  width: calc(376 * var(--u));
+  height: calc(74 * var(--u));
+  padding: calc(3 * var(--u));
+  display: grid;
+  grid-template-columns: repeat(6, calc(60 * var(--u)));
+  grid-auto-rows: calc(34 * var(--u));
+  gap: calc(2 * var(--u));
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-content: start;
+}
+
+.grid-empty {
+  color: var(--ink-dim);
+  padding: calc(4 * var(--u));
+  grid-column: 1 / -1;
+}
+
+.item {
+  width: calc(60 * var(--u));
+  height: calc(34 * var(--u));
+  padding: calc(1 * var(--u)) calc(3 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  align-items: center;
+  overflow: hidden;
+}
+
+/* No icon yet: a short colour chip, and the name gets two wrapped lines because
+ * it is the only thing identifying the button. */
+.item-chip {
+  height: calc(9 * var(--u));
+  width: calc(54 * var(--u));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.item-label {
+  width: 100%;
+  height: calc(20 * var(--u));
+  line-height: var(--line);
+  overflow: hidden;
+  overflow-wrap: break-word;
+  color: var(--ink-mid);
+  text-align: center;
+}
+
+/* With a picture the icon does the identifying, which is how the Impressions
+ * toolbars worked: 54x21 logical, sprite cropped in at 1:1 and never scaled,
+ * with the name below as a reminder and the blurb in the info box. */
+.item.has-icon .item-chip {
+  height: calc(21 * var(--u));
+}
+
+.item.has-icon .item-label {
+  height: var(--line);
+  white-space: nowrap;
+}
+
+.item.is-on .item-label {
+  color: var(--gold-hi);
+}
+
+.item-locked {
+  color: var(--ink-faint);
+}
+
+.info {
+  position: absolute;
+  left: calc(384 * var(--u));
+  top: calc(26 * var(--u));
+  width: calc(252 * var(--u));
+  height: calc(70 * var(--u));
+  padding: calc(5 * var(--u)) calc(6 * var(--u));
+  overflow: hidden;
+}
+
+.info-name {
+  color: var(--gold-hi);
+  margin-bottom: calc(2 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.info-blurb {
+  color: var(--ink-mid);
+}
+
+/* ----------------------------------------------------------------- legend -- */
+
+.legend {
+  position: absolute;
+  left: calc(6 * var(--u));
+  top: calc(254 * var(--u));
+  width: calc(126 * var(--u));
+  height: calc(40 * var(--u));
+  padding: calc(4 * var(--u)) calc(5 * var(--u));
+}
+
+.legend-title {
+  color: var(--gold-hi);
+}
+
+.legend-ramp {
+  display: flex;
+  height: calc(8 * var(--u));
+  margin: calc(2 * var(--u)) 0 calc(1 * var(--u));
+  box-shadow: inset 0 0 0 calc(1 * var(--u)) var(--deep);
+}
+
+.legend-chip {
+  flex: 1 1 0;
+  height: 100%;
+}
+
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-dim);
+}
+
+/* ------------------------------------------------------------------ toast -- */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: calc(22 * var(--u));
+  transform: translateX(-50%);
+  max-width: calc(420 * var(--u));
+  padding: calc(4 * var(--u)) calc(8 * var(--u));
+  color: var(--ink-hi);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- journal -- */
+
+.journal {
+  position: absolute;
+  left: calc(40 * var(--u));
+  top: calc(26 * var(--u));
+  width: calc(560 * var(--u));
+  height: calc(264 * var(--u));
+}
+
+.journal-title {
+  position: absolute;
+  left: calc(8 * var(--u));
+  top: calc(5 * var(--u));
+  color: var(--gold-hi);
+}
+
+.journal-close {
+  position: absolute;
+  right: calc(5 * var(--u));
+  top: calc(4 * var(--u));
+  width: calc(14 * var(--u));
+  height: calc(12 * var(--u));
+  line-height: calc(12 * var(--u));
+  text-align: center;
+}
+
+.journal-list {
+  position: absolute;
+  left: calc(6 * var(--u));
+  top: calc(20 * var(--u));
+  width: calc(140 * var(--u));
+  height: calc(238 * var(--u));
+  padding: calc(3 * var(--u));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+}
+
+.jrow {
+  height: calc(18 * var(--u));
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  text-align: left;
+  color: var(--ink-mid);
+  flex: 0 0 auto;
+}
+
+.jrow.is-on {
+  color: var(--gold-hi);
+}
+
+.jrow-dot {
+  width: calc(4 * var(--u));
+  height: calc(4 * var(--u));
+  background: var(--ink-faint);
+  flex: 0 0 auto;
+}
+
+.jrow-dot.known {
+  background: var(--gold-hi);
+}
+
+.jrow-name {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.journal-card {
+  position: absolute;
+  left: calc(152 * var(--u));
+  top: calc(20 * var(--u));
+  width: calc(402 * var(--u));
+  height: calc(238 * var(--u));
+  padding: calc(6 * var(--u)) calc(8 * var(--u));
+  overflow-y: auto;
+}
+
+.card-head {
+  display: flex;
+  gap: calc(8 * var(--u));
+  align-items: flex-start;
+  margin-bottom: calc(4 * var(--u));
+}
+
+.card-portrait {
+  flex: 0 0 auto;
+}
+
+.card-portrait.is-silhouette {
+  opacity: 1; /* never translucent — the shape itself is the unlit colour */
+}
+
+.card-name {
+  color: var(--ink-hi);
+}
+
+.card-rung {
+  color: var(--gold);
+}
+
+.card-species {
+  color: var(--ink-dim);
+}
+
+.card-blurb {
+  color: var(--ink-mid);
+  margin-bottom: calc(4 * var(--u));
+}
+
+/* The one plain-language line an unmet creature gets. Never a requirement. */
+.card-hint {
+  color: var(--ink);
+  margin: calc(4 * var(--u)) 0;
+  padding-left: calc(6 * var(--u));
+  box-shadow: inset calc(2 * var(--u)) 0 0 0 var(--gold);
+}
+
+.card-sub {
+  color: var(--gold-hi);
+  margin: calc(4 * var(--u)) 0 calc(2 * var(--u));
+}
+
+.card-tells,
+.card-reqs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.card-tells li {
+  color: var(--ink-mid);
+  padding-left: calc(8 * var(--u));
+  text-indent: calc(-8 * var(--u));
+}
+
+.card-tells li::before {
+  content: "- ";
+  color: var(--ink-faint);
+}
+
+.req {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  color: var(--ink-mid);
+  min-height: var(--line);
+}
+
+.req.is-met {
+  color: var(--ok);
+}
+
+.req-behaviour .req-text {
+  color: var(--ink);
+}
+
+.req-behaviour.is-met .req-text {
+  color: var(--ok);
+}
+
+.tick {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  flex: 0 0 auto;
+  background: var(--face-lo);
+  box-shadow:
+    inset calc(1 * var(--u)) calc(1 * var(--u)) 0 0 var(--deep),
+    inset calc(-1 * var(--u)) calc(-1 * var(--u)) 0 0 var(--face-hi);
+  line-height: calc(7 * var(--u));
+  text-align: center;
+  color: transparent;
+}
+
+.tick.is-met {
+  background: var(--ok);
+  color: transparent;
+}
+
+.req-text {
+  flex: 1 1 auto;
+}
+
+/* The needle: which way to go, with no figure attached to it. */
+.track {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(72 * var(--u));
+  height: calc(7 * var(--u));
+}
+
+.track-band {
+  position: absolute;
+  top: calc(2 * var(--u));
+  height: calc(3 * var(--u));
+  background: var(--gold);
+}
+
+.track-needle {
+  position: absolute;
+  top: 0;
+  width: calc(2 * var(--u));
+  height: calc(7 * var(--u));
+  margin-left: calc(-1 * var(--u));
+  background: var(--ink-hi);
+}
+
+/* ------------------------------------------------------------ scrollbars -- */
+
+.grid,
+.journal-list,
+.journal-card {
+  scrollbar-width: thin;
+  scrollbar-color: var(--face-hi) var(--deep);
+}
+
+.grid::-webkit-scrollbar,
+.journal-list::-webkit-scrollbar,
+.journal-card::-webkit-scrollbar {
+  width: calc(6 * var(--u));
+}
+
+.grid::-webkit-scrollbar-track,
+.journal-list::-webkit-scrollbar-track,
+.journal-card::-webkit-scrollbar-track {
+  background: var(--deep);
+}
+
+.grid::-webkit-scrollbar-thumb,
+.journal-list::-webkit-scrollbar-thumb,
+.journal-card::-webkit-scrollbar-thumb {
+  background: var(--face);
+  box-shadow:
+    inset calc(1 * var(--u)) calc(1 * var(--u)) 0 0 var(--face-hi),
+    inset calc(-1 * var(--u)) calc(-1 * var(--u)) 0 0 var(--face-lo);
+}
+
+/* ---------------------------------------------------------------- motion -- */
+/* There is no animation in the chrome to begin with; this is a guarantee, not
+ * a fix. If a future edit adds a transition, this keeps the promise in SPEC §0. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A window too small for even 1x still shows the picture rather than clipping
+ * it out of reach; nothing is ever hidden from the player. */
+@media (max-width: 640px), (max-height: 400px) {
+  #app {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: auto;
+  }
+}
