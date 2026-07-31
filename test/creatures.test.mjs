@@ -19,6 +19,7 @@ import {
 } from '../js/creatures.js';
 import { Fields } from '../js/fields.js';
 import { CATALOG } from '../js/catalog.js';
+import { createRecital } from '../js/main.js';
 
 const newFields = () => new Fields({ w: 20, h: 20 });
 const at = (tx, ty, deposits = {}, tags = []) => ({ tx, ty, footprint: [1, 1], deposits, tags });
@@ -346,4 +347,77 @@ test('poseT restarts on a pose change, so a one-shot gesture starts at its begin
   assert.equal(agent.view().poseT, 0, 'the new pose inherited the previous pose clock');
   b.update(0.05);
   assert.ok(Math.abs(agent.view().poseT - 0.05) < 1e-9);
+});
+
+// ---------------------------------------------------------------------------
+// The recital latch
+// ---------------------------------------------------------------------------
+//
+// THIS IS A REGRESSION TEST FOR A BUG THAT SHIPPED AND REACHED THE OWNER.
+//
+// The satyr's three-minute recital was armed only on a FRESH music unlock. But
+// `extra.musicUnlocked` persists in the save, so a returning player's track
+// resumed at load, `unlockSong` returned at its first line, and no later
+// arrival could arm anything. The recital was not skipped once — it was
+// permanently unreachable for everyone who had played before.
+//
+// The rule now lives in one testable place: arm on ANY moment that means
+// "there is music and there is a satyr", at most once per session.
+//
+// BE HONEST ABOUT WHAT THESE COVER. They pin the RULE, not the wiring — a unit
+// test of the latch cannot see a call site that fails to call it, which is
+// precisely what the bug was. What actually removes that bug class is that all
+// three call sites now call `arm()` UNCONDITIONALLY: the `if (!restoring)` that
+// caused it no longer exists to be got wrong. These tests stop the rule itself
+// from being "improved" back into a once-only-on-fresh-unlock latch.
+// The wiring is verified in the running browser, against a save that already
+// carries musicUnlocked.
+
+test('the recital arms on a fresh unlock', () => {
+  const r = createRecital();
+  assert.equal(r.pending, false, 'nothing is armed before anything happens');
+  r.arm();
+  assert.equal(r.pending, true);
+  assert.equal(r.played, false, 'armed is not the same as played');
+});
+
+test('the recital arms on a RESTORE unlock — the bug that shipped', () => {
+  // A returning player: the save already carries musicUnlocked, the track comes
+  // up at load. He must still play. The old code had `if (!restoring)` here and
+  // this is the assertion that would have caught it.
+  const r = createRecital();
+  r.arm(); // unlockSong(restoring = true) now calls this on both branches
+  assert.equal(r.pending, true, 'a restored garden must still get its recital');
+});
+
+test('the recital arms on an arrival even when the music is already playing', () => {
+  // The second half of the same bug: unlockSong returns early once musicUnlocked
+  // is true, so the arrival path has to arm the latch DIRECTLY rather than
+  // relying on unlockSong to do it.
+  const r = createRecital();
+  r.arm();
+  r.took(); // he played on load
+  assert.equal(r.pending, false);
+  // A later arrival must NOT start a second recital in the same session.
+  r.arm();
+  assert.equal(r.pending, false, 'he struck up twice in one session');
+});
+
+test('arming is idempotent and survives any number of refusals', () => {
+  // He may be halfway across the map rim when it is armed; askFlourish says no
+  // until he is standing on grass, and the tick keeps asking.
+  const r = createRecital();
+  for (let i = 0; i < 500; i++) r.arm();
+  assert.equal(r.pending, true, 'the latch must stay armed across refusals');
+  r.took();
+  assert.equal(r.pending, false);
+  assert.equal(r.played, true);
+  for (let i = 0; i < 500; i++) r.arm();
+  assert.equal(r.pending, false, 'nothing re-arms after he has played');
+});
+
+test('a session that never sees a satyr never arms, and that is fine', () => {
+  const r = createRecital();
+  assert.equal(r.pending, false);
+  assert.equal(r.played, false);
 });

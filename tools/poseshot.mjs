@@ -21,7 +21,9 @@ import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { CREATURE_ART, CREATURE_IDS, FACINGS, HOLDS, creaturePoses } from '../js/art/creatures.js';
+import {
+  CREATURE_ART, CREATURE_IDS, FACINGS, HOLDS, creaturePoses, ghostResolve,
+} from '../js/art/creatures.js';
 import * as TILES from '../js/art/tiles.js';
 import { resolve as pal, PALETTE } from '../js/palette.js';
 import { lintSprite } from '../js/art/format.js';
@@ -97,7 +99,7 @@ function dot(s, x, y, r, g, b) {
   s.px[i + 2] = b;
   s.px[i + 3] = 255;
 }
-function blit(s, sp, dx, dy, flat) {
+function blit(s, sp, dx, dy, flat, ghost) {
   for (let y = 0; y < sp.h; y++) {
     for (let x = 0; x < sp.w; x++) {
       const ch = sp.rows[y][x];
@@ -106,7 +108,10 @@ function blit(s, sp, dx, dy, flat) {
         dot(s, dx + x, dy + y, 0x2a, 0x26, 0x20);
         continue;
       }
-      const hex = pal(ch);
+      // The `visits` rung renders desaturated (SPEC §7). This is what the
+      // player sees FIRST — before a creature is earned it is a grey preview —
+      // so a pose has to read in the ghost as well as in colour.
+      const hex = ghost ? ghostResolve(ch) : pal(ch);
       if (!hex) continue;
       dot(s, dx + x, dy + y, parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
     }
@@ -165,6 +170,7 @@ const pose = arg('--pose', 'idle');
 const facing = arg('--facing', 'se');
 const zoom = Number(arg('--zoom', 4));
 const sil = has('--sil');
+const ghost = has('--ghost');
 const ground = arg('--ground', 'grass');
 const out = resolve(arg('--out', `docs/shots/${id}-${pose}.png`));
 
@@ -215,7 +221,7 @@ const holds = HOLDS[pose] || HOLDS.idle;
 set.forEach((sp, i) => {
   const cx = i * cellW + cellW / 2;
   const cy = cellH - 22;
-  blit(s, sp, Math.round(cx - sp.anchor[0]), Math.round(cy - sp.anchor[1]), sil);
+  blit(s, sp, Math.round(cx - sp.anchor[0]), Math.round(cy - sp.anchor[1]), sil, ghost);
   const ink = sil ? [0x2a, 0x26, 0x20] : [0xe9, 0xc1, 0x58];
   text(s, `${picked[i]} ${holds[picked[i]] ?? '-'}MS`, i * cellW + 3, 3, ink);
 });

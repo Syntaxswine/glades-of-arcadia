@@ -56,16 +56,35 @@ It has no site, so the scheduler skips it — `_maybeFlourish` ignores anything
 with `site: null`, and the playtest asserts he never self-starts. `main.js` owns
 it entirely, through `bestiary.askFlourish('satyr', 'piping')`.
 
-The call site is one flag and one line, because `askFlourish` **refuses
+The call site is a latch and one line, because `askFlourish` **refuses
 politely**: offstage, mid-transit over the map rim, or already performing all
-return `false`. So `main.js` sets `pendingPipe` when the music unlocks and asks
-on every step until it takes, rather than running a second state machine to
-listen for his arrival. He is still dissolving in over the rim at the moment the
-track starts, and a creature out there has nowhere to stand.
+return `false`. So `main.js` arms `createRecital()` and asks on every step until
+it takes, rather than running a second state machine to listen for his arrival.
+He may still be dissolving in over the rim at the moment the track starts, and a
+creature out there has nowhere to stand.
 
-It is **not** armed on a restore. Reloading a garden that already has a satyr in
-it resumes the track; a three-minute recital on every page refresh would turn the
-arrival into a chore.
+### Armed once per session, by whichever comes first
+
+- the music unlocking because a satyr has just walked in,
+- a satyr arriving at any later point,
+- or the garden loading with a satyr already living in it.
+
+> **This is a fix for a bug that shipped and reached the owner.** The first
+> version armed the recital only on a FRESH unlock, reasoning that a
+> three-minute recital on every page refresh would become a chore.
+>
+> But `extra.musicUnlocked` **persists in the save.** For a returning player the
+> track resumed at load, `unlockSong` returned at its first line
+> (`if (musicUnlocked) return`), and the recital was not merely skipped that
+> once — it became *permanently unreachable*, because no later arrival could get
+> past that same early return either. The owner loaded their garden, heard the
+> music start immediately, and watched the satyr stand there doing nothing.
+>
+> **A thing seen slightly too often beats a thing that cannot be seen.**
+>
+> The rule now lives in `createRecital()` at the top of `main.js`, exported so a
+> test can hold it, and all three call sites call `arm()` **unconditionally** —
+> the `if (!restoring)` that caused this no longer exists to be got wrong.
 
 Three minutes is the owner's number. The track itself runs 3:48, so he stops a
 little before its first pass ends.
@@ -160,9 +179,15 @@ object held at the face has to be narrow enough for the face to survive it.**
 
 - The syrinx was authored in the earth ramp, the same ramp as his skin, and
   vanished — a faint texture on his chin. Olive light and flesh mid are 132 and
-  129 in luminance, so moving it to olive did not fix it either; it needed
-  striping the *lightest* olive against a dark one, a 63-unit break, so the
-  instrument carries its own contrast instead of depending on what is behind it.
+  129 in luminance, so moving it to olive light did not fix it either.
+- **And check the GHOST.** Striping olive-light against a dark olive made the
+  instrument carry its own contrast, which worked in colour and hid a second
+  bug: the `visits` preview compresses everything toward mid-grey, and olive
+  light `i` and flesh `t` both land on `#8A7F6D` — a separation of **zero**.
+  Half the syrinx was literally his skin colour in the preview every player sees
+  *first*, and it read as a muzzle. Olive mid `h` is the key that survives both:
+  34 from flesh in colour and 30 in the ghost, where `i` was 2 and 0.
+  `poseshot --ghost` exists for exactly this.
 - At fourteen wide it read as a washboard bib. At ten, hung below the beard, as a
   necklace. Six, at the lips, with beard showing either side, reads as playing.
 - The cup went the same way: upright at the mouth it was a bib, tilted on a

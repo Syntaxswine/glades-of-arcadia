@@ -1270,19 +1270,33 @@ const S_ARM_PIPE_R = part([
 // reads as jewellery, not as playing. Six wide is the number that touches the
 // mouth and still leaves beard at both edges.
 //
-// The tubes alternate the LIGHTEST and a DARK olive, not two neighbouring
-// ones. Olive light and flesh mid are 132 and 129 in luminance — within three
-// units, so `ihihih` differed from his skin in hue alone and at this size hue
-// alone is not a read. Striping i against g is a 63-unit break, which means the
-// instrument carries its own contrast and stays legible against both the pale
-// chest and the dark beard rather than depending on what is behind it.
+// The tubes are OLIVE MID striped against OLIVE DARKEST, and the choice of
+// which olive is the whole story of this sprite.
+//
+// It was authored first in the earth ramp — his own skin — and vanished. Moved
+// to olive light (`i`) it vanished again, because olive light and flesh mid are
+// 132 and 129 in luminance: a hue difference with no value difference, and at
+// twenty-four pixels hue alone is not a read. That pass compensated by striping
+// `i` against a dark olive so the instrument carried its own internal contrast,
+// which worked in colour and hid a second bug underneath it.
+//
+// THE SECOND BUG: the `visits` rung renders desaturated, and the ghost map
+// compresses everything toward mid-grey. `i` and flesh `t` both land on
+// #8A7F6D — a separation of ZERO. Half the syrinx was literally his skin
+// colour in the preview every player sees FIRST, and it read as a muzzle.
+//
+// `h` is the key that survives both. Against flesh `t` it is 34 apart in
+// colour and 30 in the ghost; `i` was 2 and 0.
+//
+// Darker than his skin, not lighter, so the notes stay the only bright thing
+// in the pose. They are what the eye should go to.
 const S_SYRINX = part([
   'ffffff',
-  'igigig',
-  'igigig',
-  'ffffff',
-  'igig..',
-  'ig....',
+  'hfhfhf',
+  'hfhfhf',
+  'gggggg',
+  'hfhf..',
+  'hf....',
 ]);
 
 // The notes.

@@ -237,7 +237,7 @@ or failed track logs one line, and the glade keeps its birds.
 ## The instruments
 
 ```
-npm test                 # node --test — 283 tests, ~9s
+npm test                 # node --test — 288 tests, ~9s
 npm run playtest         # does the DESIGN work?  46 checks, ~40s
 npm run build            # single-file dist + a self-audit
 npm run check            # all three

@@ -321,6 +321,51 @@ function plantOpeningGlade(world, cat, rng, dayMs) {
 // must deposit into the fields THE SAME WAY the running game does. A second
 // copy of this bridge in the tool would be a copy that can drift, and the
 // playtest's whole job is to be believed.
+/**
+ * THE RECITAL LATCH — when the satyr should stand and play the score.
+ *
+ * A three-line state machine, pulled out of `boot()` so it can be tested,
+ * because the bug it now prevents shipped and reached the owner.
+ *
+ * That bug: the recital was armed only on a FRESH music unlock. But
+ * `extra.musicUnlocked` persists in the save, so a returning player's track
+ * resumed at load, `unlockSong` returned at its first line, and no later
+ * arrival could arm anything — the recital was not skipped once, it was
+ * permanently unreachable. Nothing in the type system or the test suite could
+ * see that, because the rule lived as a bare `if (!restoring)` inside a
+ * thousand-line closure.
+ *
+ * The rule, stated once and testable: **arm on ANY moment that means "there is
+ * music and there is a satyr", at most once per session.**
+ *
+ *   arm()   a fresh unlock, a restore unlock, or a satyr arriving. Idempotent.
+ *   took()  he actually started playing. Nothing arms it again this session.
+ *
+ * `pending` stays true across as many refusals as it takes — he may be halfway
+ * across the map rim when it is armed, and `askFlourish` says no until he is
+ * standing on grass.
+ */
+export function createRecital() {
+  let pending = false;
+  let played = false;
+  return {
+    arm() {
+      if (!played) pending = true;
+      return pending;
+    },
+    took() {
+      pending = false;
+      played = true;
+    },
+    get pending() {
+      return pending;
+    },
+    get played() {
+      return played;
+    },
+  };
+}
+
 export function createFieldBridge(world, fields, cat) {
   const byUid = new Map(); // world object uid -> the placement fields holds
   const byTile = new Map(); // tile index -> the synthetic ground placement
@@ -1661,23 +1706,40 @@ async function bootOnce(shell = {}) {
   /**
    * THE PERFORMANCE.
    *
-   * When the score starts, the satyr who caused it stands and plays for three
-   * minutes. He is the musician of the myth; the music arriving with him is
-   * only half the idea, and the other half is seeing him make it.
+   * When the score is playing, the satyr stands and plays it for three minutes.
+   * He is the musician of the myth; the music arriving with him is only half
+   * the idea, and the other half is seeing him make it.
    *
-   * `pendingPipe` rather than a call, because at the moment the music unlocks
-   * he is still walking in from the map rim, half dissolved into the dusk, and
-   * a creature out there has nowhere to stand. `askFlourish` refuses politely
-   * in that state, so this simply keeps asking on the frame loop until he has
-   * both feet on the grass — which is one flag and one line in the tick, rather
-   * than a second state machine listening for his arrival.
+   * ARMED ONCE PER SESSION, by whichever of these happens first:
    *
-   * It is asked ONCE and then dropped whether it took or not: if a satyr
-   * somehow never lands, the garden is quietly no worse off, and a flag that
-   * retried for ever would have him strike up again every time he happened to
-   * be idle for the rest of the session.
+   *   - the music unlocks because a satyr has just walked in (the intended
+   *     moment, and the only one the first version handled),
+   *   - a satyr arrives at any later point,
+   *   - or the garden loads with a satyr already living in it.
+   *
+   * The first version armed it ONLY on a fresh unlock, reasoning that a
+   * three-minute recital on every page refresh would become a chore. That was
+   * wrong in the way that matters. `extra.musicUnlocked` PERSISTS IN THE SAVE,
+   * so for a returning player — which is everyone who has played before — the
+   * track resumed at load, `unlockSong` returned at its first line, and the
+   * recital was not merely skipped that once but became permanently
+   * unreachable: no later arrival could arm it either, because `unlockSong`
+   * never gets past `if (musicUnlocked) return`. The owner reported exactly
+   * this, and it made the whole feature invisible.
+   *
+   * A thing seen slightly too often beats a thing that cannot be seen.
+   *
+   * It is a LATCH rather than a direct call because at the moment it is armed
+   * he may still be walking in from the map rim, half dissolved into the dusk,
+   * and a creature out there has nowhere to stand. `askFlourish` refuses
+   * politely in that state, so the tick simply keeps asking until he has both
+   * feet on the grass — one flag and one line, rather than a second state
+   * machine listening for his arrival.
+   *
+   * The latch itself is `createRecital()` at the top of this file, pulled out
+   * so a test can hold the rule.
    */
-  let pendingPipe = false;
+  const recital = createRecital();
 
   const unlockSong = guard('music', (restoring) => {
     if (musicUnlocked) return;
@@ -1689,10 +1751,9 @@ async function bootOnce(shell = {}) {
     // that the call site says which of the two stories this is.
     if (restoring) audio.setMusicUnlocked(true);
     else audio.unlockMusic();
-    // Not on a restore. Reloading a garden that already has a satyr in it
-    // resumes the track, and a three-minute recital every time the page is
-    // refreshed would turn the arrival into a chore.
-    if (!restoring) pendingPipe = true;
+    // Both branches. On a restore he takes it as soon as he is standing idle,
+    // which for a settled satyr is within a few seconds of the garden opening.
+    recital.arm();
   });
 
   // Restore. Two sources, because a save written before this feature existed
@@ -1854,9 +1915,10 @@ async function bootOnce(shell = {}) {
     const events = invoke(bestiary, ['update'], dt, { reducedMotion });
     // Ask AFTER the step, so the arrival that ended this tick counts. He
     // refuses while he is still out over the rim; the first tick he is standing
-    // on grass, he takes it and starts to play.
-    if (pendingPipe && typeof bestiary.askFlourish === 'function') {
-      if (bestiary.askFlourish(MUSICIAN, 'piping')) pendingPipe = false;
+    // on grass, he takes it and starts to play. The latch stays armed across as
+    // many refusals as it takes, and `took()` closes it for the session.
+    if (recital.pending && typeof bestiary.askFlourish === 'function') {
+      if (bestiary.askFlourish(MUSICIAN, 'piping')) recital.took();
     }
     return events;
   });
@@ -1884,6 +1946,12 @@ async function bootOnce(shell = {}) {
         (ev.type === 'visit-start' || ev.type === 'settled' || ev.type === 'settled-again')
       ) {
         unlockSong(false);
+        // Also arm the recital directly, NOT only through unlockSong. On a
+        // returning save the music is already unlocked, so unlockSong returns
+        // at its first line and this arrival would otherwise pass in silence
+        // with him standing about doing nothing. He has just walked in; that
+        // is the moment.
+        recital.arm();
       }
       switch (ev.type) {
         case 'settled':
