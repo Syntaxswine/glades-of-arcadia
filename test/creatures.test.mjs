@@ -353,67 +353,73 @@ test('poseT restarts on a pose change, so a one-shot gesture starts at its begin
 // The recital latch
 // ---------------------------------------------------------------------------
 //
-// THIS IS A REGRESSION TEST FOR A BUG THAT SHIPPED AND REACHED THE OWNER.
+// TWO REGRESSION TESTS' WORTH OF SCAR TISSUE, BOTH ABOUT INTENT vs SOUND.
 //
-// The satyr's three-minute recital was armed only on a FRESH music unlock. But
-// `extra.musicUnlocked` persists in the save, so a returning player's track
-// resumed at load, `unlockSong` returned at its first line, and no later
-// arrival could arm anything. The recital was not skipped once — it was
-// permanently unreachable for everyone who had played before.
+// BUG 1 (shipped, reached the owner): the recital armed only on a FRESH music
+// unlock. `extra.musicUnlocked` persists in the save, so a returning player's
+// track resumed at load, `unlockSong` returned at its first line, and no later
+// arrival could arm anything. Permanently unreachable.
 //
-// The rule now lives in one testable place: arm on ANY moment that means
-// "there is music and there is a satyr", at most once per session.
+// BUG 2 (the fix for bug 1, found by an audit): arming on every moment that
+// MEANT music. On a returning save `unlockSong(true)` runs during boot, before
+// any gesture — no AudioContext, nothing fetched — so the satyr piped for three
+// minutes to a silent glade, latched `played`, and the music started later with
+// no musician.
 //
-// BE HONEST ABOUT WHAT THESE COVER. They pin the RULE, not the wiring — a unit
-// test of the latch cannot see a call site that fails to call it, which is
-// precisely what the bug was. What actually removes that bug class is that all
-// three call sites now call `arm()` UNCONDITIONALLY: the `if (!restoring)` that
-// caused it no longer exists to be got wrong. These tests stop the rule itself
-// from being "improved" back into a once-only-on-fresh-unlock latch.
-// The wiring is verified in the running browser, against a save that already
-// carries musicUnlocked.
+// THE RULE IS NOW ONE RULE: arm when a note is actually sounding. The caller
+// checks `audio.playing` (audio.js's `musicPlaying`) every tick.
+//
+// BE HONEST ABOUT WHAT THESE COVER. They pin the LATCH, not the wiring — a unit
+// test of a latch cannot see a call site that fails to call it, which is what
+// bug 1 was, nor one that calls it too eagerly, which is what bug 2 was. What
+// removes those classes is that there is now exactly ONE arming call site and
+// its condition is a direct read of whether sound is coming out. The wiring is
+// verified in the running browser against a restored save.
 
-test('the recital arms on a fresh unlock', () => {
+test('the latch starts closed — silence arms nothing', () => {
   const r = createRecital();
-  assert.equal(r.pending, false, 'nothing is armed before anything happens');
-  r.arm();
-  assert.equal(r.pending, true);
-  assert.equal(r.played, false, 'armed is not the same as played');
-});
-
-test('the recital arms on a RESTORE unlock — the bug that shipped', () => {
-  // A returning player: the save already carries musicUnlocked, the track comes
-  // up at load. He must still play. The old code had `if (!restoring)` here and
-  // this is the assertion that would have caught it.
-  const r = createRecital();
-  r.arm(); // unlockSong(restoring = true) now calls this on both branches
-  assert.equal(r.pending, true, 'a restored garden must still get its recital');
-});
-
-test('the recital arms on an arrival even when the music is already playing', () => {
-  // The second half of the same bug: unlockSong returns early once musicUnlocked
-  // is true, so the arrival path has to arm the latch DIRECTLY rather than
-  // relying on unlockSong to do it.
-  const r = createRecital();
-  r.arm();
-  r.took(); // he played on load
   assert.equal(r.pending, false);
-  // A later arrival must NOT start a second recital in the same session.
-  r.arm();
-  assert.equal(r.pending, false, 'he struck up twice in one session');
+  assert.equal(r.played, false);
 });
 
 test('arming is idempotent and survives any number of refusals', () => {
-  // He may be halfway across the map rim when it is armed; askFlourish says no
-  // until he is standing on grass, and the tick keeps asking.
+  // He may be halfway across the map rim when the music starts; askFlourish
+  // says no until he is standing on grass, and the tick keeps asking.
   const r = createRecital();
   for (let i = 0; i < 500; i++) r.arm();
   assert.equal(r.pending, true, 'the latch must stay armed across refusals');
   r.took();
   assert.equal(r.pending, false);
   assert.equal(r.played, true);
+});
+
+test('nothing re-arms after he has played — one recital per session', () => {
+  const r = createRecital();
+  r.arm();
+  r.took();
+  // The track loops, or the player mutes and unmutes and it starts again.
   for (let i = 0; i < 500; i++) r.arm();
-  assert.equal(r.pending, false, 'nothing re-arms after he has played');
+  assert.equal(r.pending, false, 'he struck up a second time in one session');
+  assert.equal(r.played, true);
+});
+
+test('the latch models the caller: armed only ever means "sound is happening"', () => {
+  // Simulate the tick exactly: `if (!recital.played && audio.playing) arm()`.
+  const r = createRecital();
+  const tick = (playing) => {
+    if (!r.played && playing) r.arm();
+    return r.pending;
+  };
+  // A returning save: boot unlocks the music, but there is no context and
+  // nothing decoded, so nothing is playing. This is BUG 2.
+  for (let i = 0; i < 600; i++) {
+    assert.equal(tick(false), false, 'armed while the glade was silent');
+  }
+  // The player clicks, the mp3 decodes, a pass begins.
+  assert.equal(tick(true), true, 'did not arm when the music actually started');
+  r.took();
+  // And it stays shut for the rest of the session however long the track runs.
+  for (let i = 0; i < 600; i++) assert.equal(tick(true), false);
 });
 
 test('a session that never sees a satyr never arms, and that is fine', () => {

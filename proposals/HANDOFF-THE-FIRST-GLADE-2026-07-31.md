@@ -257,10 +257,28 @@ persists in the save, so their track resumed at load, `unlockSong` returned at
 its first line, and — because *every* later arrival hits that same early return
 — the recital was not skipped once but permanently. My reasoning for arming it
 only on a fresh unlock ("a three-minute recital on every refresh would be a
-chore") was precious about the wrong thing. **A thing seen slightly too often
-beats a thing that cannot be seen.** The rule now lives in `createRecital()`,
-exported from `main.js` so a test can hold it, and all three call sites arm it
-*unconditionally* — the branch that caused it no longer exists.
+chore") was precious about the wrong thing.
+
+**And then my fix for that was wrong too, in the same way.** It armed on every
+moment that *meant* music — fresh unlock, restore unlock, arrival — but on a
+returning save `unlockSong(true)` runs during boot, **before any gesture**: no
+AudioContext, nothing fetched. The hydrated satyr took the recital on the first
+simulation step and piped for three minutes to a silent glade, latched, and the
+music started later with no musician.
+
+I missed it *while verifying the first fix*. My browser check confirmed "he
+pipes on a restored save" and I called that success — when the evidence in my own
+output (`pose: pipe` recorded **before** the gesture line ran) was the bug.
+**A check that confirms the thing happened is not a check that it happened for
+the right reason.**
+
+The rule is now one rule, and it is about SOUND rather than intent:
+`if (!recital.played && audio.playing) recital.arm()`, checked every step, where
+`audio.playing` is audio.js's `musicPlaying`. Not `musicUnlocked` (intent), not
+`ready` (the context is running). One arming call site, whose condition is a
+direct read of whether a note is coming out. Verified end to end: 521 frames of
+silence with zero piping, then music at t=8.7 s and piping at t=8.7 s — the same
+frame. A muted player getting no recital falls out for free.
 
 **The syrinx was invisible in the ghost.** The `visits` preview compresses toward
 mid-grey, and olive-light `i` and flesh `t` both land on `#8A7F6D` — separation

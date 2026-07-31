@@ -89,9 +89,11 @@ built to take more; see `docs/FLOURISHES.md` for the shape.
   the pose. The catalogue's `syrinx` tag is Pan's capstone site and the proposed
   four-way tile — worth deciding whether the satyr's pipes should relate to
   either, or stay purely his.
-- **`piping` fires once a session and is never armed on a restore.** That is
-  right for the arrival. If it ever wants to recur, it needs a cooldown and a
-  reason — not just a flag flip.
+- **`piping` fires once a session, armed the moment the track is audibly
+  playing.** If it ever wants to recur, it needs a cooldown and a reason — not
+  just a flag flip. Whatever you do, do not re-tie it to `musicUnlocked` or to an
+  arrival: that is *intent*, and intent fires before there is an AudioContext.
+  Two bugs came out of that confusion; `docs/FLOURISHES.md` has both.
 - **The drink is silent.** There is no audio hook on a flourish at all. A single
   soft sound on the sip would probably be lovely and would equally probably get
   annoying at the fifth repeat; if tried, tie it to the one-shot's start, not to
@@ -100,9 +102,11 @@ built to take more; see `docs/FLOURISHES.md` for the shape.
 ## 4c · Found by the reachability audit (2026-07-31)
 
 Four agents traced "can a player actually SEE these animations, from every entry
-state". Two findings were real and are FIXED (the recital being unreachable on a
-restored save; `phase` animating and running every creature ~40% fast). These
-are the survivors — real, but not worth stopping for:
+state". THREE findings were real and are FIXED: the recital unreachable on a
+restored save; the fix for THAT firing into silence before any AudioContext
+existed; and `phase` animating, which ran every creature in the game ~40% fast.
+The muted-player case fell out for free — nothing is playing, so nothing arms.
+These are the survivors — real, but not worth stopping for:
 
 - **`CREATURE_SHADOWS` is dead art.** `main.js` passes the authored contact
   stamp as `shadow:`, but `render.js` only reads that field as `false` or a
@@ -110,9 +114,6 @@ are the survivors — real, but not worth stopping for:
   from the footprint instead. The shadows you see are procedural; five
   hand-authored sprites are never rasterised. Either wire them up or delete
   them, but do not leave art in the tree that nothing draws.
-- **A muted player still gets the full three-minute recital**, miming to a track
-  they cannot hear. Defensible — it is a visual, and the garden is still worth
-  looking at — but if it ever grates, gate `arm()` on `!audio.muted`.
 - **Three sprite-name collisions between modules** with mismatched dimensions:
   `broken-column` (32×29 vs 30×40), `hedge-arch` (65×86 vs 54×56), `gravel-walk`
   (64×34 vs 64×32). The raster cache is a WeakMap keyed on the object so nothing

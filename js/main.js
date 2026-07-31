@@ -327,19 +327,35 @@ function plantOpeningGlade(world, cat, rng, dayMs) {
  * A three-line state machine, pulled out of `boot()` so it can be tested,
  * because the bug it now prevents shipped and reached the owner.
  *
- * That bug: the recital was armed only on a FRESH music unlock. But
+ * TWO bugs, in sequence, both about the difference between INTENT and SOUND.
+ *
+ * The first: the recital was armed only on a FRESH music unlock. But
  * `extra.musicUnlocked` persists in the save, so a returning player's track
  * resumed at load, `unlockSong` returned at its first line, and no later
  * arrival could arm anything — the recital was not skipped once, it was
- * permanently unreachable. Nothing in the type system or the test suite could
- * see that, because the rule lived as a bare `if (!restoring)` inside a
- * thousand-line closure.
+ * permanently unreachable.
  *
- * The rule, stated once and testable: **arm on ANY moment that means "there is
- * music and there is a satyr", at most once per session.**
+ * The second was the FIX for the first, and it was worse in a quieter way. It
+ * armed on every moment that *meant* music: a fresh unlock, a restore unlock,
+ * an arrival. But on a returning save `unlockSong(true)` runs during boot,
+ * before any gesture — so there is no AudioContext, the 5 MB has not been
+ * fetched, and `beginMusic` bails at its first line. The satyr, hydrated
+ * `idle`, took the recital on the FIRST simulation step and piped for three
+ * full minutes to a silent glade. Then `played` latched, and when the player
+ * finally clicked and the track decoded, the music started with no musician.
+ * Verified in the browser: `ctx: "none"`, `load: "idle"`, `playing: false`,
+ * satyr nine seconds into the recital.
  *
- *   arm()   a fresh unlock, a restore unlock, or a satyr arriving. Idempotent.
- *   took()  he actually started playing. Nothing arms it again this session.
+ * THE RULE, and it is one rule: **arm when a note is actually sounding.**
+ *
+ *   `audio.playing`   audio.js's `musicPlaying` — the track has begun a pass.
+ *                     Not `musicUnlocked` (intent) and not `ready` (the context
+ *                     is running). The tick checks it every step.
+ *   arm()             idempotent; does nothing once he has played.
+ *   took()            he actually started. Nothing arms it again this session.
+ *
+ * This is also why a muted player no longer mimes to a track they cannot hear:
+ * nothing is playing, so nothing arms.
  *
  * `pending` stays true across as many refusals as it takes — he may be halfway
  * across the map rim when it is armed, and `askFlourish` says no until he is
@@ -1176,6 +1192,26 @@ function makeAudioShim(mod) {
         return false;
       }
     },
+    /**
+     * Is a note actually SOUNDING right now?
+     *
+     * Not `musicUnlocked`, which only means the game intends there to be music,
+     * and not `ready`, which is the AudioContext being running. This is
+     * audio.js's `musicPlaying` — the track has begun a pass.
+     *
+     * It exists because the satyr's recital is meant to be him MAKING the
+     * music, and intent is not sound: on a returning save the game unlocks the
+     * music during boot, before any gesture, so there is no context and the 5 MB
+     * has not been fetched. Anything armed on intent fires into silence.
+     */
+    get playing() {
+      try {
+        const s = src && typeof src.stats === 'function' ? src.stats() : null;
+        return !!(s && s.music && s.music.playing);
+      } catch (_) {
+        return false;
+      }
+    },
     get musicUnlocked() {
       try {
         return !!(src && src.musicUnlocked);
@@ -1751,9 +1787,9 @@ async function bootOnce(shell = {}) {
     // that the call site says which of the two stories this is.
     if (restoring) audio.setMusicUnlocked(true);
     else audio.unlockMusic();
-    // Both branches. On a restore he takes it as soon as he is standing idle,
-    // which for a settled satyr is within a few seconds of the garden opening.
-    recital.arm();
+    // NOT armed here. Unlocking is INTENT, and intent is not sound — see the
+    // recital latch above, and `audio.playing`. The tick arms it when a note is
+    // actually going.
   });
 
   // Restore. Two sources, because a save written before this feature existed
@@ -1917,6 +1953,9 @@ async function bootOnce(shell = {}) {
     // refuses while he is still out over the rim; the first tick he is standing
     // on grass, he takes it and starts to play. The latch stays armed across as
     // many refusals as it takes, and `took()` closes it for the session.
+    // ARM ON SOUND. One rule, checked every step: if the track is audibly
+    // playing and he has not played yet this session, put him on the pipes.
+    if (!recital.played && audio.playing) recital.arm();
     if (recital.pending && typeof bestiary.askFlourish === 'function') {
       if (bestiary.askFlourish(MUSICIAN, 'piping')) recital.took();
     }
@@ -1946,12 +1985,10 @@ async function bootOnce(shell = {}) {
         (ev.type === 'visit-start' || ev.type === 'settled' || ev.type === 'settled-again')
       ) {
         unlockSong(false);
-        // Also arm the recital directly, NOT only through unlockSong. On a
-        // returning save the music is already unlocked, so unlockSong returns
-        // at its first line and this arrival would otherwise pass in silence
-        // with him standing about doing nothing. He has just walked in; that
-        // is the moment.
-        recital.arm();
+        // NOT armed here either. An arrival is what STARTS the music, but the
+        // track may be seconds of decoding away, and on a returning save it may
+        // already have been going for an hour. Either way the tick below is the
+        // thing that knows.
       }
       switch (ev.type) {
         case 'settled':

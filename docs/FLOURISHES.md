@@ -63,28 +63,54 @@ it takes, rather than running a second state machine to listen for his arrival.
 He may still be dissolving in over the rim at the moment the track starts, and a
 creature out there has nowhere to stand.
 
-### Armed once per session, by whichever comes first
+### Armed when a note is actually SOUNDING
 
-- the music unlocking because a satyr has just walked in,
-- a satyr arriving at any later point,
-- or the garden loading with a satyr already living in it.
+One rule, checked every step:
 
-> **This is a fix for a bug that shipped and reached the owner.** The first
-> version armed the recital only on a FRESH unlock, reasoning that a
-> three-minute recital on every page refresh would become a chore.
+```js
+if (!recital.played && audio.playing) recital.arm();
+```
+
+`audio.playing` is audio.js's `musicPlaying` — the track has begun a pass. It is
+**not** `musicUnlocked` (which only means the game intends there to be music) and
+**not** `ready` (which is the AudioContext running).
+
+> **TWO bugs shipped here, in sequence, and both were the same confusion:
+> INTENT is not SOUND.**
 >
-> But `extra.musicUnlocked` **persists in the save.** For a returning player the
-> track resumed at load, `unlockSong` returned at its first line
-> (`if (musicUnlocked) return`), and the recital was not merely skipped that
-> once — it became *permanently unreachable*, because no later arrival could get
-> past that same early return either. The owner loaded their garden, heard the
-> music start immediately, and watched the satyr stand there doing nothing.
+> **The first** armed the recital only on a FRESH unlock. But
+> `extra.musicUnlocked` persists in the save, so a returning player's track
+> resumed at load, `unlockSong` returned at its first line
+> (`if (musicUnlocked) return`), and — because every later arrival hits that same
+> early return — the recital was not skipped once, it became *permanently
+> unreachable*. The owner loaded their garden, heard the music start, and watched
+> the satyr stand there.
 >
-> **A thing seen slightly too often beats a thing that cannot be seen.**
+> **The second was the fix for the first**, and it was worse in a quieter way. It
+> armed on every moment that *meant* music: fresh unlock, restore unlock,
+> arrival. But on a returning save `unlockSong(true)` runs during boot, **before
+> any gesture** — no AudioContext exists, the 5 MB has not been fetched, and
+> `beginMusic` bails at its first line. The hydrated satyr, already `idle`, took
+> the recital on the *first simulation step* and piped for three full minutes to
+> a silent glade. Then `played` latched, and when the player finally clicked and
+> the track decoded, the music started with no musician.
 >
-> The rule now lives in `createRecital()` at the top of `main.js`, exported so a
-> test can hold it, and all three call sites call `arm()` **unconditionally** —
-> the `if (!restoring)` that caused this no longer exists to be got wrong.
+> Measured in the browser: `ctx: "none"`, `load: "idle"`, `playing: false`, satyr
+> nine seconds into the recital.
+>
+> I found the first because the owner reported it. I missed the second *while
+> verifying the fix for the first* — my check confirmed "he pipes on a restored
+> save" and I read that as success, when the evidence in front of me
+> (`pose: pipe` recorded **before** the gesture line ran) was the bug.
+>
+> **A check that confirms the thing happened is not a check that it happened for
+> the right reason.**
+
+Verified end to end: 521 frames of silence with zero piping, then music begins at
+t=8.7 s and he begins piping at t=8.7 s — the same frame.
+
+A muted player gets no recital, for free and correctly: nothing is playing, so
+nothing arms.
 
 Three minutes is the owner's number. The track itself runs 3:48, so he stops a
 little before its first pass ends.
