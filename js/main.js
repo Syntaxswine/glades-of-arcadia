@@ -588,7 +588,7 @@ function createArtist(mods) {
   // step profile) as the columns and benches beside it, and its hedge arch has
   // a legible doorway, which the influence rule REQUIRES a player to be able to
   // see. Nothing else in either module shares a name.
-  for (const m of [mods.tiles, mods.sprites, mods.extras, mods.props, mods.decor]) {
+  for (const m of [mods.tiles, mods.extras, mods.props, mods.decor]) {
     if (!m) continue;
     for (const [k, v] of Object.entries(m)) {
       if (v && typeof v === 'object' && v.rows && v.anchor) registry.set(v.name || k, v);
@@ -1214,7 +1214,12 @@ async function bootOnce(shell = {}) {
   // `art/extras.js` holds the seam-authored sprites (palisade-fence,
   // seated-maiden) that the catalogue names and no art owner shipped.
   const mProps = await import('./art/props.js').catch(() => null);
-  const mSprites = await import('./art/sprites.js').catch(() => null);
+  // NOTE: there is deliberately no `art/sprites.js`. An optional import for it
+  // used to sit here and always resolved to null — harmless, but it cost a real
+  // 404 on every single page load, which is visible in the network panel of a
+  // deployed build and looks like a broken game. The seam-authored sprites it
+  // was reaching for live in `art/extras.js`. The art-source loop below still
+  // tolerates a missing module, so re-adding one is a one-line change.
   const mExtras = await import('./art/extras.js').catch(() => null);
   // art/decor.js — the DECOR.md Part II furniture, architecture, hedges,
   // fountains and the four ELEVATION.md connectors. Without this line every one
@@ -1413,7 +1418,7 @@ async function bootOnce(shell = {}) {
 
   // ---- art + scene --------------------------------------------------------
   const mods = {
-    grow: mGrow, tiles: mTiles, artCreatures: mArtCreatures, props: mProps, sprites: mSprites,
+    grow: mGrow, tiles: mTiles, artCreatures: mArtCreatures, props: mProps,
     extras: mExtras, decor: mDecor,
     fields: mFields, // for AXIS_META — which axes are signed
   };
