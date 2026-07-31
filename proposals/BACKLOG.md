@@ -97,6 +97,35 @@ built to take more; see `docs/FLOURISHES.md` for the shape.
   annoying at the fifth repeat; if tried, tie it to the one-shot's start, not to
   a frame.
 
+## 4c · Found by the reachability audit (2026-07-31)
+
+Four agents traced "can a player actually SEE these animations, from every entry
+state". Two findings were real and are FIXED (the recital being unreachable on a
+restored save; `phase` animating and running every creature ~40% fast). These
+are the survivors — real, but not worth stopping for:
+
+- **`CREATURE_SHADOWS` is dead art.** `main.js` passes the authored contact
+  stamp as `shadow:`, but `render.js` only reads that field as `false` or a
+  number — an object falls through to `1` and it synthesises an elliptical stamp
+  from the footprint instead. The shadows you see are procedural; five
+  hand-authored sprites are never rasterised. Either wire them up or delete
+  them, but do not leave art in the tree that nothing draws.
+- **A muted player still gets the full three-minute recital**, miming to a track
+  they cannot hear. Defensible — it is a visual, and the garden is still worth
+  looking at — but if it ever grates, gate `arm()` on `!audio.muted`.
+- **Three sprite-name collisions between modules** with mismatched dimensions:
+  `broken-column` (32×29 vs 30×40), `hedge-arch` (65×86 vs 54×56), `gravel-walk`
+  (64×34 vs 64×32). The raster cache is a WeakMap keyed on the object so nothing
+  is *drawn* wrong, and `main.js` already documents the load order that decides
+  which wins — but a name that resolves to "whichever module went last" is a
+  trap waiting for someone.
+- **`prefers-reduced-motion` does not damp creature animation.** It stops water
+  cycling and grass motion and eases the camera, but a creature still walks and
+  breathes at full rate. Worth deciding deliberately rather than by omission.
+- **A reload is a free drink** — `agent.cool` is runtime-only, so the tipple
+  cooldown resets on every load. Harmless in a game with no economy; noted so
+  nobody is surprised.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide

@@ -421,3 +421,37 @@ test('a session that never sees a satyr never arms, and that is fine', () => {
   assert.equal(r.pending, false);
   assert.equal(r.played, false);
 });
+
+test('phase is a FIXED per-agent offset, not an animated value', () => {
+  // REGRESSION. `phase` desynchronises creatures so two on screen do not blink
+  // in lockstep (RESEARCH §A8). Its only consumer is main.js, which uses it as
+  // a constant millisecond offset into the animation clock:
+  //
+  //     at = ms + (v.phase || 0) * 1000
+  //
+  // It was being advanced by 0.35/s in update(). That added 350ms to the
+  // animation clock every real second — a 35% overspeed — and when it wrapped
+  // 1 -> 0 it yanked the clock back a full second, about three frames. Every
+  // creature in the game ran fast and stuttered every ~2.9s.
+  const fields = newFields();
+  const b = new Bestiary({ fields, seed: 12, passable: () => true });
+  const a = b.agents.find((x) => x.creature.id === 'satyr' && !x.companion);
+  a.enter({ tx: 10, ty: 10 }, 20, 20, 1e6, b.zoning, null);
+
+  const start = a.view().phase;
+  assert.ok(start >= 0 && start < 1, `phase should be a 0..1 offset, got ${start}`);
+
+  for (let i = 0; i < 2000; i++) b.update(0.05); // 100 garden-seconds
+  assert.equal(
+    a.view().phase,
+    start,
+    'phase moved. It is an OFFSET — advancing it speeds up every animation in ' +
+      'the game and makes the clock jump backwards when it wraps.'
+  );
+});
+
+test('two creatures get different phases, which is what the offset is for', () => {
+  const b = new Bestiary({ fields: newFields(), seed: 33, passable: () => true });
+  const phases = b.agents.map((a) => a.view().phase);
+  assert.ok(new Set(phases).size > 1, 'every agent shares one phase — nothing is desynchronised');
+});

@@ -2425,7 +2425,25 @@ export class Agent {
 
   update(dt, env) {
     this.t += dt;
-    this.phase = (this.phase + dt * 0.35) % 1;
+    // `phase` is NOT advanced here, and that is the fix for a bug that made
+    // every creature in the game animate roughly 40% too fast with a visible
+    // stutter about every three seconds.
+    //
+    // It is a FIXED per-agent offset, set once from the seed (see the
+    // constructor, beside `drift`) so that two creatures on screen do not blink
+    // and step in lockstep — RESEARCH §A8. Its one and only consumer treats it
+    // as a constant number of milliseconds:
+    //
+    //     at = ms + (v.phase || 0) * 1000            main.js
+    //
+    // Advancing it by 0.35/s therefore added 350 ms to the animation clock
+    // every real second — a 35% overspeed — and then, when it wrapped 1 -> 0,
+    // yanked that clock back a full 1000 ms, which is about three frames of an
+    // idle cycle. Measured over twelve seconds: 42% fast, four rewinds.
+    //
+    // Nothing else reads `phase`. If a future change needs a value that MOVES,
+    // give it its own field; this one means "where in the cycle does this
+    // particular creature begin".
     const rm = !!env.reducedMotion;
     // Its OWN predicate first: water is species-specific (WATER_RULE), so a
     // shared environment predicate is only the fallback for an Agent nobody
