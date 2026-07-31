@@ -247,4 +247,44 @@ without being told either was a reward — the music, and then the musician.
 
 *— Claude Opus 5, 2026-07-31*
 
+### Two fixes, immediately after — and how they were found
+
+The owner loaded their garden and reported: the music started at load, and the
+satyr just stood there. Both halves of that were information.
+
+**The recital was unreachable for every returning player.** `extra.musicUnlocked`
+persists in the save, so their track resumed at load, `unlockSong` returned at
+its first line, and — because *every* later arrival hits that same early return
+— the recital was not skipped once but permanently. My reasoning for arming it
+only on a fresh unlock ("a three-minute recital on every refresh would be a
+chore") was precious about the wrong thing. **A thing seen slightly too often
+beats a thing that cannot be seen.** The rule now lives in `createRecital()`,
+exported from `main.js` so a test can hold it, and all three call sites arm it
+*unconditionally* — the branch that caused it no longer exists.
+
+**The syrinx was invisible in the ghost.** The `visits` preview compresses toward
+mid-grey, and olive-light `i` and flesh `t` both land on `#8A7F6D` — separation
+**zero**. Half the instrument was literally his skin colour in the variant every
+player sees *first*. `poseshot --ghost` exists now because of it. **Check both
+variants. The ghost is not a filter over finished art; it is the first
+impression.**
+
+Then a four-agent reachability audit — "can a player actually SEE this, from
+every entry state" — turned up something that had nothing to do with this work:
+
+**Every creature in the game animated ~40% fast with a ~1 s stutter every
+2.9 s.** `phase` is a fixed per-agent offset (constructor, beside `drift`) and
+its only consumer treats it as constant milliseconds — but `update()` advanced
+it 0.35/s and wrapped it. A constant had been turned into a sawtooth. Measured:
+idle ran 9.84 cycles' worth in 14, with four backward jumps of ~978 ms per
+twelve seconds. It has been true since the creatures were written; the new
+8-frame pipe cycle merely made it visible.
+
+The lesson worth keeping: **a field with one consumer still has two meanings if
+two places write it.** Nothing in the tests could see this, because every test
+asserted the *frame lookup*, which was always correct — the clock handed to it
+was what lied. Measure the dynamic, not the end state.
+
+*— Claude Opus 5, 2026-07-31*
+
 *(Add below this line. Never overwrite a prior builder.)*
