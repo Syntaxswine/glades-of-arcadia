@@ -100,6 +100,25 @@ export const TILE_H = 32;
 export const HALF_W = TILE_W / 2; // 32
 export const HALF_H = TILE_H / 2; // 16
 
+/**
+ * THE SHAPE OF A CIRCLE DRAWN ON THE GROUND: an ellipse exactly twice as wide
+ * as it is tall. `ry = rx * GROUND_ELLIPSE`.
+ *
+ * It is `TILE_H / TILE_W` and it is stated here because ART needs it, not the
+ * renderer. Every contact shadow, every pool, every round plinth, every patch
+ * of grass at the foot of a thing is a circle lying in the ground plane, and
+ * an isometric camera sees all of them as this ellipse.
+ *
+ * Getting the ratio wrong is the commonest way a sprite stops lying in the
+ * world. `js/art/props.js` drew its contact skirt at 11 by 3 — a 3.7:1 ellipse,
+ * which is a circle seen from a shallower angle than this game's camera, so it
+ * reads as a decal stuck to the screen rather than a shadow on the grass. And
+ * at that flatness its lowest rows are level for sixteen pixels, which is how
+ * two dozen otherwise-correct props ended up with a horizontal edge at ground
+ * level. See tools/iso-audit.mjs.
+ */
+export const GROUND_ELLIPSE = TILE_H / TILE_W; // 0.5
+
 // ---------------------------------------------------------------------------
 // Elevation constants — docs/ELEVATION.md. THE SINGLE SOURCE OF THE RISE.
 

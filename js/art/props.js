@@ -41,6 +41,7 @@
 // DOM-free and dependency-free; imports cleanly in Node.
 
 import { defineSprite } from './format.js';
+import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
  * Author rows at whatever length each row needs and let the trailing '.' be
@@ -1316,13 +1317,36 @@ function barkFleck(g, cx, yTop, yBot, spread, ramp = BARK) {
 
 /**
  * The contact shadow, SPEC 3: the ground ramp darkened two steps ('o' -> 'm'),
- * hugging the base and skewed away from the light. Only ever fills empty
- * pixels, so it can be laid down last without eating the object.
+ * hugging the base. Only ever fills empty pixels, so it can be laid down last
+ * without eating the object.
+ *
+ * IT IS A CIRCLE ON THE GROUND, so it is drawn as a 2:1 ellipse and its depth
+ * is not the caller's to choose — see GROUND_ELLIPSE in js/iso.js.
+ *
+ * This used to take a `ry` and every call site passed 3, 4 or 5, giving
+ * ellipses at 3.7:1 and flatter. That is a circle seen from a shallower angle
+ * than this game's camera: it reads as a decal on the screen rather than a
+ * patch of shade on the grass, and — because the lowest rows of so flat an
+ * ellipse are nearly level — it put a sixteen-pixel horizontal edge under two
+ * dozen otherwise-correct props. An isometric world has no horizontal edges at
+ * ground level. `node tools/iso-audit.mjs` is what found it.
  */
-function skirt(g, cx, cy, rx, ry) {
+function skirt(g, cx, cy, r) {
+  const ry = r * GROUND_ELLIPSE;
+  // MAKE ROOM FOR IT. `put` silently drops anything past the last row, and a
+  // clipped ellipse is a straight horizontal line — the very fault this shape
+  // exists to avoid, arriving by the back door. Forty of the forty-eight
+  // sprites the audit flagged were flagged for exactly this: their art ran off
+  // the bottom of their own bitmap.
+  //
+  // Growing DOWNWARD is free. The anchor is measured from the top, so appending
+  // rows moves nothing in the game; it only stops the grid from cutting the
+  // base off.
+  const need = Math.round(cy + ry) + 1;
+  while (g.length < need) g.push(new Array(g[0].length).fill('.'));
   for (let y = Math.round(cy - ry); y <= Math.round(cy + ry); y++) {
-    for (let x = Math.round(cx - rx); x <= Math.round(cx + rx); x++) {
-      const nx = (x - cx) / rx;
+    for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
+      const nx = (x - cx) / r;
       const ny = (y - cy) / ry;
       if (nx * nx + ny * ny <= 1 && peek(g, x, y) === '.') put(g, x, y, 'm');
     }
@@ -1413,7 +1437,7 @@ export const ASH_TREE = (() => {
   clump(g, 22, 11, 12, 9, LEAF, { seed: 7.8 });
   clump(g, 33, 9, 11, 8, LEAF, { seed: 8.5 });
   shadeCanopy(g);
-  skirt(g, 29, 94, 11, 3);
+  skirt(g, 29, 94, 11);
   return composed('ash-tree', g, [27, 93], { tags: ['tree', 'centaur', 'timber', 'maturity'] });
 })();
 
@@ -1438,7 +1462,7 @@ export const UMBRELLA_PINE = (() => {
   clump(g, 25, 8, 10, 4, NEEDLE, { seed: 5.2 });
   clump(g, 47, 8, 10, 4, NEEDLE, { seed: 6.7 });
   shadeCanopy(g, NEEDLE);
-  skirt(g, 31, 94, 11, 3);
+  skirt(g, 31, 94, 11);
   return composed('umbrella-pine', g, [29, 93], { tags: ['tree', 'satyr', 'centaur', 'shade'] });
 })();
 
@@ -1472,7 +1496,7 @@ export const PLANE_TREE = (() => {
   clump(g, 61, 15, 16, 11, LEAF, { seed: 5.5 });
   clump(g, 41, 11, 20, 11, LEAF, { seed: 6.1 });
   shadeCanopy(g);
-  skirt(g, 44, 78, 15, 4);
+  skirt(g, 44, 78, 15);
   return composed('plane-tree', g, [42, 77], { tags: ['tree', 'centaur', 'naiad', 'shade', 'water-loving'] });
 })();
 
@@ -1502,7 +1526,7 @@ export const APPLE_TREE = (() => {
     put(g, fx + 1, fy + 1, '1');
     put(g, fx + 1, fy, '3');
   }
-  skirt(g, 30, 58, 11, 3);
+  skirt(g, 30, 58, 11);
   return composed('apple-tree', g, [28, 57], { tags: ['tree', 'centaur', 'unicorn', 'fruit', 'order'] });
 })();
 
@@ -1590,7 +1614,7 @@ export const ANCIENT_OAK = (() => {
   clump(g, 33, 11, 16, 10, LEAF, { seed: 7.3 });
   clump(g, 56, 12, 15, 10, LEAF, { seed: 8.8 });
   shadeCanopy(g);
-  skirt(g, 46, 97, 24, 4);
+  skirt(g, 46, 97, 24);
   return composed('ancient-oak', g, [44, 96], { tags: ['tree', 'satyr', 'centaur', 'unicorn', 'maturity', 'shade'] });
 })();
 
@@ -1637,7 +1661,7 @@ export const BLACKTHORN_THICKET = (() => {
       if (sky && nz(x * 1.7, y * 2.3) > 0.42) put(g, x, y, '7');
     }
   }
-  skirt(g, 36, 50, 28, 3);
+  skirt(g, 36, 50, 28);
   return composed('blackthorn-thicket', g, [34, 49], { tags: ['shrub', 'satyr', 'unicorn', 'thorn', 'wildness'] });
 })();
 
@@ -1661,7 +1685,7 @@ export const WHITE_THORN = (() => {
   const pre = g.map((r) => r.slice());
   shadeCanopy(g);
   blossomOver(g, pre, { density: 1.15 });
-  skirt(g, 32, 68, 11, 3);
+  skirt(g, 32, 68, 11);
   return composed('white-thorn', g, [30, 67], { tags: ['tree', 'unicorn', 'thorn', 'blossom', 'order'] });
 })();
 
@@ -1739,7 +1763,7 @@ export const HALF_BURIED_PITHOS = (() => {
     if (!'qrstu'.includes(peek(g, sx, sy))) continue;
     put(g, sx, sy, nz(i, 7) > 0.6 ? '1' : '6');
   }
-  skirt(g, 32, 42, 27, 3);
+  skirt(g, 32, 42, 27);
   return composed('half-buried-pithos', g, [30, 41], {
     tags: ['prop', 'terracotta', 'satyr', 'centaur', 'wine', 'wildness'],
   });
@@ -1787,7 +1811,7 @@ export const WILD_VINE = (() => {
       }
     }
   }
-  skirt(g, 32, 48, 24, 3);
+  skirt(g, 32, 48, 24);
   return composed('wild-vine', g, [30, 47], { tags: ['vine', 'satyr', 'wildness', 'fruit'] });
 })();
 
@@ -1814,7 +1838,7 @@ export const IVY_BOULDER = (() => {
     clump(g, tx, ty + len, 3, 2, LEAF, { seed: tx, wobble: 0.4, lift: -1 });
   }
   shadeCanopy(g);
-  skirt(g, 30, 47, 23, 3);
+  skirt(g, 30, 47, 23);
   return composed('ivy-boulder', g, [28, 46], { tags: ['rock', 'satyr', 'ivy', 'wildness', 'maturity'] });
 })();
 
@@ -1874,7 +1898,7 @@ export const FALLEN_LOG = (() => {
   for (const [bx, by] of [[14, 26], [33, 30], [49, 33]]) {
     for (let k = 0; k < 4; k++) put(g, bx + k, by - (k % 2), k < 2 ? 'r' : 'q');
   }
-  skirt(g, 32, 32, 30, 3);
+  skirt(g, 32, 32, 30);
   return composed('fallen-log', g, [30, 31], { tags: ['timber', 'centaur', 'wildness', 'maturity'] });
 })();
 
@@ -1911,7 +1935,7 @@ export const SPRING_BASIN = (() => {
       if (peek(g, x, y) === '.') put(g, x, y, k === 0 ? 'C' : k === 1 ? 'B' : 'A');
     }
   }
-  skirt(g, 30, 56, 20, 3);
+  skirt(g, 30, 56, 20);
   return composed('spring-basin', g, [28, 55], {
     tags: ['water', 'naiad', 'moisture', 'order', 'spring'],
     cycle: { ramp: 'water', rate: 4 },
@@ -1993,7 +2017,7 @@ export const VOTIVE_SHELF = (() => {
     if (peek(g, mx, my) !== '.') continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i * 1.7, wobble: 0.42 });
   }
-  skirt(g, 31, 51, 26, 3);
+  skirt(g, 31, 51, 26);
   return composed('votive-shelf', g, [29, 50], {
     tags: ['prop', 'rock', 'naiad', 'votive', 'order', 'maturity'],
   });
@@ -2080,7 +2104,7 @@ export const LILY_BED = (() => {
     }
     put(g, hx, hy - 3, 'W');
   }
-  skirt(g, 32, 48, 22, 3);
+  skirt(g, 32, 48, 22);
   return composed('lily-bed', g, [30, 47], { tags: ['flower', 'unicorn', 'white', 'order', 'millefleurs'] });
 })();
 
@@ -2098,7 +2122,7 @@ export const STILL_POOL = (() => {
       else if (y >= 26 && ((x + y) & 3) === 0) put(g, x, y, 'J');
     }
   }
-  skirt(g, 36, 34, 28, 3);
+  skirt(g, 36, 34, 28);
   return composed('still-pool', g, [34, 22], {
     tags: ['water', 'unicorn', 'moisture', 'order', 'seclusion'],
     cycle: { ramp: 'water', rate: 11 },
@@ -2218,7 +2242,7 @@ export const UNBASINED_SPRING = (() => {
     if (!'vwxy'.includes(peek(g, mx, my))) continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i, wobble: 0.42 });
   }
-  skirt(g, 33, 45, 26, 3);
+  skirt(g, 33, 45, 26);
   return composed('unbasined-spring', g, [31, 44], {
     tags: ['water', 'rock', 'satyr', 'naiad', 'moisture', 'wildness'],
     cycle: { ramp: 'water', rate: 5 },
@@ -2250,7 +2274,7 @@ export const MOSSY_TRUNK = (() => {
       for (let j = 0; j <= h; j++) put(g, fx + k, fy - j, j === h ? 'D' : j > 0 ? 'C' : 'A');
     }
   }
-  skirt(g, 32, 32, 30, 3);
+  skirt(g, 32, 32, 30);
   return composed('mossy-trunk', g, [30, 31], { tags: ['timber', 'satyr', 'unicorn', 'moss', 'maturity', 'seclusion'] });
 })();
 
@@ -2483,7 +2507,7 @@ export const ALTAR_PAN_NYMPHS = (() => {
   for (const iv of [[7, 40], [21, 48], [43, 47], [52, 41]]) {
     clump(g, iv[0], iv[1], 5, 3.5, LEAF, { seed: iv[0], wobble: 0.42, lift: -1 });
   }
-  skirt(g, 32, 51, 25, 3);
+  skirt(g, 32, 51, 25);
   return composed('altar-pan-nymphs', g, [30, 50], { tags: ['altar', 'satyr', 'centaur', 'naiad', 'cult', 'maturity'] });
 })();
 
@@ -2530,7 +2554,7 @@ export const FERN_GROTTO = (() => {
     if (!'vwxy'.includes(peek(g, mx, my))) continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i * 1.3, wobble: 0.45 });
   }
-  skirt(g, 37, 52, 32, 3);
+  skirt(g, 37, 52, 32);
   return composed('fern-grotto', g, [35, 51], {
     tags: ['rock', 'satyr', 'naiad', 'unicorn', 'moisture', 'seclusion', 'shade'],
     cycle: { ramp: 'water', rate: 13 },
@@ -2798,7 +2822,7 @@ export const CYPRESS_SCREEN = (() => {
         put(g, x, y, CONIFER[Math.max(0, Math.min(3, i))]);
       }
     }
-    skirt(g, cx + 2, base + 2, 8, 3);
+    skirt(g, cx + 2, base + 2, 8);
   }
   return composed('cypress-screen', g, [32, 74], { tags: ['nullifier', 'tree', 'cypress', 'order', 'enclosure', 'seclusion'] });
 })();
@@ -3207,7 +3231,7 @@ export const TUMULUS = (() => {
 
   // A low, tight skirt offset away from the light. Take one used the full base
   // radius and put a black bar the width of two tiles under the barrow.
-  skirt(g, cx + 6, cy + ry + 2, rx * 0.62, 3);
+  skirt(g, cx + 6, cy + ry + 2, rx * 0.62);
   return composed('tumulus', g, [cx, cy], {
     footprint: [2, 2],
     tags: ['tomb', 'nullifier', 'grass', 'archaic', 'maturity'],
@@ -3619,8 +3643,8 @@ export const HEROON = (() => {
     }
   }
 
-  skirt(g, cx + 6, ay + 27, 42, 5);
-  skirt(g, ALT_X - 2, ALT_Y + 19, 13, 3);
+  skirt(g, cx + 6, ay + 27, 42);
+  skirt(g, ALT_X - 2, ALT_Y + 19, 13);
   return composed('heroon', g, [cx, ay], {
     footprint: [2, 2],
     tags: ['tomb', 'nullifier', 'marble', 'cult', 'maturity'],
@@ -3722,7 +3746,7 @@ export const ARCADIAN_TOMB = (() => {
   }
   for (let k = 0; k < 5; k++) put(g, cx + 3 + k, cy + 6 - Math.round(k / 2), 'B');
 
-  skirt(g, cx + 6, ay + 20, 36, 4);
+  skirt(g, cx + 6, ay + 20, 36);
   return composed('arcadian-tomb', g, [cx, ay], {
     footprint: [2, 1],
     tags: ['tomb', 'nullifier', 'marble', 'neoclassical', 'maturity'],

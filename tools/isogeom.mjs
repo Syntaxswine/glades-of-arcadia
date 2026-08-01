@@ -261,15 +261,39 @@ export function baseLift(s) {
 }
 
 /**
- * How long a dead-level edge has to be before it reads as a horizontal line.
+ * The absolute floor, below which nothing is ever called an edge.
  *
  * A 2:1 line in pixels is drawn as PAIRS, so it can hold the same y for two
- * columns and never more; a curve bottoming out holds it for four or five. So
- * anything at 12 is unambiguously a straight horizontal edge, and 12 px is
- * three sixteenths of a tile's width — visible at 1x, on a 640-wide screen,
- * without looking for it.
+ * columns and never more. 12 px is three sixteenths of a tile's width —
+ * visible at 1x on a 640-wide screen without looking for it.
  */
 export const RUN_MIN = 12;
+
+/**
+ * ...AND THE ALLOWANCE, WHICH SCALES, because a correct curve is flat too.
+ *
+ * A circle of radius r lying in the ground plane projects to an ellipse with
+ * ry = r/2. Its lowest row holds within half a pixel while
+ *
+ *     ry * (1 - sqrt(1 - nx^2)) < 0.5     ~    ry * nx^2 / 2 < 0.5
+ *
+ * so |nx| < 1/sqrt(ry), and the flat spot spans 2*r/sqrt(ry) = 2*sqrt(2r)
+ * columns. Thirteen pixels for a 22-radius shadow; eighteen for a 42. THOSE
+ * ARE NOT FAULTS — they are what a correctly drawn circle looks like on this
+ * grid, and a fixed threshold convicts every large ground contact in the game
+ * for being round.
+ *
+ * The half-pixel of slack on top is for rounding: `put` snaps to integers, and
+ * an ellipse centred on a half-pixel can land one column either way.
+ *
+ * This is the third time the measure had to learn that the answer depends on
+ * the size of the thing being asked about. It is worth stating the rule
+ * plainly: A CHECKER WHOSE THRESHOLD DOES NOT SCALE WITH ITS SUBJECT IS
+ * MEASURING THE SUBJECT'S SIZE, not the property it claims to measure.
+ */
+export function curveAllowance(rBase) {
+  return Math.ceil(2 * Math.sqrt(2 * Math.max(1, rBase))) + 1;
+}
 
 /**
  * THE MEASURE THAT VOTES: level runs WHERE THE OBJECT MEETS THE GROUND.
@@ -295,13 +319,22 @@ export const RUN_MIN = 12;
  * half-height of the deepest point — that band IS the base — and find the
  * level runs in it.
  */
-export function groundRuns(s, min = RUN_MIN) {
+export function groundRuns(s, minOverride = 0) {
   const fp = s.footprint || [1, 1];
   const band = (fp[0] + fp[1]) * 8; // the diamond's half-height: W/E corner to S vertex
   const low = baseProfile(s);
-  if (!low.length) return { runs: [], longest: 0, over: 0, band, width: (fp[0] + fp[1]) * 32 };
+  if (!low.length) {
+    return { runs: [], longest: 0, over: 0, band, width: (fp[0] + fp[1]) * 32, min: RUN_MIN };
+  }
   const deepest = Math.max(...low.map((p) => p.y));
   const inBand = low.filter((p) => p.y >= deepest - band);
+
+  // The bar, derived from how wide THIS object's ground contact actually is —
+  // not from the sprite, and not from the footprint. A 24px-wide post and a
+  // 60px-wide boulder standing on the same tile are allowed different amounts
+  // of flat, because the circles at their feet are different circles.
+  const rBase = inBand.length / 2;
+  const min = minOverride || Math.max(RUN_MIN, curveAllowance(rBase));
 
   const runs = [];
   let i = 0;
@@ -320,7 +353,7 @@ export function groundRuns(s, min = RUN_MIN) {
   }
   const longest = runs.length ? Math.max(...runs.map((r) => r.len)) : 0;
   const width = (fp[0] + fp[1]) * 32; // the diamond this object claims to stand on
-  return { runs, longest, over: longest / width, band, width };
+  return { runs, longest, over: longest / width, band, width, min };
 }
 
 /**
@@ -433,6 +466,7 @@ export function measure(s) {
     flat: g.longest, // px of dead-level edge at ground level. THE VOTE.
     over: g.over, // ...as a fraction of the diamond it stands on. Severity.
     runs: g.runs, // ...and exactly which columns, so it can be redrawn.
+    min: g.min, // ...against the allowance a correct curve of this size gets.
     band: g.band,
     lift: bl.lift, // reported: how far both ends rise. Shape-dependent.
     bestLift: bl.bestLift, // reported: how far the better end rises.

@@ -19,11 +19,14 @@
 // THE GEOMETRY and THE MEASURE both live in tools/isogeom.mjs. This file is the
 // census: load the art, measure it, print it, and fail on request.
 //
-//   lift     how far the bottom silhouette rises from its lowest point toward
-//            its corners, over the width. THE ONLY NUMBER THAT VOTES.
-//   flat     widest horizontal run anywhere, over the width. Normal for a
-//            rotational form; suspicious for anything with a front.
-//   mirror   symmetry about the vertical. Same caveat, more strongly.
+//   flat/bar the longest DEAD-LEVEL run where the object meets the ground,
+//            against the allowance a correctly drawn circle of that size gets.
+//            THE ONLY NUMBER THAT VOTES.
+//   over     that run over the width of the diamond it stands on. Severity.
+//   mirror   symmetry about the vertical. 1.0 is CORRECT for a rotational form
+//            — a column is a cylinder — and suspicious for anything with a
+//            front. Reported, never voted; the first draft of this tool voted
+//            on it and ranked COLUMN the fourth-worst sprite in the game.
 //   diag     how much of the outline runs on a 2:1 slope — the positive signal.
 
 import { measure, RUN_MIN, AUDITED_MODULES, spritesIn } from './isogeom.mjs';
@@ -58,10 +61,13 @@ const show = ALL ? rows : flagged;
 console.log('iso audit — does the sprite MEET THE GROUND in the ground plane?\n');
 console.log(`  flat = the longest DEAD-LEVEL run where the object meets the ground, in px.`);
 console.log(`         An isometric world has no horizontal edges at ground level. WANT 0.`);
-console.log(`         Runs under ${RUN_MIN}px are ignored: a curve bottoming out is not an edge.`);
+console.log(`  bar  = what a correctly drawn circle of THIS SIZE is allowed. A ground`);
+console.log(`         circle's lowest row is flat for 2*sqrt(2r) columns, so the bar`);
+console.log(`         scales; a fixed one convicts every large contact for being round.`);
+console.log(`         Never below ${RUN_MIN}px.`);
 console.log('  over = that run over the width of the diamond it stands on. Severity.');
-console.log('  lift / mirror / diag are reported for the reader; they do not vote.\n');
-console.log('  sprite                     size     fp     flat   over  mirror   diag');
+console.log('  mirror / diag are reported for the reader; they do not vote.\n');
+console.log('  sprite                     size     fp     flat/bar  over  mirror   diag');
 console.log('  ' + '-'.repeat(70));
 for (const r of show) {
   const f = (n) => n.toFixed(2).padStart(7);
@@ -71,6 +77,7 @@ for (const r of show) {
       r.size.padEnd(9) +
       (r.s.footprint || [1, 1]).join('x').padEnd(6) +
       String(r.flat).padStart(4) +
+      (" /" + r.min).padEnd(5) +
       f(r.over) +
       f(r.mirror) +
       f(r.diag) +
@@ -88,8 +95,8 @@ for (const r of show) {
 if (!show.length) console.log('  (none — every sprite meets the ground in the ground plane)');
 
 console.log(
-  `\n  ${rows.length} sprites measured · ${flagged.length} with a level run of ` +
-    `${RUN_MIN}px or more at ground level`
+  `\n  ${rows.length} sprites measured · ${flagged.length} with a level edge at ` +
+    `ground level longer than a curve of that size would give`
 );
 
 if (STRICT && flagged.length) {
