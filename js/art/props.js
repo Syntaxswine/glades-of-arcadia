@@ -56,14 +56,74 @@ import { GROUND_ELLIPSE } from '../iso.js';
  */
 function sprite(name, [dx, up], rows, opts = {}) {
   const w = Math.max(...rows.map((r) => r.length));
+  const padded = rows.map((r) => r.padEnd(w, '.'));
+  // THE ANCHOR IS FIXED BEFORE THE CONTACT BAND IS TOUCHED. It is measured
+  // from the top once the row count is known, and `groundContact` may both
+  // remove and add rows at the bottom — so taking it first is what stops the
+  // shadow rewrite from silently moving forty sprites off their tiles.
+  const anchor = [((w - 1) >> 1) + dx, padded.length - 1 - up];
   return defineSprite({
     name,
-    anchor: [((w - 1) >> 1) + dx, rows.length - 1 - up],
-    rows: rows.map((r) => r.padEnd(w, '.')),
+    anchor,
+    rows: groundContact(padded, anchor),
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
   });
+}
+
+/**
+ * Replace a hand-typed contact band with a contact SHADOW that lies in the
+ * ground plane.
+ *
+ * Forty-eight rows in this file looked like this at the foot of a sprite:
+ *
+ *     '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm...',
+ *     '..mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm..',
+ *     '.....mmmmmmmmmmmmmmmmmmmmmmmmmmm.....',
+ *
+ * — a rectangular band of the darkest grass key, meant as the patch of shade
+ * an object casts where it meets the ground. But the ground is a plane seen at
+ * 2:1, so that patch is a CIRCLE, and a circle in this projection is an ellipse
+ * exactly twice as wide as it is tall (GROUND_ELLIPSE, js/iso.js). Drawn as a
+ * band it is a horizontal edge, and an isometric world has none at ground
+ * level: `node tools/iso-audit.mjs`.
+ *
+ * The band is detected rather than declared because it is unambiguous — a
+ * TRAILING row containing nothing but 'm' and transparency is a contact band
+ * and can be nothing else; object art has other colours in it. Its width sets
+ * the shadow's radius, so a big prop keeps a big shadow and a herm keeps a
+ * small one, and the ellipse is centred on the ANCHOR: the anchor is the tile's
+ * centre point, which is exactly where the circle under an object is centred.
+ */
+function groundContact(rows, [ax, ay]) {
+  const w = rows[0].length;
+  const isBand = (r) => /^[.m]*$/.test(r) && r.includes('m');
+
+  let cut = rows.length;
+  let x0 = w;
+  let x1 = -1;
+  while (cut > 0 && isBand(rows[cut - 1])) {
+    cut--;
+    x0 = Math.min(x0, rows[cut].indexOf('m'));
+    x1 = Math.max(x1, rows[cut].lastIndexOf('m'));
+  }
+  if (cut === rows.length || cut === 0) return rows; // no band, or all band
+
+  const r = Math.max(6, (x1 - x0 + 1) / 2);
+  const ry = r * GROUND_ELLIPSE;
+  const g = rows.slice(0, cut).map((s) => s.split(''));
+  while (g.length <= Math.round(ay + ry)) g.push(new Array(w).fill('.'));
+
+  const cx = ax + 0.5; // the anchor PIXEL's middle, not its left edge
+  for (let y = Math.max(0, Math.round(ay - ry)); y <= Math.round(ay + ry); y++) {
+    for (let x = Math.max(0, Math.round(cx - r)); x <= Math.min(w - 1, Math.round(cx + r)); x++) {
+      const nx = (x - cx) / r;
+      const ny = (y - ay) / ry;
+      if (nx * nx + ny * ny <= 1 && g[y][x] === '.') g[y][x] = 'm';
+    }
+  }
+  return g.map((a) => a.join(''));
 }
 
 /** A run of identical rows — a column shaft is 28 copies of one profile. */

@@ -348,7 +348,12 @@ export function groundRuns(s, minOverride = 0) {
       j++;
     }
     const len = j - i + 1;
-    if (len >= min) runs.push({ x0: inBand[i].x, x1: inBand[j].x, y: inBand[i].y, len });
+    // STRICTLY LONGER. `min` is the longest run that is still CORRECT — the
+    // flat spot a properly drawn circle of this size has — so a run of exactly
+    // that length is the right answer, not a near miss. Testing `>=` here
+    // failed every sprite whose ground contact was an exact ellipse, which is
+    // to say every sprite that had just been fixed.
+    if (len > min) runs.push({ x0: inBand[i].x, x1: inBand[j].x, y: inBand[i].y, len });
     i = j + 1;
   }
   const longest = runs.length ? Math.max(...runs.map((r) => r.len)) : 0;
