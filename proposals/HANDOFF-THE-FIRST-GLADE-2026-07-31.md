@@ -445,24 +445,63 @@ sprites, generalised to all of them and derived rather than tolerated.
 
 ### Sequence
 
-1. **`groundCentre()` in `tools/isogeom.mjs`**, plus the mis-anchor audit. No
-   art changes. Prove it against the current anchors first.
-2. **Make the runtime shadow do the whole job.** Raise `SHADOW_SCALE`, or better
-   size it from `groundCentre().r` carried into the catalogue, so a broad plane
-   tree and a narrow cypress differ -- the thing `shadow:` was supposed to do and
-   never did. Decide ellipse vs diamond and use one.
+1. ~~**`groundCentre()` in `tools/isogeom.mjs`**, plus the mis-anchor audit.~~
+   **DONE 2026-08-01, `2857be6`.** It landed in `js/art/format.js` rather than
+   the tool, because step 2 needed the renderer to call it too; `isogeom`
+   re-exports it. Reproduces all four hand-repaired buildings. The audit gained
+   the two arms it never had and lost two blind spots -- see below.
+2. ~~**Make the runtime shadow do the whole job.**~~ **DONE 2026-08-01,
+   `024c7a7`.** Sized from `groundCentre(art).r`, drawn as an ELLIPSE, coloured
+   from the tile it lands on. `tools/shadow-probe.mjs` is the instrument.
 3. **Delete the baked skirts from static props.** Regressions 2 and 3 die here.
    Keep the SECONDARY ones (the altar inside the heroon) -- those belong to
    sub-objects, not to the building.
-4. **26 flat feet reappear.** Put them in `test/iso-ground.test.mjs`'s KNOWN
+4. **28 flat feet reappear.** Put them in `test/iso-ground.test.mjs`'s KNOWN
    list -- it is a ratchet, designed for exactly this -- and redraw them as real
-   2:1 elliptical bases.
+   2:1 bases: an ELLIPSE for a round foot, a DIAMOND for a square plinth. Both
+   satisfy "no horizontal edges at ground level"; a column plinth is a square
+   block and drawing it round would be a different lie.
 5. **Teach the tools to draw the ground themselves.** `propshot` and the sprite
    lab render sprites with no renderer, which is the only honest reason a baked
    shadow ever helped. The lab already draws the ground diamond.
 
-**Do not skip step 2.** Deleting before enlarging trades a green mat for no
-shadow at all, which will read as everything floating -- the bug we started from.
+~~**Do not skip step 2.**~~ Step 2 is done and the warning is discharged: the
+runtime pass now carries the load. Measured, `tools/shadow-probe.mjs`:
+
+| | before | after |
+|---|---|---|
+| placeables whose stamp was 100% hidden | **13** | **1** (`cascade-head`) |
+| stamp px visible across the catalogue | 16 004 (44.4%) | **47 260** (46.2%) |
+| heroon / tholos / marble-exedra / tomb | 0 / 0 / 0 / 0 | 1770 / 874 / 2543 / 779 |
+
+The heroon's runtime shade (1770 px) is now larger than its entire baked skirt
+(1397 px of `m`), which is the precondition step 3 was waiting on.
+
+### STEP 3 IS DE-RISKED, and here is the measurement that says so
+
+Run before starting it, with both `skirt()` implementations and `groundContact`
+temporarily stubbed out (`git checkout` after -- do not leave the guard in):
+
+- **On grass, deleting the baked skirts is a VISUAL NO-OP.** Rendered side by
+  side at 4x, `ionic-column`, `fluted-urn` and `obelisk` go from 91/91/113 `m`
+  pixels to **zero** and the two pictures are indistinguishable. The runtime
+  ellipse now covers the same ground in the same colour. On paving it is a
+  strict improvement, because that shade is stone and the baked one is grass.
+- **`iso-audit` goes from 0 to 28**, not 26. Worst first:
+  `sleeping-satyr` 36px of level edge (allowed 20), `wall-fountain` 33 (16),
+  `jet-basin` 33 (19), `half-buried-pithos` 29 (22), `ancient-oak` 25 (21),
+  `fountain-tiered` 25 (20), `arbour-seat` 24 (18), `axe-marker` 24 (15),
+  then a long tail of plinths and column bases at 15-22 against ~12-16.
+  **None of it is visible** -- every one of those feet sits inside the runtime
+  shadow. That is why step 4 may follow step 3 rather than block it.
+- **THE TRAP IN THE OBVIOUS EDIT.** There are TWO mechanisms, not one.
+  `skirt()` calls draw an ellipse; hand-typed `mmmm` bands are converted into
+  one by `groundContact`. Stubbing `skirt` alone leaves the bands **as literal
+  flat rows** -- the original fault, restored. So step 3 is:
+  `groundContact` changes from *convert the band* to *strip the band*, which
+  removes all 48 hand-typed rows across 68 sprites with **no art edits at
+  all**, and then the ~43 `skirt()` call sites go by hand so the secondary
+  ones can be kept.
 
 ### VERIFIED -- a five-lens investigation, each lens adversarially checked
 
@@ -544,6 +583,38 @@ threaded through **43** call sites, not the ~25 claimed.
 is fixed the rule is **not** "centre on the sprite anchor": the altar is a
 sub-object standing on grass 46 px left of the building, and its centre is its
 own base diamond, about `ALT_Y + 10`.
+
+### What steps 1 and 2 corrected in the record above
+
+Written down because three of the numbers in this proposal were wrong, and the
+corrections are all in the direction of *the fault was worse than reported*:
+
+- **The catalogue-footprint fault is 10, not 12** -- seven of the 25 raw
+  mismatches are GROUND PAINTERS, whose footprint is a brush by design
+  (`catalog.js`: "These paint tiles"). It is still the same class of float the
+  owner reported, it still includes `sleeping-satyr`, and it is now a ratchet in
+  `test/sprite-anchors.test.mjs` (`KNOWN_UNDERSIZED`).
+- **The old sink arm caught NONE of the four buildings, not "the heroon by a
+  margin of zero".** Measured at `27b4cfe^` the overshoots were +10 / +14 / +15
+  / +16 against a threshold firing *above* 16. Tolerance is now 8, and the
+  calibration is a test: four controls at the four measured overshoots must all
+  fire, one at +4 (the worst legitimate overshoot in the game) must not.
+- **Ignoring `m` in the float arm is not academic.** `fern-grotto` reads 17px of
+  reach with its shadow counted and **2** without; `cypress-screen` 14 against
+  8. Both passed the old arm.
+- **The green mat was in BOTH systems.** `main.js`'s `terrainCell` has never set
+  `cell.ground`, so every non-turf tile fell through `_groundKeyAt` to the grass
+  default and the RUNTIME shadow was grass-green on stone too. Fixed by asking
+  the tile art's modal key rather than by adding a table.
+- **`CREATURE_SHADOWS` is dead art.** `main.js` passes the sprite as `shadow:`
+  and the old `typeof === 'number'` test discarded it, so those five
+  hand-authored shadows have never once drawn. The renderer now reads their
+  WIDTH (the rows are all `m`; drawing them would put a green patch under every
+  creature on paving). **The table could honestly be five numbers.**
+- **A bitmap clamp on `groundCentre().r` was written and deleted.** It can never
+  bind -- the band is measured *from* the bitmap -- and a guard that cannot fire
+  reads as protection while providing none. The five side-clipped shadows are a
+  BAKING fault, not a sizing one, and die in step 3.
 
 **And two of my own claims did not survive.** The comment I wrote on `pergola`
 ("no contact shadow at all") is FALSE -- rows 35-37 were already the post feet
