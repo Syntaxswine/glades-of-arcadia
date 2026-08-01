@@ -65,7 +65,8 @@ function sprite(name, [dx, up], rows, opts = {}) {
   return defineSprite({
     name,
     anchor,
-    rows: groundContact(padded, anchor),
+    // `contact: false` for anything COMPOSED — see groundContact's warning.
+    rows: opts.contact === false ? padded : groundContact(padded, anchor),
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
@@ -95,6 +96,23 @@ function sprite(name, [dx, up], rows, opts = {}) {
  * the shadow's radius, so a big prop keeps a big shadow and a herm keeps a
  * small one, and the ellipse is centred on the ANCHOR: the anchor is the tile's
  * centre point, which is exactly where the circle under an object is centred.
+ *
+ * ---------------------------------------------------------------------------
+ * IT MUST NOT RUN ON COMPOSED SPRITES, and this was shipped broken once.
+ *
+ * "A trailing row of nothing but 'm'" is true of a hand-typed band. It is ALSO
+ * true of the bottom few rows of a correct ellipse that `skirt()` has just
+ * drawn — those rows are pure shadow, because the object above has ended. So
+ * on a composed sprite this strips the LOWER HALF of a correct shadow, then
+ * rebuilds an ellipse from what is left and lands it flat: the heroon went
+ * from a 12px level edge to a 106px one, the worst reading in the catalogue,
+ * by way of a change that made eighteen other sprites right.
+ *
+ * `composed()` therefore passes `contact: false`. The rule underneath is worth
+ * keeping: A REWRITE THAT DETECTS ITS OWN INPUT WILL EVENTUALLY DETECT ITS OWN
+ * OUTPUT. It has to be able to tell "not yet done" from "already done", and
+ * here the honest signal is not in the pixels at all — it is which constructor
+ * the author used.
  */
 function groundContact(rows, [ax, ay]) {
   const w = rows[0].length;
@@ -1355,7 +1373,11 @@ function composed(name, g, [ax, ay], opts = {}) {
   const r = gridRows(g);
   const w = r[0].length;
   const h = r.length;
-  return sprite(name, [ax - ((w - 1) >> 1), h - 1 - ay], r, opts);
+  // NEVER rewrite a composed sprite's contact. `skirt()` already drew it as a
+  // correct 2:1 ellipse, and groundContact would strip the pure-'m' rows off
+  // the BOTTOM of that ellipse and rebuild a truncated one — turning the right
+  // answer into a 106px horizontal edge under the heroon. See groundContact.
+  return sprite(name, [ax - ((w - 1) >> 1), h - 1 - ay], r, { ...opts, contact: false });
 }
 
 // ---------------------------------------------------------------------------
