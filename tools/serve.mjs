@@ -110,6 +110,6 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`red-under-green: serving ${ROOT}`);
+  console.log(`glades-of-arcadia: serving ${ROOT}`);
   console.log(`  http://localhost:${PORT}/`);
 });

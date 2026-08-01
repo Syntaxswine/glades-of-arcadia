@@ -121,6 +121,25 @@
       <span id="status"></span>
     </fieldset>
   </div>
+  <!-- THE ISOMETRIC OVERLAY. The row above draws the coordinate system of the
+       FILE — square pixels, a rectangular bounds box. This row draws the
+       coordinate system of the WORLD. A sprite can sit perfectly in the first
+       and point at nothing the map contains; that blind spot hid a fault
+       across a third of the art. See tools/isogeom.mjs. -->
+  <div class="row">
+    <fieldset class="bevel-in">
+      <b>iso</b>
+      <label><input type="checkbox" id="isoDiamond"> ground diamond</label>
+      <label><input type="checkbox" id="isoHex"> cube hexagon</label>
+      <label><input type="checkbox" id="isoGuide"> 2:1 guide</label>
+      <label><input type="checkbox" id="isoBase"> base contour</label>
+      <label>height <input id="isoH" type="number" min="0" max="6" step="0.5" value="1" style="width:4em"></label>
+    </fieldset>
+    <fieldset class="bevel-in">
+      <label><input type="checkbox" id="isoOnly"> only sprites that end flat</label>
+      <span id="isoCount"></span>
+    </fieldset>
+  </div>
 </header>
 
 <main>
@@ -138,6 +157,10 @@ import { PALETTE, resolve, variant, RAMPS } from '../js/palette.js';
 import { lintSprite, keysUsed, TRANSPARENT } from '../js/art/format.js';
 import { CLUMPS, CLUMP_GROUPS } from '../js/art/clumps.js';
 import * as GROW from '../js/art/grow.js';
+import {
+  groundDiamond, boxHull, baseProfile, measure, measurable, RUN_MIN,
+  AUDITED_MODULES, spritesIn,
+} from './isogeom.mjs';
 
 /* ------------------------------------------------------------------ *
  * State
@@ -152,6 +175,7 @@ const S = {
   grid: true,
   anchor: true,
   bounds: false,
+  iso: { diamond: false, hex: false, guide: false, base: false, h: 1, only: false },
 };
 if (qs.get('snap')) document.getElementById('snapPort').value = qs.get('snap');
 
@@ -180,8 +204,14 @@ function resolver() {
  * module paths, imports whatever exists, and walks the exports for anything
  * sprite-shaped. Adding tiles.js or creatures.js later needs no edit here.
  * ------------------------------------------------------------------ */
+// The audited modules come FIRST and by name, because probing is a guess and a
+// guess goes stale: `decor.js` and `extras.js` were written after this list was
+// and were never on it, so forty-seven sprites — the whole fountain and column
+// family among them — had never once appeared in the sprite lab. Everything
+// after the spread is still speculative, and still costs nothing when absent.
 const CANDIDATES = [
-  'clumps', 'sprites', 'tiles', 'terrain', 'ground', 'water', 'props',
+  ...AUDITED_MODULES,
+  'sprites', 'terrain', 'ground', 'water',
   'sculpture', 'statues', 'structures', 'buildings', 'creatures', 'figures',
   'decals', 'edges', 'ui', 'icons', 'index',
 ];
@@ -209,11 +239,16 @@ function collectSprites(mod, modName, into) {
   }
 }
 
+/** The raw module objects, kept so the iso census can walk EXACTLY what the
+ *  headless audit walks — see `auditedItems`. */
+const MODULES = new Map();
+
 async function discover() {
   const found = [];
   await Promise.all(CANDIDATES.map(async (n) => {
     try {
       const mod = await import(`../js/art/${n}.js`);
+      MODULES.set(n, mod);
       collectSprites(mod, n, found);
     } catch { /* not written yet, or not mine to know about */ }
   }));
@@ -222,15 +257,182 @@ async function discover() {
 
 /* ------------------------------------------------------------------ *
  * Drawing
+ *
+ * Two coordinate systems meet in here and it is worth being explicit about
+ * which is which, because confusing them is the whole subject of the iso
+ * overlay:
+ *
+ *   FILE space   sprite pixel (x, y), origin at the sprite's top-left. The
+ *                pixel grid and the bounds box live here.
+ *   WORLD space  offsets in screen pixels from the ANCHOR, which is the pixel
+ *                that lands on the footprint's centre point. The ground
+ *                diamond, the cube hexagon and the 2:1 guide live here.
+ *
+ * The canvas is laid out in file space, with `left`/`top` allowed to go
+ * NEGATIVE so that world-space geometry wider than the sprite (a 1x1 diamond
+ * is 64px across; an obelisk is 24) still fits on the tile.
  * ------------------------------------------------------------------ */
+
+/** How much room the world-space overlay needs, in sprite pixels. */
+function isoExtents(sp) {
+  const fp = sp.footprint || [1, 1];
+  const pts = [...groundDiamond(fp[0], fp[1]), ...boxHull(fp[0], fp[1], S.iso.h)];
+  let minX = 0;
+  let minY = 0;
+  let maxX = sp.w;
+  let maxY = sp.h;
+  for (const p of pts) {
+    minX = Math.min(minX, sp.anchor[0] + p.x);
+    maxX = Math.max(maxX, sp.anchor[0] + p.x);
+    minY = Math.min(minY, sp.anchor[1] + p.y);
+    maxY = Math.max(maxY, sp.anchor[1] + p.y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function isoOn() {
+  return S.iso.diamond || S.iso.hex || S.iso.guide;
+}
+
+/**
+ * The overlay. Drawn UNDER the sprite (guide, hexagon, far half of the
+ * diamond) and OVER it (near half of the diamond, base contour), because the
+ * two edges the base has to meet are the two nearest the viewer and a guide
+ * you cannot see against the art is not a guide.
+ */
+function drawIsoUnder(ctx, sp, scale, ox, oy) {
+  const fp = sp.footprint || [1, 1];
+  const P = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+  const poly = (pts, style, width) => {
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+
+  // The 2:1 lattice. Every line here is one a sprite is ALLOWED to draw along:
+  // rising 1-in-2, falling 1-in-2, vertical. There is deliberately no
+  // horizontal in it — that is the point of the picture.
+  if (S.iso.guide) {
+    const step = 8 * scale;
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    // Slope +1/2 and -1/2, both phased through the anchor so the lattice is
+    // the ground plane's own and not an arbitrary sheet of graph paper.
+    //
+    //   y = sign*x + c,  so a line is identified by its intercept c, and the
+    //   one through the anchor is c0. A line is visible somewhere on the
+    //   canvas if c lands anywhere in [-|sign|*w, h] — widened by a step at
+    //   each end rather than solved exactly, because being one line generous
+    //   costs nothing and being one line short leaves a visible gap.
+    for (const sign of [0.5, -0.5]) {
+      const c0 = oy - sign * ox;
+      const lo = Math.floor((-Math.abs(sign) * w - step - c0) / step);
+      const hi = Math.ceil((h + Math.abs(sign) * w + step - c0) / step);
+      for (let k = lo; k <= hi; k++) {
+        const c = c0 + k * step;
+        ctx.moveTo(0, Math.round(c) + 0.5);
+        ctx.lineTo(w, Math.round(c + sign * w) + 0.5);
+      }
+    }
+    for (let x = ox % step; x < w; x += step) {
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, h);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // The cube hexagon: the silhouette of a box standing on this footprint,
+  // `height` tiles tall. Art should live inside it and use its edges.
+  if (S.iso.hex && S.iso.h > 0) {
+    poly(boxHull(fp[0], fp[1], S.iso.h).map(P), 'rgba(255,206,110,0.55)', 1);
+  }
+
+  // The FAR half of the ground diamond, dim: it is behind the object.
+  if (S.iso.diamond) {
+    const [n, e, s, w] = groundDiamond(fp[0], fp[1]).map(P);
+    ctx.beginPath();
+    ctx.moveTo(w.x, w.y);
+    ctx.lineTo(n.x, n.y);
+    ctx.lineTo(e.x, e.y);
+    ctx.strokeStyle = 'rgba(120,220,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    void s;
+  }
+}
+
+function drawIsoOver(ctx, sp, scale, ox, oy) {
+  const fp = sp.footprint || [1, 1];
+  const P = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+
+  // The NEAR edges of the ground diamond, bright: W -> S -> E. THIS IS THE
+  // SHAPE THE BASE HAS TO MEET. A foot may sit inside it — a narrow post
+  // occupies only the middle of its plot, quite correctly. What it may not do
+  // is run flat across it.
+  if (S.iso.diamond) {
+    const [, e, s, w] = groundDiamond(fp[0], fp[1]).map(P);
+    ctx.beginPath();
+    ctx.moveTo(w.x, w.y);
+    ctx.lineTo(s.x, s.y);
+    ctx.lineTo(e.x, e.y);
+    ctx.strokeStyle = 'rgba(120,220,255,0.95)';
+    ctx.lineWidth = Math.max(1, scale / 4);
+    ctx.stroke();
+  }
+
+  // The measured bottom contour, painted on. Green where it steps, RED where
+  // it runs dead level for RUN_MIN columns or more AT GROUND LEVEL. This is
+  // `iso-audit` drawn onto the sprite instead of printed: the number says a
+  // sprite is wrong, the contour says which twenty pixels.
+  if (S.iso.base) {
+    const bad = new Set();
+    for (const run of measure(sp).runs) for (let x = run.x0; x <= run.x1; x++) bad.add(x);
+    for (const p of baseProfile(sp)) {
+      ctx.fillStyle = bad.has(p.x) ? 'rgba(255,64,64,0.92)' : 'rgba(126,224,129,0.85)';
+      ctx.fillRect(
+        ox + (p.x - sp.anchor[0]) * scale,
+        oy + (p.y - sp.anchor[1] + 1) * scale,
+        scale,
+        Math.max(1, Math.round(scale / 2))
+      );
+    }
+  }
+}
+
 function drawSprite(sp, scale, opts = {}) {
   const res = opts.resolve || resolver();
   const pad = 2;
+  // `wide` is about ROOM, not about ink: only the diamond, the hexagon and the
+  // guide can fall outside the sprite's own box. The base contour is measured
+  // from the art and never leaves it, so ticking it alone must not reflow every
+  // cell in the page.
+  const wide = opts.iso ?? isoOn();
+  const ext = wide ? isoExtents(sp) : { minX: 0, minY: 0, maxX: sp.w, maxY: sp.h };
+  const left = Math.floor(ext.minX) - pad;
+  const top = Math.floor(ext.minY) - pad;
+  const right = Math.ceil(ext.maxX) + pad;
+  const bottom = Math.ceil(ext.maxY) + pad;
+
   const cv = document.createElement('canvas');
-  cv.width = (sp.w + pad * 2) * scale;
-  cv.height = (sp.h + pad * 2) * scale;
+  cv.width = (right - left) * scale;
+  cv.height = (bottom - top) * scale;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
+
+  // Sprite pixel -> canvas pixel, and the world-space origin (the top-left of
+  // the anchor pixel, which is exactly where render.js lands it).
+  const px = (x) => (x - left) * scale;
+  const py = (y) => (y - top) * scale;
+  const ox = px(sp.anchor[0]);
+  const oy = py(sp.anchor[1]);
 
   ctx.fillStyle = opts.ground || S.ground;
   ctx.fillRect(0, 0, cv.width, cv.height);
@@ -238,9 +440,11 @@ function drawSprite(sp, scale, opts = {}) {
   // Pixel grid, only where a pixel is big enough for it to mean anything.
   if (S.grid && scale >= 4) {
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    for (let x = 0; x <= sp.w + pad * 2; x++) ctx.fillRect(x * scale, 0, 1, cv.height);
-    for (let y = 0; y <= sp.h + pad * 2; y++) ctx.fillRect(0, y * scale, cv.width, 1);
+    for (let x = left; x <= right; x++) ctx.fillRect(px(x), 0, 1, cv.height);
+    for (let y = top; y <= bottom; y++) ctx.fillRect(0, py(y), cv.width, 1);
   }
+
+  if (wide) drawIsoUnder(ctx, sp, scale, ox, oy);
 
   for (let y = 0; y < sp.h; y++) {
     const row = sp.rows[y];
@@ -251,25 +455,46 @@ function drawSprite(sp, scale, opts = {}) {
       // Magenta is deliberate: an unknown palette key must be impossible to
       // miss, not silently transparent.
       ctx.fillStyle = hex || '#ff00ff';
-      ctx.fillRect((x + pad) * scale, (y + pad) * scale, scale, scale);
+      ctx.fillRect(px(x), py(y), scale, scale);
     }
   }
+
+  if (wide || S.iso.base) drawIsoOver(ctx, sp, scale, ox, oy);
 
   if (S.bounds) {
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(pad * scale + 0.5, pad * scale + 0.5, sp.w * scale - 1, sp.h * scale - 1);
+    ctx.strokeRect(px(0) + 0.5, py(0) + 0.5, sp.w * scale - 1, sp.h * scale - 1);
   }
   if (S.anchor) {
-    const ax = (sp.anchor[0] + pad) * scale;
-    const ay = (sp.anchor[1] + pad) * scale;
     const t = Math.max(1, Math.round(scale / 4));
     const arm = Math.max(2, scale * 1.5);
     ctx.fillStyle = '#C8414A';
-    ctx.fillRect(ax - arm, ay + (scale - t) / 2, arm * 2 + scale, t);
-    ctx.fillRect(ax + (scale - t) / 2, ay - arm, t, arm * 2 + scale);
+    ctx.fillRect(ox - arm, oy + (scale - t) / 2, arm * 2 + scale, t);
+    ctx.fillRect(ox + (scale - t) / 2, oy - arm, t, arm * 2 + scale);
   }
   return cv;
+}
+
+/** Does this sprite end in a horizontal edge? Null when it is too small to ask. */
+function liftOf(sp) {
+  return measurable(sp) ? measure(sp) : null;
+}
+
+/**
+ * The audited population — the same modules `iso-audit` walks, flattened by
+ * the same function. Not `DISCOVERED.filter(...)`: the lab's own collector
+ * dedups by NAME and the audit's by identity, and a census that differs from
+ * the terminal's by two sprites is a census nobody trusts. This is the whole
+ * reason `spritesIn` lives in isogeom.mjs and not in either consumer.
+ */
+function auditedItems() {
+  const out = [];
+  for (const n of AUDITED_MODULES) {
+    const mod = MODULES.get(n);
+    if (mod) out.push(...spritesIn(mod, `${n}.js`));
+  }
+  return out;
 }
 
 function cell(sp, subtitle) {
@@ -286,16 +511,42 @@ function cell(sp, subtitle) {
   shots.className = 'shots';
   for (const z of S.zooms) shots.append(drawSprite(sp, z));
   d.append(n, shots, m);
+
+  // The one number from iso-audit, on the sprite it belongs to. Only shown
+  // once the overlay is up: a permanent red badge on a third of the catalogue
+  // would become wallpaper, and a warning nobody reads is worse than none.
+  const q = liftOf(sp);
+  if (q && (isoOn() || S.iso.base)) {
+    const b = document.createElement('div');
+    b.className = 'meta';
+    b.style.color = q.ok ? 'var(--ok)' : 'var(--bad)';
+    b.textContent = q.ok
+      ? `ground edge clean  (no level run >= ${RUN_MIN}px)`
+      : `FLAT AT GROUND: ${q.flat}px level  (${(q.over * 100) | 0}% of its diamond)`;
+    d.append(b);
+  }
   return d;
 }
 
-function section(title, sprites, sub) {
+function section(title, sprites, sub, audited = false) {
+  // The "only flat" filter is a view of the AUDITED population and nothing
+  // else. Composed trees are excluded from the measure on purpose (a wide
+  // canopy over a narrow trunk passes trivially — see isogeom), so showing a
+  // filtered slice of them would put a number on art the number cannot judge.
+  if (S.iso.only && !audited) return null;
+  const items = S.iso.only
+    ? sprites.filter((i) => {
+        const q = liftOf(i.sprite || i);
+        return q && !q.ok;
+      })
+    : sprites;
+  if (S.iso.only && !items.length) return null;
   const s = document.createElement('section');
   const h = document.createElement('h2');
-  h.textContent = `${title}  (${sprites.length})`;
+  h.textContent = `${title}  (${items.length}${S.iso.only ? ` of ${sprites.length}` : ''})`;
   const g = document.createElement('div');
   g.className = 'grid';
-  for (const item of sprites) {
+  for (const item of items) {
     const sp = item.sprite || item;
     g.append(cell(sp, item.note || (sub ? sub(item) : '')));
   }
@@ -337,6 +588,9 @@ let DISCOVERED = [];
 function render() {
   const out = document.getElementById('out');
   out.textContent = '';
+  // `section` returns null when the "only flat" filter empties it, and
+  // append(null) would print the word "null" onto the page.
+  const add = (sec) => { if (sec) out.append(sec); };
 
   // Composers, grouped, with three seeds each so variety is visible at a
   // glance — one sample of a seeded generator tells you almost nothing.
@@ -349,12 +603,12 @@ function render() {
   }
   for (const [name, items] of byComposer) {
     items.sort((a, b) => a.note.localeCompare(b.note));
-    out.append(section(`composer: ${name}`, items));
+    add(section(`composer: ${name}`, items));
   }
 
   // Clumps, in their authored groups.
   for (const [group, names] of Object.entries(CLUMP_GROUPS)) {
-    out.append(section(`clumps: ${group}`, names.map((n) => ({ sprite: CLUMPS[n] }))));
+    add(section(`clumps: ${group}`, names.map((n) => ({ sprite: CLUMPS[n] })), null, true));
   }
 
   // Whatever the other artists have written.
@@ -364,7 +618,9 @@ function render() {
     if (!byModule.has(item.module)) byModule.set(item.module, []);
     byModule.get(item.module).push(item);
   }
-  for (const [mod, items] of byModule) out.append(section(`sprites: ${mod}.js`, items));
+  for (const [mod, items] of byModule) {
+    add(section(`sprites: ${mod}.js`, items, null, AUDITED_MODULES.includes(mod)));
+  }
   if (!byModule.size) {
     const s = document.createElement('section');
     s.innerHTML = '<h2>hand-authored sprites</h2><p class="note">No sprite modules found yet under ' +
@@ -373,7 +629,21 @@ function render() {
     out.append(s);
   }
 
+  isoTally();
   runLint();
+}
+
+/**
+ * The census, in the header, next to the filter that acts on it. The number
+ * lives here as well as in `iso-audit` because a count you have to leave the
+ * page to read is a count nobody checks between edits.
+ */
+function isoTally() {
+  const all = auditedItems().map((d) => d.sprite).filter(measurable);
+  const bad = all.filter((s) => !measure(s).ok).length;
+  const el = document.getElementById('isoCount');
+  el.textContent = `${bad} of ${all.length} flat at ground · ${AUDITED_MODULES.join(' ')}`;
+  el.style.color = bad ? '#7a1f1f' : 'var(--ok)';
 }
 
 /* ------------------------------------------------------------------ *
@@ -495,6 +765,42 @@ function post(cv, name) {
   }));
 }
 
+/**
+ * The ISO contact sheet: every sprite that ends flat, at 4x, each with the
+ * ground diamond it failed to meet and its own bottom contour painted on.
+ *
+ * This exists because the fault was found BY EYE, by the owner, and the fix
+ * has to be checkable the same way. `iso-audit` prints thirty-two names; this
+ * shows thirty-two pictures of what is wrong with them, and `snap.mjs` puts
+ * them on disk where an agent with no screen can open them.
+ */
+function isoSheet(sprites, cols, scale) {
+  const shots = sprites.map((sp) => ({ sp, cv: drawSprite(sp, scale, { iso: true, ground: '#3b3830' }) }));
+  const CW = Math.max(...shots.map((s) => s.cv.width)) + 8;
+  const CH = Math.max(...shots.map((s) => s.cv.height)) + 22;
+  const rows = Math.ceil(shots.length / cols);
+  const cv = document.createElement('canvas');
+  cv.width = cols * CW;
+  cv.height = rows * CH;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#2a2620';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.font = '12px ui-monospace, Consolas, monospace';
+  ctx.textBaseline = 'top';
+  shots.forEach((s, i) => {
+    const c = i % cols;
+    const r = (i / cols) | 0;
+    const x = c * CW + 4;
+    const y = r * CH + 18;
+    const q = measure(s.sp);
+    ctx.fillStyle = q.ok ? '#7ee081' : '#ff6b6b';
+    ctx.fillText(`${s.sp.name}  ${q.flat}px level`, x, r * CH + 3);
+    ctx.drawImage(s.cv, x, y);
+  });
+  return cv;
+}
+
 async function snapAll() {
   const st = document.getElementById('status');
   st.textContent = 'snapping…';
@@ -511,6 +817,20 @@ async function snapAll() {
   ];
   const hand = DISCOVERED.filter((d) => d.module !== 'clumps').map((d) => d.sprite);
   if (hand.length) jobs.push([sheet(hand, 8, 4, 'sprites'), 'lab-sprites']);
+
+  // The offenders, in pages of twelve — one 32-up sheet at 4x is 6000px wide
+  // and stops getting bigger on screen, which is the ceiling poseshot ran into.
+  const flat = auditedItems()
+    .map((d) => d.sprite)
+    .filter((s) => measurable(s) && !measure(s).ok)
+    .sort((a, b) => measure(b).over - measure(a).over);
+  const was = { ...S.iso };
+  S.iso = { diamond: true, hex: false, guide: false, base: true, h: 1, only: false };
+  for (let i = 0; i < flat.length; i += 12) {
+    jobs.push([isoSheet(flat.slice(i, i + 12), 4, 4), `lab-iso-${String(i / 12 + 1).padStart(2, '0')}`]);
+  }
+  S.iso = was;
+
   let ok = 0;
   for (const [cv, name] of jobs) if (await post(cv, name)) ok++;
   st.textContent = ok === jobs.length ? `snapped ${ok} sheet(s)` : `snapped ${ok}/${jobs.length} — is snap.mjs running?`;
@@ -544,6 +864,29 @@ $('grid').addEventListener('change', (e) => { S.grid = e.target.checked; render(
 $('anchor').addEventListener('change', (e) => { S.anchor = e.target.checked; render(); });
 $('bounds').addEventListener('change', (e) => { S.bounds = e.target.checked; render(); });
 $('snapAll').addEventListener('click', snapAll);
+
+for (const [id, key] of [
+  ['isoDiamond', 'diamond'], ['isoHex', 'hex'], ['isoGuide', 'guide'],
+  ['isoBase', 'base'], ['isoOnly', 'only'],
+]) {
+  $(id).addEventListener('change', (e) => { S.iso[key] = e.target.checked; render(); });
+}
+$('isoH').addEventListener('change', (e) => { S.iso.h = Math.max(0, +e.target.value || 0); render(); });
+
+// ?iso=diamond,hex,guide,base,only — so a snap run can ask for the overlay
+// without a human ticking four boxes, and so a URL can be pasted into a bug
+// report and show the same picture.
+if (qs.get('iso') !== null) {
+  const want = new Set((qs.get('iso') || 'diamond,base').split(',').filter(Boolean));
+  for (const [id, key] of [
+    ['isoDiamond', 'diamond'], ['isoHex', 'hex'], ['isoGuide', 'guide'],
+    ['isoBase', 'base'], ['isoOnly', 'only'],
+  ]) {
+    S.iso[key] = want.has(key);
+    $(id).checked = S.iso[key];
+  }
+  if (qs.get('isoH')) { S.iso.h = +qs.get('isoH') || 1; $('isoH').value = S.iso.h; }
+}
 
 // Number keys jump between stages; everything reachable from the keyboard.
 addEventListener('keydown', (e) => {
