@@ -356,6 +356,114 @@ is where a well-written wrong answer lives.
   was live was not. **A 35-object garden in the dev browser was lost.**
 
 
+## PROPOSAL — ONE SHADOW SYSTEM, AND A MEASURED CENTRE POINT
+
+**Owner's call, 2026-08-01: "the baked shadows should go... with the asterisk
+that we get a fixed measured centre point variable that tracks where the middle
+of the object is based on its size."** Agreed and specced here; NOT built.
+
+### Why it came up
+
+The owner spotted the heroon and the tumulus floating. That is fixed
+(`27b4cfe`). But the investigation found **three** regressions from the same
+commit series, all with one root: when `skirt()` became a correct 2:1 ground
+ellipse, the baked contact shadows went from 3-4 px slivers to full ellipses --
+3x to 17x more pixels -- and every latent problem with baking a shadow became
+visible at once.
+
+| # | what | status |
+|---|---|---|
+| 1 | four shadows placed 12-27 rows below the anchor, so the object floated over a puddle | SHIPPED FIXED |
+| 2 | **the baked shadow is grass-green on every ground.** `m` is `#3B4A22`, the darkest key of the GRASS ramp. On flagstone, gravel, sand or paving every prop now stands on a dark green mat, wider than the object. Rendered and confirmed by eye | **OPEN** |
+| 3 | **five shadows are cut off square by the bitmap's SIDE edge.** Both `skirt()`s grow the grid downward only; `put()` still drops out-of-range *x*. The balustrade's shadow runs hard against column 0 for 19 rows -- the same fault the downward growth exists to prevent, arriving sideways | **OPEN** |
+
+`js/art/extras.js:17` claims the renderer's `variant({grass:'earth'})` recolours
+the skirt on soil "for free". **No such variant exists.** That comment is bug
+(2) in written form, and it has been wrong since it was written.
+
+### Why a static building's shadow does not belong on the sprite
+
+Two reasons, both specific to buildings -- the mover argument is not needed:
+
+1. **The colour comes from the ground it lands on.** `shadowStamp(fw, fh,
+   groundKey, scale)` derives it as `shade(groundKey, -2)`: grass -> `m`,
+   marble -> `A`, rock -> `v`, earth -> `q`, water -> `I`. A baked shadow is one
+   fixed colour, and the player can pave under anything.
+2. **Draw order.** The runtime shadows are ONE PASS under everything, so no
+   object's shade lands on top of a neighbour. A baked shadow draws in its own
+   sprite's depth slot. Buildings are the worst case: their shadows are biggest.
+
+There is no third reason. The baked ones exist only because sprites were
+authored with hand-typed `mmmm` bands before the runtime pass was reconciled
+with them.
+
+### What the investigation established, that changes the plan
+
+- **`shadow:` is DEAD API.** `js/catalog.js` never sets it -- zero matches -- so
+  `main.js` forwards `undefined` for every placeable and every object gets
+  `scale = 1`. The per-object scale documented at `render.js:76` has never once
+  been used.
+- **The two systems do not agree on SHAPE.** The runtime stamp is
+  `|u| + |v| <= 1` -- a rhombus, the tile diamond. The baked skirt is
+  `nx^2 + ny^2 <= 1` -- a true ellipse.
+- **The runtime stamp is small, and behind a big object it is invisible.**
+  `SHADOW_SCALE = 0.5`, so a 2x2 stamp's bottom tip is anchor+18 against a front
+  vertex at anchor+32 -- and it is 100% hidden behind the heroon's 115 px
+  podium. **Deleting the baked shadows without enlarging the runtime one would
+  leave big buildings with no visible shade at all.** This is the step that must
+  not be skipped.
+- **26 sprites pass `iso-audit` ONLY because of their baked shadow.** Strip
+  every `m` pixel and re-run: 0 flagged becomes 26. Their own feet are still
+  flat cuts under a smudge. So the audit has partly been measuring the shadow
+  rather than the object -- an effect-hack standing where bedrock should be.
+
+### THE ASTERISK: a measured centre point
+
+Today every baked shadow's position and radius is a magic number typed at the
+call site -- `skirt(g, cx + 2, ay + 1, 60)` -- and the four floating sprites were
+fixed by hand-measuring their bases at 115, 118, 83 and 63 px. **Those numbers
+should be computed, not typed.**
+
+```js
+/** The object's own ground centre, from the ART, ignoring shadow pixels. */
+groundCentre(sprite) -> { cx, cy, r }
+```
+
+- **the base band** -- the lowest opaque NON-`m` pixel in each column;
+- **`cx`** -- the midpoint of that band's span;
+- **`r`** -- its half-width, clamped to `(fw+fh)*16` (the footprint diamond) and
+  to the bitmap, which is what kills regression 3 by construction;
+- **`cy = deepestRow - r * GROUND_ELLIPSE`** -- back off from the front of the
+  foot by the foot's own half-height, because a 2:1 foot of half-width `r` is
+  `r/2` tall.
+
+**It reproduces the anchors we already have**, which is the check that it is
+right: heroon -> anchor-0.75, still-pool -> anchor-2.75. So it can also become a
+NEW audit -- *"a sprite whose measured ground centre is far from its anchor is
+mis-anchored"* -- which is the fault `anchor-audit` only catches for multi-tile
+sprites, generalised to all of them and derived rather than tolerated.
+
+### Sequence
+
+1. **`groundCentre()` in `tools/isogeom.mjs`**, plus the mis-anchor audit. No
+   art changes. Prove it against the current anchors first.
+2. **Make the runtime shadow do the whole job.** Raise `SHADOW_SCALE`, or better
+   size it from `groundCentre().r` carried into the catalogue, so a broad plane
+   tree and a narrow cypress differ -- the thing `shadow:` was supposed to do and
+   never did. Decide ellipse vs diamond and use one.
+3. **Delete the baked skirts from static props.** Regressions 2 and 3 die here.
+   Keep the SECONDARY ones (the altar inside the heroon) -- those belong to
+   sub-objects, not to the building.
+4. **26 flat feet reappear.** Put them in `test/iso-ground.test.mjs`'s KNOWN
+   list -- it is a ratchet, designed for exactly this -- and redraw them as real
+   2:1 elliptical bases.
+5. **Teach the tools to draw the ground themselves.** `propshot` and the sprite
+   lab render sprites with no renderer, which is the only honest reason a baked
+   shadow ever helped. The lab already draws the ground diamond.
+
+**Do not skip step 2.** Deleting before enlarging trades a green mat for no
+shadow at all, which will read as everything floating -- the bug we started from.
+
 ## Maker's mark
 
 Built 2026-07-30 → 07-31, in one long session, from a photograph of a Hellenistic
