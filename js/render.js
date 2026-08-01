@@ -163,6 +163,7 @@ import {
   sortForDraw,
   pickTileAt,
   snap,
+  facingMirrored,
 } from './iso.js';
 
 import { RAMPS, ACCENT, PALETTE, resolve as basePalette, shade, contactShadow, cycleWater } from './palette.js';
@@ -495,9 +496,41 @@ function canvasFromRGBA(data, w, h) {
 }
 
 /**
+ * A raster flipped about its vertical centre — which in a 2:1 projection is an
+ * EXACT quarter-turn of the world, not an approximation of one. The projection
+ * is symmetric about the vertical, so a wall running NE-SW mirrors into one
+ * running NW-SE and every pixel lands where it should. That is why four
+ * facings cost two drawings. js/iso.js §FACING.
+ *
+ * The anchor moves with it: the pixel at `ax` ends up at `w - 1 - ax`. Getting
+ * that wrong shifts the object sideways by twice its anchor offset, which on a
+ * centred sprite is invisible and on an off-centre one is not — the failure a
+ * test would catch only if it used an asymmetric anchor, which is why the one
+ * in test/facing.test.mjs does.
+ */
+function mirroredRaster(base) {
+  const cv = makeCanvas(base.w, base.h);
+  const ctx = ctxOf(cv);
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(base.w, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(base.canvas, 0, 0);
+  return { canvas: cv, ax: base.w - 1 - base.ax, ay: base.ay, w: base.w, h: base.h };
+}
+
+/**
  * @returns {{canvas:HTMLCanvasElement, ax:number, ay:number, w:number, h:number}|null}
  */
-export function artRaster(art, variantKey = 'base') {
+export function artRaster(art, variantKey = 'base', facing = 0) {
+  // A mirrored facing is the SAME drawing seen from the other side, so it is
+  // cached against the same art under its own key rather than being rebuilt
+  // per frame. `facingDrawing` is reserved for a second (back) drawing, which
+  // no placeable has yet — when one does, it arrives as separate art and this
+  // line is where it will be chosen.
+  if (art && facingMirrored(facing)) {
+    const base = artRaster(art, variantKey, 0);
+    return base ? cachedFor(art, `${variantKey}|mirror`, () => mirroredRaster(base)) : null;
+  }
   if (!art) return null;
   const resolver = VARIANTS[variantKey] || basePalette;
 
@@ -2631,7 +2664,7 @@ class Renderer {
       const art = o.art || o.sprite;
       if (!art) continue;
       const variantKey = o.variant || (o.rung === 'visits' || o.desaturated ? 'ghost' : 'base');
-      const base = artRaster(art, variantKey);
+      const base = artRaster(art, variantKey, o.facing || 0);
       if (!base) continue;
       // `fade` is the transit dissolve (CREATURE-MOVEMENT.md §1): a creature
       // arriving out of the dusk or wandering back off at the end of its visit.
@@ -2710,9 +2743,11 @@ class Renderer {
     const art = g.art || g.sprite;
     if (!art) return;
     const key = legal ? 'ok' : 'bad';
-    const r = artRaster(art, key);
+    const r = artRaster(art, key, g.facing || 0);
     if (!r) return;
-    const s = stippled(art, key, r);
+    // THE GHOST HAS TO SHOW THE TURN or the wheel teaches nothing: the whole
+    // feedback loop for facing is "spin it, watch the preview, then click".
+    const s = stippled(art, `${key}|f${g.facing || 0}`, r);
     const c = footprintCentreAt(gx, gy, fw, fh, lv, cam);
     ctx.drawImage(s.canvas, snap(c.x - s.ax), snap(c.y - s.ay));
   }

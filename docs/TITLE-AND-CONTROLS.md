@@ -188,6 +188,49 @@ never plant, raze, terrace or pan. That ordering is the whole safety property.
 `Esc` cancel · `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `+` / `-` raise and lower
 the tile under the cursor · `Space` drag-pan · `Backspace` remove.
 
+### The wheel turns what you are holding
+
+> *"there are a few tiles that you should be able to alter the direction on.
+> Currently the middle scroll wheel scrolls up and down the map, I think it
+> would be better suited to pick between what direction an object faces in
+> space."*
+
+| gesture | what it does |
+|---|---|
+| wheel, holding something with a direction | **turns it**, and the ghost shows the turn |
+| wheel, holding anything else | pans up and down, as it always did |
+| `Shift`+wheel | pans left and right — and never turns, so it is also how you pan without putting your hedge down |
+
+**Seventeen things turn and the rest do not,** and the difference is geometry
+rather than taste. A column is a cylinder, an urn is a solid of revolution, a
+round basin is a circle: they look the same from every side, and a rotation
+control over them is a control that visibly does nothing. What turns is what
+has a DIRECTION — a wall or a bench, which runs along one of the two ground
+diagonals; an arch or an exedra or a niche, which has a face; a seated figure,
+which looks somewhere. The list is `TURNS` in `js/catalog.js`, with the
+argument beside it.
+
+**Four facings cost two drawings.** A 2:1 projection is symmetric about the
+vertical, so a horizontal flip turns a thing facing SE into the same thing
+facing SW *exactly*. The two remaining directions face away from the camera and
+need a real second drawing — a cave from behind is a hillside with no hole in
+it — so today every turnable thing declares `facings: 2` and the wheel cycles
+two. Nothing in the save has to change when a back view is drawn. See
+**`js/iso.js` §FACING** for the table.
+
+**Only square footprints turn.** Mirroring the screen's x axis swaps the two
+tile axes, so a 2×1 would mirror into a 1×2 — which means transposing the
+footprint through `canPlace`, the collision test and the depth key. That work
+is not done, and the catalogue self-check **throws at import** rather than let
+it half-work. It is why `cave-mouth` (2×1) and `colonnade` (3×1) are missing
+from a list they otherwise belong at the top of.
+
+**The save.** `SAVE_VERSION` is 3, and `facing` is written **only when it is
+non-zero** — so a garden in which nothing has been turned serialises byte for
+byte as it did under v2, and every v2 garden loads with everything as it was
+drawn. That is the whole compatibility story and it is the part that must not
+be got wrong; `test/facing.test.mjs` opens with three tests about that one `if`.
+
 ### The move tool — `X`, or the four-arrow mark left of the `?`
 
 Pick it up and **the map answers your clicks instead of the garden**. Click to

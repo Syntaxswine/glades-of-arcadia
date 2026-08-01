@@ -1251,6 +1251,10 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
         art,
         footprint: def.footprint,
         shadow: def.shadow,
+        // Which way round. 0 (as drawn) for everything in every garden made
+        // before the wheel could turn things, and for everything that does not
+        // turn — render.js only builds a mirrored raster when it is odd.
+        facing: o.facing || 0,
         uid: o.uid,
       });
     }
@@ -1966,8 +1970,11 @@ async function bootOnce(shell = {}) {
         // We drive it from the one loop below, so it must not run its own rAF.
         selfDrive: false,
         on: {
-          place: (id, tx, ty) => {
-            const r = world.place(id, tx, ty);
+          // `opts` carries `facing` — which way round the wheel left it. World
+          // clamps it against the placeable's own count, so this passes it
+          // straight through rather than second-guessing.
+          place: (id, tx, ty, _item, opts) => {
+            const r = world.place(id, tx, ty, opts || {});
             if (r) {
               dirty = true;
               audio.cue('place');

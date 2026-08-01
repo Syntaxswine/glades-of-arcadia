@@ -1848,6 +1848,11 @@ export function createUI(opts = {}) {
     showInfo(item);
     if (on.select) on.select(S.selectedId, item);
     if (item) announce(`${item.name || item.id} selected`);
+    // A control nobody knows about is not a control. Seventeen things in the
+    // catalogue turn and the rest do not, so the only honest place to say so is
+    // the moment one of them is in your hand — said once, on pick-up, rather
+    // than parked permanently in the chrome where it would become wallpaper.
+    if (item && item.facings > 1) say('Scroll to turn it round.', 2600);
   }
 
   function clearSelection() {
@@ -2503,7 +2508,7 @@ export function createUI(opts = {}) {
     const before = S.ghost;
     S.ghost = next;
     if (S.renderer) {
-      ask(S.renderer, 'setGhost', next ? { tx: next.tx, ty: next.ty, footprint: [next.w, next.h], art: next.art || null, legal: next.legal } : null);
+      ask(S.renderer, 'setGhost', next ? { tx: next.tx, ty: next.ty, footprint: [next.w, next.h], art: next.art || null, legal: next.legal, facing: next.facing || 0 } : null);
     }
     // The refusal reason, in world.js's own warm words, in the info box.
     if (next && next.mode !== 'raze' && !next.legal && next.reason) showRefusal(next.reason);

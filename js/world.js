@@ -64,7 +64,7 @@ import {
 // before it reaches into the next diagonal row — so iso.js owns it and this
 // module imports it. world.js still owns the integer level itself and knows
 // nothing about the pixel rise (LEVEL_H is deliberately not imported here).
-import { MAP_W, MAP_H, MAX_LEVEL } from './iso.js';
+import { MAP_W, MAP_H, MAX_LEVEL, clampFacing } from './iso.js';
 
 /**
  * THE MAP SIZE HAS ONE HOME AND IT IS iso.js. Re-exported here only because
@@ -87,10 +87,15 @@ export const UNDO_LIMIT = 64;
  * Save format version.
  *   1  ground + objects
  *   2  + per-tile `levels` (elevation) and the per-tile grass-type cache
+ *   3  + per-object `facing` (BACKLOG §4k). Written ONLY when it is non-zero,
+ *      so a garden in which nothing has been turned serialises byte for byte
+ *      as it did under v2 — and a v2 save loads with every object at facing 0,
+ *      which is the way it was drawn. That is the whole compatibility story
+ *      and it is the part that must not be got wrong.
  * `World.deserialize` migrates every older shape forward and never refuses a
  * garden for being old. A v1 save loads as a flat glade at level 0.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'arcadia.garden';
 
 // ---------------------------------------------------------------------------
@@ -916,6 +921,13 @@ export class World {
       stage: null,
     };
     obj.stage = stageFor(def, 0);
+    // Which way round. ABSENT WHEN ZERO, deliberately: facing 0 is "as drawn",
+    // it is what every object in every existing garden is, and an undefined
+    // key serialises to nothing. That is what keeps a v2 save round-tripping
+    // byte for byte through v3. `def.facings` is the ceiling — a thing that
+    // does not turn cannot be given a facing by a caller that forgot to check.
+    const facing = clampFacing(opts.facing ?? 0, def.facings ?? 1);
+    if (facing) obj.facing = facing;
 
     this._attach(obj, def);
     this._record({ kind: 'place', uid: obj.uid });
@@ -1424,15 +1436,21 @@ export class World {
       grassTypes: [...GRASS_TYPES],
       grass: Array.from(this.grass),
       grassAlt: Array.from(this.grassAlt),
-      objects: this.objects.map((o) => ({
-        uid: o.uid,
-        id: o.id,
-        tx: o.tx,
-        ty: o.ty,
-        seed: o.seed,
-        placedAt: Math.round(o.placedAt),
-        stage: o.stage,
-      })),
+      objects: this.objects.map((o) => {
+        const rec = {
+          uid: o.uid,
+          id: o.id,
+          tx: o.tx,
+          ty: o.ty,
+          seed: o.seed,
+          placedAt: Math.round(o.placedAt),
+          stage: o.stage,
+        };
+        // Only when turned. See SAVE_VERSION: this one `if` is what makes a
+        // v3 save of an untouched garden identical to its v2 save.
+        if (o.facing) rec.facing = o.facing;
+        return rec;
+      }),
       nextUid: this.nextUid,
       extra: this.extra,
     };
@@ -1547,6 +1565,11 @@ export class World {
         placedAt: Number(o.placedAt) || 0,
         stage: o.stage ?? null,
       };
+      // v3. Absent (every v1 and v2 garden, and everything never turned) means
+      // 0, which is as drawn. Clamped against the CURRENT catalogue, so a
+      // placeable that stops turning does not leave objects mirrored forever.
+      const facing = clampFacing(o.facing ?? 0, def.facings ?? 1);
+      if (facing) obj.facing = facing;
       world._attach(obj, def);
       if (obj.uid >= world.nextUid) world.nextUid = obj.uid + 1;
     }

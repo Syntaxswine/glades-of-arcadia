@@ -120,6 +120,59 @@ export const HALF_H = TILE_H / 2; // 16
 export const GROUND_ELLIPSE = TILE_H / TILE_W; // 0.5
 
 // ---------------------------------------------------------------------------
+// FACING — which way a thing is turned. proposals/BACKLOG.md §4k.
+//
+// The owner: "there are a few tiles that you should be able to alter the
+// direction on. Currently the middle scroll wheel scrolls up and down the map,
+// I think it would be better suited to pick between what direction an object
+// faces in space."
+//
+// THE ECONOMICS ARE BETTER THAN THEY LOOK, and this is why the field is an
+// integer 0..3 rather than a boolean.
+//
+// A 2:1 projection is symmetric about the vertical, so a horizontal flip turns
+// a thing facing SE into the same thing facing SW — EXACTLY, with no new art.
+// The two remaining directions face away from the camera and need a second
+// drawing (a cave from behind is a hillside with no hole in it), which is a
+// real drawing and not a transform.
+//
+//     facing   drawing        on screen
+//     0        front          front on the right-hand wall   (SE)
+//     1        front, flipped front on the left-hand wall    (SW)
+//     2        back           turned away, to the right      (NE)
+//     3        back, flipped  turned away, to the left       (NW)
+//
+//     drawings   facings
+//        1          2
+//        2          4
+//
+// TODAY EVERY TURNABLE THING HAS ONE DRAWING, so the catalogue declares
+// `facings: 2` and the wheel cycles two. Nothing about the stored field or the
+// save has to change when a back view is drawn; only the catalogue number does.
+//
+// AND WHY ONLY SQUARE FOOTPRINTS MAY TURN: mirroring the screen's x axis swaps
+// the two tile axes, so a 2x1 object mirrors into a 1x2 one. Handling that
+// means transposing the footprint through canPlace, the collision test and the
+// depth key — real work, not yet done, and the catalogue self-check refuses a
+// non-square `facings` rather than letting it half-work.
+
+/** How many facings the model can express. Storage, not availability. */
+export const FACINGS = 4;
+
+/** Is this facing drawn by flipping its drawing horizontally? */
+export const facingMirrored = (f) => (f & 1) === 1;
+
+/** Which of the (up to two) drawings this facing uses. 0 = front, 1 = back. */
+export const facingDrawing = (f) => (f >> 1) & 1;
+
+/** Clamp anything into a legal facing for a thing with `n` of them. */
+export function clampFacing(facing, n = 1) {
+  const count = Math.max(1, Math.min(FACINGS, Math.round(+n || 1)));
+  const f = Math.round(+facing || 0);
+  return ((f % count) + count) % count;
+}
+
+// ---------------------------------------------------------------------------
 // Elevation constants — docs/ELEVATION.md. THE SINGLE SOURCE OF THE RISE.
 
 /**

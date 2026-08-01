@@ -95,6 +95,12 @@
 // swap is one identifier per line, and `ART_WISHLIST` is the checklist.
 // Nothing is ever unrendered; some things are, for a while, understudies.
 
+// The only import this file has, and it earns it: FACINGS is the ceiling on
+// `facings`, and a catalogue carrying its own copy of a geometry constant is
+// the class of bug that put MAP_W = 20 in two files. js/iso.js imports nothing,
+// so there is no cycle.
+import { FACINGS } from './iso.js';
+
 export const GROUPS = Object.freeze([
   'ground',
   'terrain',
@@ -2249,6 +2255,58 @@ const DECOR = [
 // Assembly, normalisation and the self-check.
 // ---------------------------------------------------------------------------
 
+/**
+ * WHAT THE WHEEL MAY TURN. proposals/BACKLOG.md §4k, js/iso.js §FACING.
+ *
+ * The owner: *"there are a few tiles that you should be able to alter the
+ * direction on."* A FEW — the list is deliberately short, and the test for
+ * membership is not "could it be flipped" but **would flipping it visibly
+ * change which way the thing is turned**.
+ *
+ * That rules out most of the catalogue by its own geometry. A column is a
+ * cylinder, an urn is a solid of revolution, a round basin is a circle: they
+ * look the same from every side and are *supposed* to, so a rotation control
+ * over them is a control that visibly does nothing. The same argument the iso
+ * audit had to learn about rotational forms, arriving from the other side.
+ *
+ * What is left are the things with a DIRECTION:
+ *
+ *   linear    a wall, a hedge, a bench, a balustrade — it runs along one of
+ *             the two ground diagonals, and the flip swaps NE-SW for NW-SE.
+ *             This is the classic isometric-builder rotate.
+ *   fronted   an arch, an exedra, a niche, a wall fountain, a shelf — it has a
+ *             face, and the face belongs to one of the two visible walls.
+ *   a figure  a seated maiden looks somewhere.
+ *
+ * ONLY SQUARE FOOTPRINTS. Mirroring the screen's x axis swaps the two tile
+ * axes, so a 2x1 mirrors into a 1x2 — see js/iso.js. The self-check below
+ * refuses a non-square entry rather than letting it half-work, which is why
+ * `cave-mouth` (2x1) and `colonnade` (3x1) are absent from a list they
+ * otherwise belong at the top of.
+ */
+const TURNS = new Set([
+  // linear — it runs along a diagonal
+  'dry-stone-wall',
+  'clipped-hedge',
+  'tall-hedge',
+  'palisade-fence',
+  'balustrade',
+  'stone-bench',
+  'stepped-terrace-wall',
+  // fronted — it has a face, and a face belongs to a wall plane
+  'hedge-arch',
+  'pergola',
+  'wall-fountain',
+  'votive-shelf',
+  'exedra',
+  'marble-exedra',
+  // it goes somewhere, or looks somewhere
+  'earth-ramp',
+  'stone-stair',
+  'seated-maiden',
+  'axe-marker',
+]);
+
 function normalise(raw) {
   const z = raw.zone || NONE;
   const def = {
@@ -2283,8 +2341,25 @@ function normalise(raw) {
     // `unlockedBy`, which shows an empty slot as a promise — see the Arcadian
     // tomb, which must make no promise at all.
     hidden: raw.hidden === true,
+    // How many ways round it can be placed. 1 means it does not turn, and 1 is
+    // the default because most of the catalogue is rotational and would show
+    // nothing. See TURNS above and js/iso.js §FACING. An entry may override
+    // the list explicitly, which is how a second (back) drawing will raise one
+    // of these to 4 without touching the set.
+    facings: Math.max(1, Math.min(FACINGS, raw.facings ?? (TURNS.has(raw.id) ? 2 : 1))),
   };
   return Object.freeze(def);
+}
+
+/** How many ways round this may be placed. Anything unknown does not turn. */
+export function facingsOf(def) {
+  const n = def && def.facings;
+  return Number.isFinite(n) && n > 1 ? Math.min(FACINGS, Math.round(n)) : 1;
+}
+
+/** Does the wheel do anything over this? */
+export function turns(def) {
+  return facingsOf(def) > 1;
 }
 
 export const CATALOG = Object.freeze(
@@ -2324,6 +2399,17 @@ const BY_ID = new Map(CATALOG.map((d) => [d.id, d]));
     }
     if (!d.art || (d.art.kind !== 'grow' && d.art.kind !== 'sprite')) {
       throw new Error(`${where}: art.kind must be 'grow' or 'sprite'`);
+    }
+    // Only a SQUARE thing may turn. A horizontal flip swaps the two tile axes,
+    // so a 2x1 mirrors into a 1x2 — which means transposing the footprint
+    // through canPlace, the collision test and the depth key. That work is not
+    // done, and half-doing it would put objects through each other, so this
+    // refuses at import rather than at play. js/iso.js §FACING.
+    if (d.facings > 1 && d.footprint[0] !== d.footprint[1]) {
+      throw new Error(
+        `${where}: facings ${d.facings} on a ${d.footprint.join('x')} footprint. ` +
+          `Mirroring swaps the tile axes, so only square footprints may turn yet.`
+      );
     }
     for (const axis of AXES) {
       const v = d.deposits[axis];

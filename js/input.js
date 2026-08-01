@@ -276,6 +276,12 @@ export function createInput(opts = {}) {
     downX: 0,
     downY: 0,
     keyCursor: null,
+    /**
+     * Which way round each placeable was last turned, by id. Per placeable and
+     * not global: turning the hedge and then picking up a bench must not hand
+     * you a bench somebody else already turned.
+     */
+    facings: new Map(),
     /** The live terrain drag: { op, x0, y0, x1, y1 } or null. */
     terrain: null,
     lastSaid: null,
@@ -641,6 +647,53 @@ export function createInput(opts = {}) {
     return { op: t.op, x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1 };
   }
 
+  // ------------------------------------------------------------------ facing --
+  //
+  // The owner: "there are a few tiles that you should be able to alter the
+  // direction on. Currently the middle scroll wheel scrolls up and down the
+  // map, I think it would be better suited to pick between what direction an
+  // object faces in space."
+  //
+  // Right on both halves. The wheel was barely earning its keep as a pan —
+  // there are now four other ways to pan, and one of them is a whole tool —
+  // and rotation is the thing an isometric builder always binds.
+  //
+  // FACING IS PER PLACEABLE, NOT GLOBAL. Turning the hedge and then picking up
+  // a bench should not hand you a bench somebody else already turned; the
+  // player's mental model is that each thing remembers how they last placed
+  // it, which is also how every builder of the period behaved.
+
+  /** How many ways round this may be placed. 1 means the wheel does nothing. */
+  function facingsOf(item) {
+    const n = item && item.facings;
+    return Number.isFinite(n) && n > 1 ? Math.round(n) : 1;
+  }
+
+  /** The facing this placeable was last turned to. */
+  function facingFor(item) {
+    if (!item) return 0;
+    const n = facingsOf(item);
+    if (n <= 1) return 0;
+    return state.facings.get(item.id) || 0;
+  }
+
+  /**
+   * Turn the selection. Returns false when there is nothing to turn, so the
+   * caller can fall through to panning — a wheel that silently did nothing
+   * over a column would read as a broken wheel, not as a column that has no
+   * sides.
+   */
+  function turnBy(delta) {
+    const item = (ui && ui.selection && ui.selection()) || null;
+    const n = facingsOf(item);
+    if (!item || n <= 1) return false;
+    const next = (((facingFor(item) + delta) % n) + n) % n;
+    state.facings.set(item.id, next);
+    refreshGhost();
+    if (ui && ui.announce) ui.announce(`${item.name || item.id} facing ${next + 1} of ${n}`);
+    return true;
+  }
+
   // --------------------------------------------------------------- the ghost --
 
   function refreshGhost() {
@@ -702,6 +755,7 @@ export function createInput(opts = {}) {
       h: f.h,
       legal: l.ok,
       reason: l.reason,
+      facing: facingFor(item),
     });
   }
 
@@ -728,11 +782,14 @@ export function createInput(opts = {}) {
       return false;
     }
     state.lastSaid = null;
+    const facing = facingFor(item);
     let ok;
-    if (typeof on.place === 'function') ok = on.place(item.id, tx, ty, item) !== false;
+    if (typeof on.place === 'function') ok = on.place(item.id, tx, ty, item, { facing }) !== false;
     // world.place() routes ground painters into paint() itself, so there is one
-    // call site here and no chance of the two drifting apart.
-    else if (world && typeof world.place === 'function') ok = !!world.place(item.id, tx, ty);
+    // call site here and no chance of the two drifting apart. `facing` is
+    // clamped there against the placeable's own count, so a host that ignores
+    // the fifth argument above still cannot produce an illegal facing.
+    else if (world && typeof world.place === 'function') ok = !!world.place(item.id, tx, ty, { facing });
     else ok = false;
     if (ok) touched();
     return ok;
@@ -1038,14 +1095,19 @@ export function createInput(opts = {}) {
   }
 
   function onWheel(ev) {
-    // No zoom: the scale is integer and owned by the shell. The wheel nudges
-    // the camera instead, which is what a mouse-only player expects.
+    // No zoom: the scale is integer and owned by the shell.
     if (ui && ui.isModal && ui.isModal()) return;
     if (ui && ui.blocks && ui.blocks(state.px, state.py)) return;
     ev.preventDefault();
     const step = 32;
-    if (ev.shiftKey) panBy(Math.sign(ev.deltaY) * step, 0);
-    else panBy(0, Math.sign(ev.deltaY) * step);
+    const dir = Math.sign(ev.deltaY);
+    // THE WHEEL TURNS WHAT YOU ARE HOLDING, and pans when you are holding
+    // nothing that turns. Shift keeps the horizontal pan it always had, and
+    // shift is also the escape hatch for panning WITHOUT putting your hedge
+    // down — the same reason the move tool keeps your selection.
+    if (!ev.shiftKey && turnBy(dir)) return;
+    if (ev.shiftKey) panBy(dir * step, 0);
+    else panBy(0, dir * step);
   }
 
   // ----------------------------------------------------------------- keyboard --

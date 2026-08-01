@@ -428,49 +428,60 @@ list written before the module:
 
 Both now read `AUDITED_MODULES`.
 
-## 4k · FACING — the middle wheel should turn things (2026-08-01)
+## 4k · FACING — the middle wheel turns things ✅ SHIPPED (2026-08-01)
 
 Owner: *"there are a few tiles that you should be able to alter the direction on.
 Currently the middle scroll wheel scrolls up and down the map, I think it would
 be better suited to pick between what direction an object faces in space."*
 
-Right on both halves — the wheel is barely earning its keep as a pan (there are
-now four other ways to pan) and rotation is the thing an isometric builder
-always binds. This is the natural **sequel to §4j**: it is only worth building
-once sprites have a direction to be turned to.
+Right on both halves — the wheel was barely earning its keep as a pan (there are
+now four other ways to pan, and one of them is a whole tool) and rotation is the
+thing an isometric builder always binds.
 
-**The economics are better than they look.** In 2:1 iso, a horizontal flip turns
-an NE-facing wall into an NW-facing one *exactly* — the projection is symmetric
-about the vertical. So:
-
-| drawings | facings |
+| gesture | what it does |
 |---|---|
-| 1 | 2 (itself + its mirror) |
-| 2 | 4 (all of them) |
+| wheel, holding something with a direction | **turns it**, and the ghost shows the turn |
+| wheel, holding anything else | pans up and down, as it always did |
+| `Shift`+wheel | pans left and right, never turns |
 
-**Four facings cost two drawings, not four.** The renderer already has variant
-resolvers (`palette.variant`, the ghost's desaturation) so a mirrored raster is
-a cache key, not a new sprite.
+**Seventeen things turn**, listed as `TURNS` in js/catalog.js with the argument
+beside them. The test for membership is not "could it be flipped" but *would
+flipping it visibly change which way the thing is turned* — which rules out most
+of the catalogue by its own geometry. A column is a cylinder, an urn is a solid
+of revolution, a round basin is a circle. The same argument the iso audit had to
+learn about rotational forms, arriving from the other side.
 
-What it would touch, roughly in order of nastiness:
+**Four facings cost two drawings.** `facing` is stored 0..3 with
+`facingMirrored` / `facingDrawing` in js/iso.js; a horizontal flip is an exact
+NE↔NW turn, so one drawing covers two facings. The other two face away from the
+camera and want a real second drawing, so every entry declares `facings: 2`
+today and nothing in the save changes when a back view is drawn.
 
-- **The save.** `facing` becomes a per-object field, and `SAVE_VERSION` bumps.
-  Every existing garden must load with facing 0 and look exactly as it does
-  today — this is the part that must not be got wrong.
-- `world.place()` and the undo stack carry it.
-- The ghost previews the facing you are about to place at, or the wheel teaches
-  nothing.
-- `render.js` picks the raster: `art + facing` as the cache key, with the
-  mirror derived rather than stored.
-- **Which placeables are rotatable at all** is a catalogue field, not a global.
-  A boulder has no facing; a bench, a wall, a cave and an exedra do. Roughly the
-  same list as §4j(B), which is not a coincidence.
-- The wheel binding itself is four lines in `input.js` — and the pan it replaces
-  should probably survive on `Shift`+wheel rather than vanish.
+**The save is the part that mattered.** `SAVE_VERSION` 3, and `facing` is
+written **only when non-zero** — a garden in which nothing has been turned
+serialises byte for byte as it did under v2, and every v2 garden loads with
+everything as it was drawn. `test/facing.test.mjs` opens with three tests about
+that one `if`, plus a clamp that is total from both directions (a caller that
+forgot to check, and a save claiming a facing the catalogue no longer offers).
 
-**Sequencing:** §4j(B) first (give things a front), then this (let the player
-turn it). Building the facing system over sprites that all face the viewer would
-be a rotation control that visibly does nothing.
+### What is NOT done
+
+- **Only SQUARE footprints turn**, and the catalogue self-check throws at import
+  rather than let it half-work. Mirroring swaps the tile axes, so a 2×1 mirrors
+  into a 1×2 — which means transposing the footprint through `canPlace`, the
+  collision test and the depth key. That is the next step, and it is what
+  `cave-mouth` (2×1), `chirons-cave` (2×1), `colonnade` (3×1), `ruined-arch`,
+  `fern-grotto` and `arbour-seat` are all waiting on.
+- **No back views.** Facings 2 and 3 are reachable in the data model and
+  unreachable in play. A cave from behind — a hillside with no hole in it — is
+  the obvious first one, and it would double the value of the wheel for the
+  whole cave family.
+- **Placed objects cannot be turned**, only objects being placed. Turning one
+  already in the ground needs its own undo record kind; the wheel over a placed
+  object currently pans.
+- **`seated-maiden` and `palisade-fence` declare `facings: 2` but their sprites
+  are not in props.js or decor.js** — they draw understudies today, so the turn
+  is real but what turns is the stand-in. Harmless, worth knowing.
 
 ## 5 · Housekeeping
 
