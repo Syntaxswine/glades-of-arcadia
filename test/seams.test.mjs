@@ -456,3 +456,68 @@ test('fields.grassGrid drops straight into world.cacheGrassGrid', () => {
   assert.equal(world.grassAt(5, 5), 'thicket', 'the satyr’s own grass, under his own vines');
   assert.ok(world.grassVersion > 0, 'and the renderer is told to repaint');
 });
+
+// ---------------------------------------------------------------------------
+// main.js -> ui.js : WHO IS STANDING ON THIS TILE
+//
+// The fifth silent seam, and the same shape as the four in the header. The `?`
+// tool's `creatureAt` read `a.x` / `a.y` / `a.creature || a.id` from the scene's
+// creature list. That list is built by main.js `buildCreatures`, whose entries
+// have always used `tx` / `ty` — and which carried no identity at all until the
+// commit that added these tests.
+//
+// So it matched NOTHING, ever: `Math.round(undefined)` is NaN, NaN never equals
+// a tile index, and every question asked of a satyr was answered about the
+// grass under him. Nothing threw, nothing logged, and the wrong answer was a
+// perfectly good sentence about a meadow — which is exactly why it survived.
+//
+// WHAT THESE CAN AND CANNOT CATCH. `creatureAtIn` is pure and exported, so the
+// READER half is properly guarded below, including a negative control for an
+// entry with no identity. The WRITER half — main.js actually putting `creature`
+// on the entry — is not reachable from node without a DOM, so the last test
+// asserts the shape as a written-down contract. If `buildCreatures` ever drops
+// the field again, that is the test that should have caught it and will not.
+// Recorded rather than pretended away.
+
+test('the `?` finds a creature in a scene entry shaped the way main.js builds one', () => {
+  // These four keys are exactly what js/main.js buildCreatures pushes.
+  const entry = { tx: 6.4, ty: 8.2, level: 0, creature: 'centaur' };
+  const cards = [{ id: 'centaur', name: 'Asbolos', revealed: true, blurb: 'Thessalian.' }];
+  const hit = ui.creatureAtIn([entry], 6, 8, cards);
+  assert.ok(hit, 'the reader missed a creature standing on the tile');
+  assert.equal(hit.name, 'Asbolos', 'it should hand back the JOURNAL card, not a stub');
+});
+
+test('the `?` still finds one when there is no card for it yet', () => {
+  const hit = ui.creatureAtIn([{ tx: 3, ty: 3, creature: 'naiad' }], 3, 3, []);
+  assert.equal(hit.id, 'naiad');
+  assert.equal(hit.name, 'Naiad', 'an unrevealed creature is still someone');
+});
+
+test('the `?` finds NOBODY when the entry has no identity — the original bug', () => {
+  // The exact shape the scene carried before this was fixed: position, art,
+  // footprint, and no answer to "who is this".
+  const anonymous = { tx: 6, ty: 8, level: 0, art: {}, footprint: [1, 1], fade: 1 };
+  assert.equal(ui.creatureAtIn([anonymous], 6, 8, []), null);
+  // ...and a reader that quietly returns something plausible here is worse
+  // than one that returns null, because null falls through to the ground and
+  // says so. Null is the honest failure; a stub named "Undefined" is not.
+});
+
+test('the `?` ignores a creature that is not on that tile, or not present', () => {
+  const list = [
+    { tx: 1, ty: 1, creature: 'satyr' },
+    { tx: 6, ty: 8, creature: 'naiad', present: false },
+  ];
+  assert.equal(ui.creatureAtIn(list, 6, 8, []), null);
+  assert.equal(ui.creatureAtIn(list, 1, 1, []).id, 'satyr');
+  assert.equal(ui.creatureAtIn([], 1, 1, []), null);
+  assert.equal(ui.creatureAtIn(null, 1, 1, []), null);
+});
+
+test('a mover with fractional coordinates rounds to the tile it is over', () => {
+  const at = (tx, ty) => ui.creatureAtIn([{ tx, ty, creature: 'satyr' }], 6, 8, []);
+  assert.ok(at(5.6, 7.5), 'just inside');
+  assert.ok(at(6.49, 8.49), 'just inside the other way');
+  assert.equal(at(5.4, 8), null, 'over the next tile west');
+});

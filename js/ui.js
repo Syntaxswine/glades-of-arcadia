@@ -1018,6 +1018,41 @@ const WANT_LABEL = {
   thrives: 'to thrive',
 };
 
+/**
+ * The creature standing on a tile, given the scene's own creature list.
+ *
+ * EXPORTED AND PURE so the seam can be tested, because this is where the `?`
+ * tool was broken from the day it shipped and nothing noticed.
+ *
+ * THE FAULT, worth stating exactly: it read `a.x`/`a.y` and `a.creature ||
+ * a.id` from a scene list whose entries are built with `tx`/`ty` and — until
+ * the same commit as this comment — carried NO identity at all.
+ * `Math.round(undefined)` is NaN, NaN never equals a tile index, so it matched
+ * nothing, ever. Every `?` aimed at a satyr was answered about the grass under
+ * him, in a perfectly good sentence about a meadow. Nothing threw. Nothing
+ * logged. It survived a session of review because the wrong answer was well
+ * written.
+ *
+ * A mover keeps FRACTIONAL tile coordinates so it never pops across a tile
+ * boundary, hence the rounding. Both key spellings are accepted because a
+ * reader that is strict about a name it does not own is a reader that breaks
+ * again the next time the other side is refactored.
+ */
+export function creatureAtIn(drawn, tx, ty, cards) {
+  for (const a of drawn || []) {
+    if (!a || a.present === false) continue;
+    const ax = a.tx != null ? a.tx : a.x;
+    const ay = a.ty != null ? a.ty : a.y;
+    if (!Number.isFinite(ax) || !Number.isFinite(ay)) continue;
+    if (Math.round(ax) !== tx || Math.round(ay) !== ty) continue;
+    const id = a.creature || a.id;
+    if (!id) continue;
+    const card = (cards || []).find((c) => c && c.id === id);
+    return card || { id, name: String(id).charAt(0).toUpperCase() + String(id).slice(1), blurb: '' };
+  }
+  return null;
+}
+
 // --------------------------------------------------------------------------
 // createUI
 // --------------------------------------------------------------------------
@@ -1576,17 +1611,42 @@ export function createUI(opts = {}) {
    * loud for a screen reader, because the info box is a picture of text and
    * this is the one moment the game is being asked a direct question.
    */
+  /**
+   * The one thing this creature is still short of, in the journal's own words.
+   *
+   * The FIRST unmet requirement and not all of them: the `?` is a glance, the
+   * journal is the ledger, and a status line that lists four things is a status
+   * line nobody finishes reading. `requirements[].text` is already composed by
+   * creatures.js to the exact-for-counts / qualitative-for-axes rule, so it is
+   * used verbatim rather than recomposed here — two spellings of the same fact
+   * is how a game starts contradicting itself.
+   */
+  function wantLine(id) {
+    const card = (S.cards || []).find((c) => c && c.id === id);
+    if (!card || !card.revealed) return null;
+    if (card.complete || !card.nextRung) return 'At home here.';
+    const unmet = (card.requirements || []).filter((r) => r && !r.met && r.text);
+    if (!unmet.length) return null;
+    return `Wants ${WANT_LABEL[card.nextRung] || 'more'}: ${unmet[0].text}`;
+  }
+
   function explainTile(tx, ty) {
     const world = S.world;
 
     // 1. A creature. It moves, so it is what the player was pointing at.
+    //
+    // AND IT SAYS WHAT THE CREATURE IS STILL WAITING FOR, which is the answer a
+    // player most wants and which lived only in the journal. Asking a satyr
+    // what he needs, and being told, is worth more than being told what a satyr
+    // is — the blurb is the thing you learn once.
     const who = creatureAt(tx, ty);
     if (who) {
       const line = who.blurb || '';
+      const want = wantLine(who.id);
       infoName.textContent = who.name || who.id;
-      infoBlurb.textContent = line;
-      announce(`${who.name || who.id}. ${line}`);
-      return { kind: 'creature', id: who.id };
+      infoBlurb.textContent = want ? `${want} ${line}`.trim() : line;
+      announce(`${who.name || who.id}. ${want || ''} ${line}`.replace(/\s+/g, ' ').trim());
+      return { kind: 'creature', id: who.id, want: want || null };
     }
 
     // 2. An object.
@@ -1632,17 +1692,22 @@ export function createUI(opts = {}) {
    * aimed. Asking the simulation instead would be right by a tick and wrong by
    * up to a tile.
    */
+  /**
+   * The creature standing on this tile, or null.
+   *
+   * THE COORDINATES ARE `tx`/`ty`, NOT `x`/`y`. This looked for `a.x`/`a.y` on
+   * a scene list whose entries have always been built with `tx`/`ty`, so it
+   * matched nothing, ever: `Math.round(undefined)` is NaN, NaN !== tx, and
+   * every `?` aimed at a satyr was answered about the grass under him. Nothing
+   * threw and nothing logged — the fallback was a perfectly good sentence about
+   * a meadow, which is why it survived a whole session of review.
+   *
+   * A mover keeps FRACTIONAL tile coordinates so it never pops across a
+   * boundary, hence the rounding.
+   */
   function creatureAt(tx, ty) {
     const scene = S.renderer && S.renderer.scene;
-    const drawn = (scene && scene.creatures) || [];
-    for (const a of drawn) {
-      if (a.present === false) continue;
-      if (Math.round(a.x) !== tx || Math.round(a.y) !== ty) continue;
-      const id = a.creature || a.id;
-      const card = (S.cards || []).find((c) => c.id === id);
-      return card || { id, name: cap(String(id)), blurb: '' };
-    }
-    return null;
+    return creatureAtIn((scene && scene.creatures) || [], tx, ty, S.cards);
   }
 
   // ------------------------------------------------------------- the tombs --
@@ -1887,13 +1952,22 @@ export function createUI(opts = {}) {
         ? t
         : 'place';
     S.tool = next;
-    // Every other tool takes what you were holding out of your hand, because
-    // "what does a click do" must have one answer. MOVE is the exception, and
-    // deliberately: it exists so that you can shove the map about WITHOUT
-    // putting your plant down, which was the thing the drag-to-pan gesture
-    // could never offer. Its ghost is suppressed below, so nothing pretends it
-    // is about to be planted.
-    if (next !== 'place' && next !== 'move') S.selectedId = null;
+    // A tool that BUILDS takes what you were holding out of your hand, because
+    // "what does a click do" must have one answer. The two tools that only
+    // ANSWER are the exceptions, and deliberately:
+    //
+    //   move  shove the map about WITHOUT putting your plant down, which is
+    //         the thing drag-to-pan could never offer;
+    //   ask   look something up without losing your place.
+    //
+    // Neither can plant anything — `setGhost` returns null for both, so
+    // nothing pretends it is about to be — which is exactly why the ambiguity
+    // the rule above protects against does not arise for them.
+    //
+    // `ask` used to clear the selection while the comment in `setGhost` said
+    // it kept it. Two comments in one file disagreeing is a bug wherever the
+    // code lands; this is the reading that costs the player less.
+    if (next !== 'place' && next !== 'move' && next !== 'ask') S.selectedId = null;
     setGhost(null);
     syncPressed();
     showInfo(null);

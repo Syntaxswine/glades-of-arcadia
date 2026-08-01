@@ -1337,6 +1337,13 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
         // A half-dissolved creature is halfway into the sky; a contact shadow
         // needs ground under it to lie on and there is none out there.
         shadow: fade < 1 ? false : CREATURE_SHADOWS[v.creature],
+        // WHO IT IS. The scene list carried no identity at all, so `ui.js`'s
+        // `creatureAt` — the whole basis of asking `?` about a creature — could
+        // never match one and every question about a satyr was answered about
+        // the grass he was standing on. It looked for `a.creature || a.id` on
+        // entries that had neither, and for `a.x`/`a.y` on entries that carry
+        // `tx`/`ty`. Nothing threw; it just quietly always said "meadow".
+        creature: v.creature,
       });
     }
     return out;
