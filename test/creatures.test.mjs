@@ -372,8 +372,8 @@ test('poseT restarts on a pose change, so a one-shot gesture starts at its begin
 // BE HONEST ABOUT WHAT THESE COVER. They pin the LATCH, not the wiring — a unit
 // test of a latch cannot see a call site that fails to call it, which is what
 // bug 1 was, nor one that calls it too eagerly, which is what bug 2 was. What
-// removes those classes is that there is now exactly ONE arming call site and
-// its condition is a direct read of whether sound is coming out. The wiring is
+// removes those classes is that there is now exactly ONE place that starts the
+// score, and it is the same statement that starts the gesture. The wiring is
 // verified in the running browser against a restored save.
 
 test('the latch starts closed — silence arms nothing', () => {
@@ -403,23 +403,74 @@ test('nothing re-arms after he has played — one recital per session', () => {
   assert.equal(r.played, true);
 });
 
-test('the latch models the caller: armed only ever means "sound is happening"', () => {
-  // Simulate the tick exactly: `if (!recital.played && audio.playing) arm()`.
-  const r = createRecital();
-  const tick = (playing) => {
-    if (!r.played && playing) r.arm();
-    return r.pending;
-  };
-  // A returning save: boot unlocks the music, but there is no context and
-  // nothing decoded, so nothing is playing. This is BUG 2.
-  for (let i = 0; i < 600; i++) {
-    assert.equal(tick(false), false, 'armed while the glade was silent');
+/**
+ * Simulate main.js's tick exactly. `can` is "the audio could sound this
+ * instant"; `standing` is whether askFlourish would succeed. Returns the number
+ * of times the score was started, which must never exceed one.
+ */
+function runTick(r, steps, dt, can, standing) {
+  let starts = 0;
+  for (let i = 0; i < steps; i++) {
+    if (!r.pending) continue;
+    if (can(i) && standing(i)) {
+      if (r.took()) starts++;
+    } else if (r.hold(dt, can(i))) {
+      if (r.release()) starts++;
+    }
   }
-  // The player clicks, the mp3 decodes, a pass begins.
-  assert.equal(tick(true), true, 'did not arm when the music actually started');
-  r.took();
-  // And it stays shut for the rest of the session however long the track runs.
-  for (let i = 0; i < 600; i++) assert.equal(tick(true), false);
+  return starts;
+}
+
+test('THE SCORE STARTS WITH HIM — never a step before', () => {
+  // The owner's report: "the music plays before the satyr playing music
+  // starts". It did, structurally — the score was unlocked on ARRIVAL and he
+  // was still walking in from the rim. Now nothing starts it but him.
+  const r = createRecital();
+  r.arm();
+  // Ten seconds of walking in, with the track decoded and waiting.
+  const yes = () => true;
+  let starts = runTick(r, 100, 0.1, yes, (i) => i >= 100);
+  assert.equal(starts, 0, 'the score started while he was still walking in');
+  assert.equal(r.released, false, 'the score was let go without a musician');
+  assert.ok(r.held < 30, 'patience should not have run out in ten seconds');
+  // He plants both feet.
+  starts = runTick(r, 1, 0.1, yes, yes);
+  assert.equal(starts, 1, 'the score did not start when he raised the pipes');
+  assert.equal(r.played, true);
+});
+
+test('a muted player holds nothing and mimes nothing', () => {
+  const r = createRecital();
+  r.arm();
+  // Ten minutes muted, standing right there. `can` is false, so patience never
+  // advances: the recital is waiting, not being spent.
+  const starts = runTick(r, 6000, 0.1, () => false, () => true);
+  assert.equal(starts, 0);
+  assert.equal(r.held, 0, 'patience ran down while nothing could be heard');
+  assert.equal(r.pending, true, 'the recital was lost to a mute');
+});
+
+test('patience: the score does not wait for ever, and he joins it late', () => {
+  const r = createRecital(30);
+  r.arm();
+  // He is thirty-one seconds into a revel. The music gives up waiting.
+  let starts = runTick(r, 310, 0.1, () => true, () => false);
+  assert.equal(starts, 1, 'the score waited past its patience');
+  assert.equal(r.released, true);
+  assert.equal(r.pending, true, 'the recital was cancelled instead of deferred');
+  // He is free at last. He plays — and does NOT start the track a second time.
+  starts = runTick(r, 1, 0.1, () => true, () => true);
+  assert.equal(starts, 0, 'the score was started twice');
+  assert.equal(r.played, true, 'he never got his recital');
+});
+
+test('the score is started exactly once however the two paths interleave', () => {
+  const r = createRecital(5);
+  r.arm();
+  const starts =
+    runTick(r, 200, 0.1, (i) => i % 3 !== 0, (i) => i > 120) +
+    runTick(r, 200, 0.1, () => true, () => true);
+  assert.equal(starts, 1);
 });
 
 test('a session that never sees a satyr never arms, and that is fine', () => {

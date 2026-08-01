@@ -524,10 +524,14 @@ function btn(cls, label, onClick, title) {
   const b = el('button', 'btn ' + (cls || ''), label);
   b.type = 'button';
   if (title) b.title = title;
-  b.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    onClick(ev);
-  });
+  // `onClick` is optional: some buttons (the move pad) want to wire their own
+  // pointer handling and would otherwise have to pass a no-op.
+  if (typeof onClick === 'function') {
+    b.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      onClick(ev);
+    });
+  }
   return b;
 }
 
@@ -815,6 +819,49 @@ export function affinityWords(item) {
   return bits.join(' ');
 }
 
+/**
+ * WHAT THE QUESTION MARK SAYS ABOUT BARE GROUND.
+ *
+ * Module scope, and exported, so `test/ask.test.mjs` can hold it against
+ * `GROUND_TYPES` and `GRASS_TYPES`. These are hand-written prose against two
+ * enums that live in other files; without a test, adding a ground type gives it
+ * a silent "Off the map" and nobody finds out.
+ *
+ * Written as "what lives here" rather than as a description, because that is the
+ * question actually being asked.
+ *
+ * `meadow` is deliberately ABSENT from `grass`. It is the baseline nobody has
+ * claimed, so the ground type underneath is the more interesting answer — the
+ * species grasses are the thing the player MADE, and meadow is what they left
+ * alone. See docs/ZONING.md.
+ */
+export const ASKED = Object.freeze({
+  grass: Object.freeze({
+    thicket: [
+      'Thicket',
+      'Rough, dry, unkempt tussock. Satyrs will not settle anywhere tidier than this.',
+    ],
+    sward: ['Sward', 'Open running turf, coarse and level. Centaurs want room, and this is room.'],
+    fen: ['Fen', 'Wet ground, reedy at the edges. A naiad reads this as the shallows of her pool.'],
+    millefleurs: [
+      'Millefleurs',
+      'A thousand small flowers and no bare soil anywhere. Only a unicorn asks for ground this fine.',
+    ],
+  }),
+  ground: Object.freeze({
+    grass: ['Glade floor', 'Plain grass. Everything starts here and anything may still happen on it.'],
+    greensward: ['Greensward', 'Mown and level. Tidy ground: the centaur likes it, the satyr does not.'],
+    meadow: ['Meadow', 'Long grass gone to flower. Nobody mows it and nothing minds.'],
+    millefleurs: ['Millefleurs', 'Dense low flowering planting, no earth showing through.'],
+    moss: ['Moss', 'Old, damp, and always in shade. It takes years and cannot be hurried.'],
+    tilled: ['Tilled earth', 'Worked rows. Somebody has had their hands in this.'],
+    gravel: ['Gravel', 'A swept walk. Order, which some of them like and one of them cannot bear.'],
+    rock: ['Bare rock', 'Stone and scree. Nothing grows, and a hoof sounds different on it.'],
+    water: ['Open water', 'Deep enough to matter. The naiad lives in it; the unicorn stops at the brink.'],
+    marsh: ['Marsh', 'Shallow, reedy, half land. Passable if you do not mind wet feet.'],
+  }),
+});
+
 function listWords(list) {
   if (list.length <= 1) return list[0] || '';
   if (list.length === 2) return `${list[0]} and ${list[1]}`;
@@ -1062,7 +1109,24 @@ export function createUI(opts = {}) {
   btnRaze.setAttribute('aria-pressed', 'false');
   const btnUndo = btn('bar-btn', 'Undo', () => doUndo(), 'Undo (Ctrl+Z)');
 
-  barRight.append(btnJournal, btnField, btnRaze, btnUndo);
+  /**
+   * THE QUESTION MARK.
+   *
+   * Pick it up and the next thing you click is described instead of changed.
+   * Every builder of the period had one — Caesar III, Pharaoh and Zeus all hand
+   * you a cursor that answers "what IS that" — and it is the right shape for
+   * this game in particular, because Arcadia never shows a number and therefore
+   * has nowhere else to put the answer.
+   *
+   * It is a TOOL and not a hover tip on purpose. A tooltip that follows the
+   * pointer around a garden you are trying to look at is noise; a question you
+   * asked is not.
+   */
+  const btnAsk = btn('bar-btn', '?', () => toggleTool('ask'), 'What is that? (?)');
+  btnAsk.setAttribute('aria-pressed', 'false');
+  btnAsk.setAttribute('aria-label', 'Ask about a thing');
+
+  barRight.append(btnAsk, btnJournal, btnField, btnRaze, btnUndo);
   bar.append(timeOut, overlayName, barRight);
 
   function doUndo() {
@@ -1127,7 +1191,82 @@ export function createUI(opts = {}) {
   const jCard = el('div', 'journal-card');
   journal.append(jTitle, jClose, jList, jCard);
 
-  mount.append(bar, legend, toast, panel, journal, liveRegion);
+  // ------------------------------------------------------------- move pad --
+  //
+  // A four-way pad for a map that is now sixty tiles square.
+  //
+  // WHY IT EXISTS. On a touch screen there is no keyboard and no middle mouse
+  // button, so the only way to cross the map was a drag — and a drag is exactly
+  // the gesture that also PLACES things, so a player with a plant in hand had
+  // no way to move at all without putting it down first. That is not a mobile
+  // inconvenience, it is a dead end.
+  //
+  // WHY IT IS ALWAYS ON, not gated behind a coarse-pointer query. A control that
+  // appears on some devices and not others cannot be documented, cannot be
+  // screenshotted, and cannot be found by the player who needs it. It is small,
+  // it is quiet, and a mouse player who never touches it has lost 34 x 34
+  // logical pixels in the corner of a meadow.
+  //
+  // HELD, not tapped: pointerdown starts panning and pointerup stops it, so one
+  // long press crosses the map. The rate is per SECOND and applied from the
+  // frame loop, so it is the same speed at 30Hz and at 144Hz.
+  const pad = el('div', 'pad');
+  pad.setAttribute('role', 'group');
+  pad.setAttribute('aria-label', 'Move the view');
+
+  /** Logical pixels per second while a pad button is held. */
+  const PAD_SPEED = 340;
+  const padHeld = { dx: 0, dy: 0 };
+
+  const PAD_DIRS = [
+    { cls: 'pad-n', dx: 0, dy: -1, label: 'Move up', glyph: '▲' },
+    { cls: 'pad-w', dx: -1, dy: 0, label: 'Move left', glyph: '◀' },
+    { cls: 'pad-e', dx: 1, dy: 0, label: 'Move right', glyph: '▶' },
+    { cls: 'pad-s', dx: 0, dy: 1, label: 'Move down', glyph: '▼' },
+  ];
+  for (const d of PAD_DIRS) {
+    const b = btn('pad-btn ' + d.cls, d.glyph, null, d.label);
+    b.setAttribute('aria-label', d.label);
+    const grab = (ev) => {
+      ev.preventDefault();
+      padHeld.dx = d.dx;
+      padHeld.dy = d.dy;
+      // Capture, so sliding a thumb off the button still stops when it lifts.
+      try {
+        b.setPointerCapture(ev.pointerId);
+      } catch (_) {}
+    };
+    const let_go = () => {
+      if (padHeld.dx === d.dx && padHeld.dy === d.dy) {
+        padHeld.dx = 0;
+        padHeld.dy = 0;
+      }
+    };
+    b.addEventListener('pointerdown', grab);
+    b.addEventListener('pointerup', let_go);
+    b.addEventListener('pointercancel', let_go);
+    b.addEventListener('pointerleave', let_go);
+    // Keyboard: the pad is focusable chrome, so Enter and Space must work. One
+    // press is one nudge — holding a key on a button does not repeat reliably.
+    b.addEventListener('click', () => {
+      if (on.pan) on.pan(d.dx * 64, d.dy * 32);
+    });
+    pad.appendChild(b);
+  }
+
+  /**
+   * Called from the frame loop with the real dt. Returns true if it moved,
+   * which is only so a caller can skip work when nothing is held.
+   */
+  function panStep(dt) {
+    if (!padHeld.dx && !padHeld.dy) return false;
+    if (!on.pan) return false;
+    const d = Math.max(0, Math.min(0.1, dt || 0));
+    on.pan(padHeld.dx * PAD_SPEED * d, padHeld.dy * PAD_SPEED * d);
+    return true;
+  }
+
+  mount.append(bar, legend, toast, pad, panel, journal, liveRegion);
 
   // ------------------------------------------------------------- the palette --
 
@@ -1428,6 +1567,91 @@ export function createUI(opts = {}) {
     infoBlurb.textContent = words ? `${shown.blurb || ''} ${words}`.trim() : shown.blurb || '';
   }
 
+  // --------------------------------------------------------------- the ? ---
+  //
+  // What the question mark answers. Three kinds of thing can be under it, and
+  // the order matters: a creature is the most interesting thing on any tile it
+  // is standing on, an object is next, and the ground is what is left. Nothing
+  // ever answers "nothing" — bare meadow gets a sentence too, because a player
+  // who asks a question and is told there is no answer stops asking.
+
+  const GRASS_SAID = ASKED.grass;
+  const GROUND_SAID = ASKED.ground;
+
+  /**
+   * Answer a click. Returns the same shape the info box takes, and says it out
+   * loud for a screen reader, because the info box is a picture of text and
+   * this is the one moment the game is being asked a direct question.
+   */
+  function explainTile(tx, ty) {
+    const world = S.world;
+
+    // 1. A creature. It moves, so it is what the player was pointing at.
+    const who = creatureAt(tx, ty);
+    if (who) {
+      const line = who.blurb || '';
+      infoName.textContent = who.name || who.id;
+      infoBlurb.textContent = line;
+      announce(`${who.name || who.id}. ${line}`);
+      return { kind: 'creature', id: who.id };
+    }
+
+    // 2. An object.
+    const obj = world && typeof world.objectAt === 'function' ? world.objectAt(tx, ty) : null;
+    const def = obj ? catalogById(obj.id) : null;
+    if (def) {
+      const words = affinityWords(def);
+      infoName.textContent = def.name || def.id;
+      infoBlurb.textContent = `${def.blurb || ''} ${words}`.trim();
+      announce(`${def.name || def.id}. ${def.blurb || ''} ${words}`);
+      return { kind: 'object', id: def.id };
+    }
+
+    // 3. The ground.
+    const grass = world && typeof world.grassAt === 'function' ? world.grassAt(tx, ty) : null;
+    const ground = world && typeof world.groundAt === 'function' ? world.groundAt(tx, ty) : null;
+    // `meadow` is deliberately absent from GRASS_SAID: it is the baseline
+    // nobody has claimed, so the GROUND underneath is the more interesting
+    // answer. The id returned is whichever of the two actually spoke, so a
+    // caller cannot be told 'meadow' and shown "Glade floor".
+    let id = grass;
+    let said = GRASS_SAID[grass];
+    if (!said) {
+      id = ground;
+      said = GROUND_SAID[ground];
+    }
+    if (!said) {
+      id = null;
+      said = ['Off the map', 'Past the rim there is only the dusk the creatures walk in out of.'];
+    }
+    infoName.textContent = said[0];
+    infoBlurb.textContent = said[1];
+    announce(`${said[0]}. ${said[1]}`);
+    return { kind: 'ground', id };
+  }
+
+  /**
+   * Whichever creature is standing on this tile.
+   *
+   * Read off the RENDERER'S OWN SCENE rather than out of the bestiary. That is
+   * the list that was actually drawn on the frame the player clicked, in the
+   * positions they saw, which is the only list that can agree with where they
+   * aimed. Asking the simulation instead would be right by a tick and wrong by
+   * up to a tile.
+   */
+  function creatureAt(tx, ty) {
+    const scene = S.renderer && S.renderer.scene;
+    const drawn = (scene && scene.creatures) || [];
+    for (const a of drawn) {
+      if (a.present === false) continue;
+      if (Math.round(a.x) !== tx || Math.round(a.y) !== ty) continue;
+      const id = a.creature || a.id;
+      const card = (S.cards || []).find((c) => c.id === id);
+      return card || { id, name: cap(String(id)), blurb: '' };
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------- the tombs --
 
   /**
@@ -1646,6 +1870,7 @@ export function createUI(opts = {}) {
 
   const TOOL_SAID = {
     place: 'Placing',
+    ask: 'Asking. Click anything.',
     raze: 'Clearing',
     raise: 'Raising the land',
     lower: 'Lowering the land',
@@ -1658,7 +1883,8 @@ export function createUI(opts = {}) {
    * with two answers to "what does a click do".
    */
   function selectTool(t) {
-    const next = t === 'place' || t === 'raze' || TERRAIN_TOOL_IDS.includes(t) ? t : 'place';
+    const next =
+      t === 'place' || t === 'raze' || t === 'ask' || TERRAIN_TOOL_IDS.includes(t) ? t : 'place';
     S.tool = next;
     if (next !== 'place') S.selectedId = null;
     setGhost(null);
@@ -1676,6 +1902,8 @@ export function createUI(opts = {}) {
   function syncPressed() {
     btnRaze.setAttribute('aria-pressed', String(S.tool === 'raze'));
     btnRaze.classList.toggle('is-on', S.tool === 'raze');
+    btnAsk.setAttribute('aria-pressed', String(S.tool === 'ask'));
+    btnAsk.classList.toggle('is-on', S.tool === 'ask');
     btnField.setAttribute('aria-pressed', String(S.overlay != null));
     btnField.classList.toggle('is-on', S.overlay != null);
     btnJournal.classList.toggle('is-on', S.journal);
@@ -2221,12 +2449,28 @@ export function createUI(opts = {}) {
     timeOut.textContent = bits.join(' · ');
   }
 
+  /**
+   * Rectangles that are chrome but are drawn ON the canvas rather than built as
+   * DOM — the minimap, and anything like it. The DOM panels are already excluded
+   * by their own rects above; a canvas-drawn panel has nothing to be excluded by
+   * unless it says so, and the failure is the nastiest kind: the click lands on
+   * the garden UNDERNEATH the thing the player was aiming at, and plants a tree
+   * behind the minimap.
+   */
+  let reserved = [];
+
+  /** Replace the reserved list. Call with [] to clear. */
+  function reserve(rects) {
+    reserved = Array.isArray(rects) ? rects.filter(Boolean) : [];
+  }
+
   /** Does this logical point belong to the chrome rather than the garden? */
   function blocks(x, y) {
     if (S.journal) return true;
     const inRect = (r) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
     if (inRect(LAYOUT.TOPBAR) || inRect(LAYOUT.PANEL)) return true;
     if (!legend.hidden && x < 132 && y > LAYOUT.PANEL.y - 46 && y < LAYOUT.PANEL.y) return true;
+    for (let i = 0; i < reserved.length; i++) if (inRect(reserved[i])) return true;
     return false;
   }
 
@@ -2288,6 +2532,9 @@ export function createUI(opts = {}) {
   function update(a, b) {
     if (typeof a === 'number') {
       const g = b || game;
+      // The move pad, every frame and before the quarter-second work below —
+      // panning must be smooth, and the journal refresh must not be.
+      panStep(a);
       S.cardClock += a;
       // Four times a second is plenty for a journal; the ladder does not move
       // faster than the player can read.
@@ -2430,6 +2677,9 @@ export function createUI(opts = {}) {
 
     say,
     announce,
+
+    reserve,
+    explainTile,
 
     /**
      * main.js folds this into the autosave. Chrome state only, never world.

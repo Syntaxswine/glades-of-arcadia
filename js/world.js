@@ -64,10 +64,21 @@ import {
 // before it reaches into the next diagonal row — so iso.js owns it and this
 // module imports it. world.js still owns the integer level itself and knows
 // nothing about the pixel rise (LEVEL_H is deliberately not imported here).
-import { MAX_LEVEL } from './iso.js';
+import { MAP_W, MAP_H, MAX_LEVEL } from './iso.js';
 
-export const MAP_W = 20;
-export const MAP_H = 20;
+/**
+ * THE MAP SIZE HAS ONE HOME AND IT IS iso.js. Re-exported here only because
+ * older call sites import it from world.js.
+ *
+ * These were a second, independent `20` for the whole life of the project. They
+ * were never *read* by anything that passes explicit dimensions — main.js
+ * always does — so growing the map to 60 did not visibly break, and that is
+ * exactly the danger: `new World()` with no options, or a save with no `w`,
+ * silently built a 20x20 world inside a 60x60 game. See
+ * docs/TITLE-AND-CONTROLS.md, which made this a law after the same mistake in
+ * the other direction (iso.js's pair were the dead ones then).
+ */
+export { MAP_W, MAP_H };
 
 /** SPEC §0 — bounded undo stack. */
 export const UNDO_LIMIT = 64;

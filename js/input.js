@@ -245,7 +245,12 @@ export function createInput(opts = {}) {
   const world = opts.world || (game && game.world) || null;
   const renderer = opts.renderer || (game && game.renderer) || null;
   const on = opts.on || {};
-  const map = { w: 20, h: 20, ...(opts.map || {}) };
+  // The minimap, if the host built one. Optional: preview mode and the tests
+  // run without it and must keep working.
+  const minimap = opts.minimap || (game && game.minimap) || null;
+  // Defaulted from iso.js rather than re-typed. A hard-coded 20 here was the
+  // shape of an old bug — see docs/TITLE-AND-CONTROLS.md, "Growing the map".
+  const map = { w: iso.MAP_W, h: iso.MAP_H, ...(opts.map || {}) };
 
   // The camera is the renderer's when there is one — it eases, it clamps, and
   // it is the camera the frame was actually drawn with. The local one is for
@@ -856,6 +861,21 @@ export function createInput(opts = {}) {
     state.lastX = p.x;
     state.lastY = p.y;
     state.pointerIn = true;
+
+    // THE MINIMAP, before the chrome test that would otherwise swallow it. On a
+    // 60x60 map, jumping is the minimap's whole reason for being — a picture of
+    // where you are is half the answer and "take me there" is the other half.
+    // Checked first because ui.js RESERVES the same rectangle, so by the next
+    // line the click is already gone.
+    if (minimap && typeof minimap.hit === 'function' && minimap.hit(p.x, p.y, viewRect())) {
+      const t = typeof minimap.pick === 'function' ? minimap.pick(p.x, p.y, viewRect()) : null;
+      if (t) {
+        centreOn(t.tx, t.ty);
+        if (ui && ui.announce) ui.announce(`looking at ${t.tx}, ${t.ty}`);
+      }
+      return;
+    }
+
     if (ui && ui.blocks && ui.blocks(p.x, p.y)) return; // the chrome owns this pixel
 
     const t = pick(ev);
@@ -872,6 +892,17 @@ export function createInput(opts = {}) {
 
     const tool = (ui && ui.tool && ui.tool()) || 'place';
     const item = (ui && ui.selection && ui.selection()) || null;
+
+    // THE QUESTION MARK asks and changes nothing. Before every other branch,
+    // because "click a thing to find out what it is" must not also plant,
+    // raze, terrace or pan — a help cursor that edits the garden is a trap.
+    if (tool === 'ask') {
+      state.dragging = false;
+      state.painting = false;
+      state.panning = false;
+      if (ui && typeof ui.explainTile === 'function') ui.explainTile(t.tx, t.ty);
+      return;
+    }
 
     // Left-drag with nothing selected pans, which is what a player reaches for
     // first. Middle-drag and space-drag always pan.
@@ -1053,6 +1084,12 @@ export function createInput(opts = {}) {
         // always does, so the whole UI stays keyboard-traversable.
         ev.preventDefault();
         if (ui && ui.cycleOverlay) ui.cycleOverlay(ev.shiftKey ? -1 : 1);
+        return;
+      // The question mark, on the question mark key. It is the only punctuation
+      // the game binds, and it is bound to the thing it is drawn as.
+      case '?':
+        ev.preventDefault();
+        if (ui && ui.toggleTool) ui.toggleTool('ask');
         return;
       case 'Escape':
         ev.preventDefault();

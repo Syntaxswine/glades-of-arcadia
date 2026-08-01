@@ -679,6 +679,82 @@ button:disabled {
 }
 
 /* ---------------------------------------------------------------------------
+   The move pad
+   ---------------------------------------------------------------------------
+   Four buttons in a diamond, bottom-left of the map view, above the panel.
+
+   IT IS A DIAMOND AND NOT A CROSS, because the map is isometric: "up" on the
+   pad is up ON SCREEN, and the four arrows sit on the same diagonals the
+   terrain does. A square d-pad next to a diamond world invites the player to
+   read the arrows as tile directions, which they are not.
+
+   Sizes are whole logical pixels like everything else in this file, so the pad
+   lands on the same device-pixel grid as the canvas at 1x, 2x and 3x.
+*/
+.pad {
+  position: absolute;
+  left: calc(6 * var(--u));
+  top: calc(252 * var(--u)); /* 300 (panel) - 42 (pad) - 6 (margin) */
+  width: calc(42 * var(--u));
+  height: calc(42 * var(--u));
+  /* Never in the way of the garden: the pad is a tool, not a HUD. */
+  opacity: 0.72;
+  transition: opacity 120ms linear;
+  /* The BOX is transparent to the pointer; only the four buttons take it.
+     `.ui > *` turns pointer-events on for every direct child, which would make
+     the empty middle and corners of this 42x42 square swallow clicks on the
+     garden underneath — four small dead zones nobody would ever diagnose. */
+  pointer-events: none;
+}
+
+.pad-btn {
+  pointer-events: auto;
+}
+
+.pad:hover,
+.pad:focus-within {
+  opacity: 1;
+}
+
+.pad-btn {
+  position: absolute;
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  padding: 0;
+  min-width: 0;
+  line-height: calc(14 * var(--u));
+  font-size: calc(7 * var(--u));
+  color: var(--ink-mid);
+  /* A held direction should feel held. `touch-action: none` is load-bearing on
+     a phone: without it the browser claims the press as a scroll gesture and
+     the pointerup never arrives, so the pan runs away. */
+  touch-action: none;
+  user-select: none;
+}
+
+.pad-btn:active,
+.pad-btn.is-on {
+  color: var(--gold-hi);
+}
+
+.pad-n {
+  left: calc(14 * var(--u));
+  top: 0;
+}
+.pad-w {
+  left: 0;
+  top: calc(14 * var(--u));
+}
+.pad-e {
+  left: calc(28 * var(--u));
+  top: calc(14 * var(--u));
+}
+.pad-s {
+  left: calc(14 * var(--u));
+  top: calc(28 * var(--u));
+}
+
+/* ---------------------------------------------------------------------------
    The title screen
    ---------------------------------------------------------------------------
    Sits inside #stage, so it inherits the letterbox and the integer scaling the

@@ -39,6 +39,7 @@
 // iso.js is exempt because it is pure arithmetic with no dependencies, and a
 // game that cannot project a tile has no feature left to lose.
 import { MAP_W, MAP_H } from './iso.js';
+import { createMinimap } from './minimap.js';
 
 const LOGICAL_W = 640; // SPEC §2 — the backing store, exactly.
 const LOGICAL_H = 400;
@@ -319,6 +320,210 @@ function plantOpeningGlade(world, cat, rng, dayMs) {
 }
 
 // ---------------------------------------------------------------------------
+// THE PROVING GROUND — `?garden=all`
+// ---------------------------------------------------------------------------
+//
+// A garden where all four of them are welcome at once, in four quadrants of the
+// big map. It is a cheat code and it says so: it is reached by a URL flag, it is
+// never the default, and it wipes its own undo stack like the opening glade.
+//
+// WHY IT IS DERIVED AND NOT AUTHORED. The obvious way to write this is to hand
+// place sixty things from the lore. That garden would be right on the day it was
+// written and quietly wrong for ever after — the ladder is tuned regularly, and
+// a test map that no longer satisfies it is worse than no test map, because it
+// LOOKS like it should work and the failure reads as a bug in the simulation.
+//
+// So it reads the requirements themselves. For each species it walks the rungs
+// up to `settles`, and for every `at-least <n> <tag> within <r>` it plants n
+// carriers of that tag inside r of that species' corner, choosing the carrier
+// that argues hardest FOR that species (catalog.byAffinity). `at-most` rungs are
+// honoured by omission — the centaur's `at-most 4 tree within 3` is her open run
+// to gallop on, and reading it as a demand for four trees builds the one garden
+// she will not live in.
+//
+// It cannot promise every creature settles: bands (`seclusion`, `maturity`) are
+// field maths, `patch` needs the grass to spread first, and a beat has to be
+// performed. What it promises is that every COUNTED demand is met and none of
+// the counted refusals is present, which is the part a human cannot set up by
+// hand without an afternoon.
+const QUADRANTS = {
+  satyr: { tx: 16, ty: 16 },
+  centaur: { tx: 44, ty: 16 },
+  naiad: { tx: 16, ty: 44 },
+  unicorn: { tx: 44, ty: 44 },
+};
+
+/**
+ * The counted demands of a species, up to and including `settles`.
+ *
+ * BOTH DIRECTIONS, and the caps are not a footnote. The first version of this
+ * only tracked `at-most 0` as a list of forbidden tags and dropped every cap
+ * with a number on it, which built the centaur six ash trees inside her
+ * `at-most 4 tree within 3` and made her quadrant the one garden she refuses.
+ * A cap of four is the same KIND of statement as a cap of zero — she wants an
+ * open run — and the only difference is where the line is.
+ */
+function countedDemands(creature, rungs) {
+  const upto = rungs.slice(0, rungs.indexOf('settles') + 1);
+  const need = new Map(); // tag -> { n, radius }   at-least: the tightest wins
+  const caps = new Map(); // tag -> { n, radius }   at-most:  the tightest wins
+  for (const rung of upto) {
+    for (const req of creature.rungs[rung] || []) {
+      if (req.kind !== 'count') continue;
+      const table = req.dir === 'at-most' ? caps : need;
+      const cur = table.get(req.tag);
+      if (req.dir === 'at-most') {
+        table.set(req.tag, {
+          n: Math.min(cur ? cur.n : Infinity, req.n),
+          radius: Math.max(cur ? cur.radius : 0, req.radius),
+        });
+      } else {
+        table.set(req.tag, {
+          n: Math.max(cur ? cur.n : 0, req.n),
+          radius: Math.min(cur ? cur.radius : Infinity, req.radius),
+        });
+      }
+    }
+  }
+  return { need, caps };
+}
+
+/**
+ * Tiles within `r` of a centre, nearest first. A spiral rather than a scan, so
+ * a demand with radius 4 fills the middle of its own circle instead of hugging
+ * the rim where the next species' circle is.
+ */
+function ringsAround(cx, cy, r) {
+  const out = [];
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 1 || y < 1 || x >= MAP_W - 1 || y >= MAP_H - 1) continue;
+      out.push({ x, y, d: dx * dx + dy * dy });
+    }
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out;
+}
+
+export function plantProvingGround(world, cat, creatures) {
+  const RUNGS = (creatures && creatures.RUNGS) || [];
+  const ALL = (creatures && creatures.CREATURES) || [];
+  if (!RUNGS.length || !ALL.length) {
+    report.notes.push('proving ground: creatures.js exported no ladder');
+    return { placed: 0, missed: ['creatures.js exported no ladder'] };
+  }
+  let placed = 0;
+  const missed = [];
+
+  world.batch(() => {
+    for (const creature of ALL) {
+      const home = QUADRANTS[creature.id];
+      if (!home) continue;
+      const { need, caps } = countedDemands(creature, RUNGS);
+
+      /**
+       * Would putting `def` on this tile break one of this species' caps?
+       *
+       * Checked per SPOT rather than per carrier, because most conflicts are
+       * about DISTANCE, not about the object. Six ash trees are not too many
+       * for a centaur; six ash trees within three tiles of where she wants to
+       * stand are. Pushing the sixth out to the fourth ring satisfies the
+       * at-least and the at-most both, which is what the requirements were
+       * always describing and what the first version could not express.
+       */
+      // Everything this quadrant has planted, counted here rather than read
+      // back out of the world.
+      //
+      // `world.countTag` walks `world.objects`, and A GROUND PAINTER IS NOT AN
+      // OBJECT — it writes the tile's ground type and leaves nothing behind to
+      // count. (fields.js keeps a synthetic placement so the ladder can still
+      // see it; the world cannot.) Counting our own placements is both exact
+      // and blind to nothing, and it does not depend on the field bridge having
+      // caught up inside a `batch`.
+      const mine = [];
+      const near = (x, y, r) => {
+        const dx = x - home.tx;
+        const dy = y - home.ty;
+        // EUCLIDEAN, matching world/fields `objectsNear` (dx*dx + dy*dy <= r*r).
+        // A Chebyshev test would call the corners of the square "inside" and
+        // refuse spots the requirement never counted.
+        return dx * dx + dy * dy <= r * r;
+      };
+      const breaksACap = (def, x, y) => {
+        for (const tag of def.tags) {
+          const cap = caps.get(tag);
+          if (!cap) continue;
+          if (!near(x, y, cap.radius)) continue; // outside the cap; it does not count
+          let n = 0;
+          for (const p of mine) {
+            if (p.def.tags.includes(tag) && near(p.x, p.y, cap.radius)) n++;
+          }
+          if (n >= cap.n) return true;
+        }
+        return false;
+      };
+
+      // GROUND FIRST, in both senses. A placeable that paints ground (water,
+      // moss, tilled) has to be down before anything that `requires` it can
+      // stand on it — the naiad's whole quadrant depends on this ordering, and
+      // getting it backwards fails silently as "the reeds would not place".
+      const paints = (tag) => cat.byTag(tag).some((d) => d.ground);
+      const wanted = [...need.entries()].sort(
+        (a, b) => (paints(a[0]) ? 0 : 1) - (paints(b[0]) ? 0 : 1)
+      );
+
+      for (const [tag, want] of wanted) {
+        // The carrier that argues hardest for THIS species. Ties are broken
+        // toward the one carrying the FEWEST capped tags, so where a demand can
+        // be met by either a plain thing or a thing that also counts against a
+        // cap, the plain one goes in first and the caps stay unspent.
+        const carriers = cat.byTag(tag).slice().sort((a, b) => {
+          const aff = (b.affinities[creature.id] || 0) - (a.affinities[creature.id] || 0);
+          if (aff) return aff;
+          const cost = (d) => d.tags.filter((t) => caps.has(t)).length;
+          return cost(a) - cost(b);
+        });
+        if (!carriers.length) {
+          missed.push(`${creature.id}: nothing carries '${tag}'`);
+          continue;
+        }
+        // Search the FULL radius, not radius-1. Shrinking it was a habit from
+        // the opening glade (keep things off the rim) and here it is actively
+        // wrong: the outer ring is exactly where a surplus goes to satisfy an
+        // at-least without spending an at-most.
+        const r = Number.isFinite(want.radius) ? Math.max(1, want.radius) : 4;
+        const spots = ringsAround(home.tx, home.ty, r);
+        let got = 0;
+        for (const spot of spots) {
+          if (got >= want.n) break;
+          for (const def of carriers) {
+            if (breaksACap(def, spot.x, spot.y)) continue;
+            if (world.place(def.id, spot.x, spot.y)) {
+              mine.push({ def, x: spot.x, y: spot.y });
+              got++;
+              placed++;
+              break;
+            }
+          }
+        }
+        if (got < want.n) missed.push(`${creature.id}: only ${got}/${want.n} '${tag}'`);
+      }
+    }
+  });
+
+  if (Array.isArray(world.undoStack)) world.undoStack.length = 0;
+  report.notes.push(
+    `proving ground: ${placed} placements` + (missed.length ? ` — SHORT: ${missed.join('; ')}` : '')
+  );
+  // `missed` is the whole point of returning anything. test/proving-ground
+  // asserts it is empty, so a ladder edit that this fixture can no longer
+  // satisfy fails the suite instead of quietly building a broken test map.
+  return { placed, missed };
+}
+
+// ---------------------------------------------------------------------------
 // THE JOIN: world edits -> field deposits
 // ---------------------------------------------------------------------------
 //
@@ -357,38 +562,76 @@ function plantOpeningGlade(world, cat, rng, dayMs) {
  * Verified in the browser: `ctx: "none"`, `load: "idle"`, `playing: false`,
  * satyr nine seconds into the recital.
  *
- * THE RULE, and it is one rule: **arm when a note is actually sounding.**
+ * The fix for that was to arm on `audio.playing` — when a note was actually
+ * sounding. It worked, and it was still backwards, which the owner heard at
+ * once: **the music played before the musician did.** Unavoidably so. The score
+ * started when he ARRIVED, and arriving means walking in from the map rim,
+ * which takes as long as it takes; he could not raise the pipes until both feet
+ * were on the grass, several bars in. Music, then a musician catching up to it.
  *
- *   `audio.playing`   audio.js's `musicPlaying` — the track has begun a pass.
- *                     Not `musicUnlocked` (intent) and not `ready` (the context
- *                     is running). The tick checks it every step.
- *   arm()             idempotent; does nothing once he has played.
- *   took()            he actually started. Nothing arms it again this session.
+ * THE RULE, now, and it is one rule: **the score starts when he does.**
  *
- * This is also why a muted player no longer mimes to a track they cannot hear:
- * nothing is playing, so nothing arms.
+ * Nothing unlocks the music on arrival any more. Arrival arms the recital; the
+ * tick waits until the track is decoded and the context is running — everything
+ * the score needs except a reason — and then asks him, every step, until he is
+ * standing. The step he raises the pipes is the step the first note sounds, and
+ * audio.js fades it in over about four seconds, so it swells under the gesture
+ * rather than announcing it.
  *
- * `pending` stays true across as many refusals as it takes — he may be halfway
- * across the map rim when it is armed, and `askFlourish` says no until he is
- * standing on grass.
+ *   arm()             the garden wants its recital. Idempotent; does nothing
+ *                     once he has played.
+ *   hold(dt, can)     one step of waiting. `can` is "the audio could sound this
+ *                     instant". Returns true when patience has run out.
+ *   took()            he raised the pipes. Let the score go.
+ *   release()         let the score go WITHOUT him; true only the first time.
+ *
+ * PATIENCE, because a held score is a held score. If he is thirty seconds into
+ * something else — a revel, a long walk to the krater — the music stops waiting
+ * and starts anyway. The latch stays armed, so he joins it when he is free.
+ * That is the old bug's shape (music without musician) but bounded, deliberate,
+ * and rare, rather than the default path.
+ *
+ * A muted player still mimes to nothing: `can` is false while muted, so nothing
+ * is held and nothing is played.
+ *
+ * @param {number} patience seconds the score will wait for him.
  */
-export function createRecital() {
+export function createRecital(patience = 30) {
   let pending = false;
   let played = false;
+  let released = false;
+  let held = 0;
   return {
     arm() {
       if (!played) pending = true;
       return pending;
     },
+    hold(dt, can) {
+      if (released || !can) return false;
+      held += dt;
+      return held >= patience;
+    },
+    release() {
+      const first = !released;
+      released = true;
+      return first;
+    },
     took() {
       pending = false;
       played = true;
+      return this.release();
     },
     get pending() {
       return pending;
     },
     get played() {
       return played;
+    },
+    get released() {
+      return released;
+    },
+    get held() {
+      return held;
     },
   };
 }
@@ -1223,6 +1466,21 @@ function makeAudioShim(mod) {
         return false;
       }
     },
+    /**
+     * Is the track DECODED and sitting in memory, ready to be started?
+     *
+     * The recital waits on this rather than on `playing`, because the score is
+     * now started BY the gesture instead of before it: main.js needs to know
+     * that the only thing the music is missing is a musician.
+     */
+    get loaded() {
+      try {
+        const s = src && typeof src.stats === 'function' ? src.stats() : null;
+        return !!(s && s.music && s.music.load === 'ready');
+      } catch (_) {
+        return false;
+      }
+    },
     get musicUnlocked() {
       try {
         return !!(src && src.musicUnlocked);
@@ -1541,6 +1799,18 @@ async function bootOnce(shell = {}) {
     dirty = true;
   }
 
+  // `?garden=all` — the proving ground. Four quadrants, one per species, built
+  // from the ladder itself. A cheat code, and a test fixture you can walk about
+  // in: watching all four grasses spread at once is the only way to see the
+  // zoning system whole. See plantProvingGround.
+  const wantAll = /(?:^|[?&])garden=all(?:&|$)/.test(
+    (typeof location !== 'undefined' && location.search) || ''
+  );
+  if (wantAll && !restored && (cat.CATALOG || []).length && has(world, ['place'])) {
+    plantProvingGround(world, cat, mCreatures);
+    dirty = true;
+  }
+
   // ---- art + scene --------------------------------------------------------
   const mods = {
     grow: mGrow, tiles: mTiles, artCreatures: mArtCreatures, props: mProps,
@@ -1565,6 +1835,12 @@ async function bootOnce(shell = {}) {
         if (ev.type === 'ground' || ev.type === 'level') builder.bumpTerrain();
         else if (ev.type !== 'grass') builder.invalidateObjects();
         if (ev.type !== 'grow') dirty = true;
+        // The minimap's terrain layer caches ground AND grass, so unlike the
+        // scene it does care about a grass write — zoning is most of what it is
+        // for. `grow` is a tree getting taller, which is a nothing at one pixel
+        // per tile. Everything else repaints 3600 rects, once, on the next
+        // frame.
+        if (minimap && ev.type !== 'grow') minimap.invalidate();
       })
     );
   }
@@ -1591,6 +1867,21 @@ async function bootOnce(shell = {}) {
   }
   game.renderer = renderer;
   if (!renderer) report.fallbacks.push('no renderer — the canvas stays blank');
+
+  // ---- minimap ------------------------------------------------------------
+  //
+  // Statically imported, unlike the rest — it is ours, it is small, and its own
+  // imports are palette.js and iso.js, both of which are already in the graph.
+  // A dynamic import with a fallback would be ceremony around a file that
+  // cannot be missing.
+  const minimap = createMinimap({
+    world,
+    groupOf: (id) => {
+      const def = cat && typeof cat.byId === 'function' ? cat.byId(id) : null;
+      return def ? def.group : null;
+    },
+  });
+  game.minimap = minimap;
 
   // The shell already fits the stage on resize; re-wire it so the renderer's
   // integer scale is fitted at the same moment, by the same function.
@@ -1640,6 +1931,11 @@ async function bootOnce(shell = {}) {
         on: {
           undo: doUndo,
           audio: (on) => audio.setMuted(!on),
+          // The move pad. Late-bound on purpose: the UI is built before the
+          // input is, and the input owns the camera clamp — routing the pad
+          // through `panBy` means one pan implementation, so the pad cannot
+          // walk off the edge of the world in a way the keys cannot.
+          pan: (dx, dy) => invoke(input, ['panBy'], dx, dy),
         },
       });
     } catch (err) {
@@ -1668,6 +1964,9 @@ async function bootOnce(shell = {}) {
         // input's own fallback projection.
         renderer,
         camera,
+        // So a click on the minimap jumps the camera instead of falling through
+        // to the garden drawn underneath it.
+        minimap,
         map: { w: MAP_W, h: MAP_H },
         // We drive it from the one loop below, so it must not run its own rAF.
         selfDrive: false,
@@ -1810,11 +2109,16 @@ async function bootOnce(shell = {}) {
     // Same call either way — audio.js starts the track as soon as it is primed
     // and decoded, whichever of those lands last. The two names differ only so
     // that the call site says which of the two stories this is.
-    if (restoring) audio.setMusicUnlocked(true);
-    else audio.unlockMusic();
-    // NOT armed here. Unlocking is INTENT, and intent is not sound — see the
-    // recital latch above, and `audio.playing`. The tick arms it when a note is
-    // actually going.
+    // THE SCORE IS NOT STARTED HERE — this is the arrival, and he is still out
+    // over the rim walking in. Starting it now is what put the music in front
+    // of the musician. Arm the recital instead; the tick starts the track on
+    // the step he raises the pipes. See createRecital above.
+    //
+    // `restoring` no longer changes what happens, only what the moment MEANS,
+    // and it is kept because the save still records that this garden has heard
+    // its music before.
+    void restoring;
+    recital.arm();
   });
 
   // Restore. Two sources, because a save written before this feature existed
@@ -1976,13 +2280,20 @@ async function bootOnce(shell = {}) {
     const events = invoke(bestiary, ['update'], dt, { reducedMotion });
     // Ask AFTER the step, so the arrival that ended this tick counts. He
     // refuses while he is still out over the rim; the first tick he is standing
-    // on grass, he takes it and starts to play. The latch stays armed across as
-    // many refusals as it takes, and `took()` closes it for the session.
-    // ARM ON SOUND. One rule, checked every step: if the track is audibly
-    // playing and he has not played yet this session, put him on the pipes.
-    if (!recital.played && audio.playing) recital.arm();
+    // on grass, he takes it — and THAT is the step the score starts, which is
+    // the whole point. The latch stays armed across as many refusals as it
+    // takes, and `took()` closes it for the session.
     if (recital.pending && typeof bestiary.askFlourish === 'function') {
-      if (bestiary.askFlourish(MUSICIAN, 'piping')) recital.took();
+      // Everything the music needs except a reason: the file decoded, the
+      // context running, the player listening.
+      const can = !audio.muted && audio.ready && audio.loaded;
+      if (can && bestiary.askFlourish(MUSICIAN, 'piping')) {
+        if (recital.took()) audio.unlockMusic();
+      } else if (recital.hold(dt, can)) {
+        // He has been busy too long. The score stops waiting; he joins it when
+        // he is free, because `pending` is still true.
+        if (recital.release()) audio.unlockMusic();
+      }
     }
     return events;
   });
@@ -2170,13 +2481,29 @@ async function bootOnce(shell = {}) {
     game.camera.oy = c.y ?? 0;
   });
 
+  // The map rectangle, in logical pixels. ui.js owns the number; the fallback
+  // is the same rectangle spelled out, for a host that swapped ui.js out.
+  const VIEW = (mUI && mUI.LAYOUT && mUI.LAYOUT.VIEW) || { x: 0, y: 14, w: 640, h: 286 };
+
+  // Tell the chrome that the minimap's corner is not garden. Once: the panel
+  // does not move.
+  if (minimap) invoke(ui, ['reserve'], [minimap.rect(VIEW)]);
+
   const drawFrame = guard('render', (nowMs) => {
     if (!renderer) return;
     const axis = invoke(ui, ['overlay']) ?? null;
     renderer.setOverlay(axis || null);
-    renderer.setScene(builder.scene(nowMs, axis));
+    const scene = builder.scene(nowMs, axis);
+    renderer.setScene(scene);
     if (ui && 'ghost' in ui) renderer.setGhost(ui.ghost || null);
     renderer.frame(nowMs);
+    // OVER the finished frame, and after it — the minimap is chrome, and chrome
+    // is not part of the scene the renderer sorts. It reads the renderer's own
+    // snapped camera so the border it draws is the view that was actually
+    // drawn, not the one we asked for.
+    if (minimap && renderer.ctx) {
+      minimap.draw(renderer.ctx, renderer.camera, VIEW, scene && scene.creatures, nowMs);
+    }
   });
 
   function frame(nowMs) {

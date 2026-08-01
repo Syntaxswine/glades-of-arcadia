@@ -63,17 +63,49 @@ it takes, rather than running a second state machine to listen for his arrival.
 He may still be dissolving in over the rim at the moment the track starts, and a
 creature out there has nowhere to stand.
 
-### Armed when a note is actually SOUNDING
+### THE SCORE STARTS WHEN HE DOES
 
 One rule, checked every step:
 
 ```js
-if (!recital.played && audio.playing) recital.arm();
+if (recital.pending) {
+  const can = !audio.muted && audio.ready && audio.loaded;   // everything but a reason
+  if (can && bestiary.askFlourish('satyr', 'piping')) {
+    if (recital.took()) audio.unlockMusic();                 // <- the same statement
+  } else if (recital.hold(dt, can)) {
+    if (recital.release()) audio.unlockMusic();              // patience ran out
+  }
+}
 ```
 
-`audio.playing` is audio.js's `musicPlaying` — the track has begun a pass. It is
-**not** `musicUnlocked` (which only means the game intends there to be music) and
-**not** `ready` (which is the AudioContext running).
+**Nothing unlocks the music on arrival any more.** Arrival arms the recital; the
+tick waits until the track is decoded and the context is running, then asks him
+every step until he is standing. The step he raises the pipes is the step the
+first note sounds, and audio.js fades it in over about four seconds, so the score
+swells *under* the gesture rather than announcing it.
+
+`audio.loaded` is new: `musicState === 'ready'`, the file decoded and in memory.
+The recital waits on that rather than on `playing`, because it is now the thing
+that *starts* the music and needs to know the only missing piece is a musician.
+
+**PATIENCE — 30 seconds.** If he is deep in a revel or a long walk to the krater,
+the score stops waiting and starts without him; `pending` stays true so he joins
+it when he is free. That is the old bug's shape, bounded and deliberate and rare,
+rather than the default path. A held score is still a held score.
+
+> **The third bug, and the owner heard it at once: the music played before the
+> musician did.** Unavoidably so, and the previous rule is why.
+>
+> Arming on `audio.playing` was correct as far as it went — a note really was
+> sounding. But the score was started by ARRIVAL, and arriving means walking in
+> from the map rim, which takes as long as it takes. He could not raise the pipes
+> until both feet were on the grass, several bars in. Music, then a musician
+> catching up to it.
+>
+> The rule was right about *intent versus sound* and wrong about **who is
+> upstream of whom**. The satyr is not reacting to the music; he is the reason
+> there is any. Making the gesture start the track is the only version where the
+> two cannot drift, because they are one statement.
 
 > **TWO bugs shipped here, in sequence, and both were the same confusion:
 > INTENT is not SOUND.**
@@ -106,11 +138,14 @@ if (!recital.played && audio.playing) recital.arm();
 > **A check that confirms the thing happened is not a check that it happened for
 > the right reason.**
 
-Verified end to end: 521 frames of silence with zero piping, then music begins at
-t=8.7 s and he begins piping at t=8.7 s — the same frame.
+A muted player still mimes to nothing, and now costs nothing either: `can` is
+false while muted, so the score is not held and the patience clock does not run
+— the recital is *waiting*, not being spent. It is there when they unmute.
 
-A muted player gets no recital, for free and correctly: nothing is playing, so
-nothing arms.
+`test/creatures.test.mjs` holds four properties of the latch: the score never
+starts while he is walking in, a mute holds nothing, patience releases the score
+once and defers the recital rather than cancelling it, and the score is started
+**exactly once** however the two paths interleave.
 
 Three minutes is the owner's number. The track itself runs 3:48, so he stops a
 little before its first pass ends.

@@ -212,6 +212,60 @@ Recorded because "not checked" and "checked and fine" are different states.
   to cross, whether the camera speed still suits it, whether creatures now feel
   sparse — is not.
 
+## 4h · Getting about, and the ? — what was NOT built (2026-08-01)
+
+The minimap, the move pad, the `?` cursor and `?garden=all` all shipped. These
+are the edges left showing.
+
+**The minimap**
+
+- **No overlay mode.** It shows ground + zoning, always. The obvious next one is
+  for it to follow `Tab` and wash in the same affinity ramp the map does, so the
+  field overlay and the minimap are one language. Cheap: the ramp function is
+  already exported (`ui.overlayRamp`).
+- **No toggle and no zoom.** It cannot be hidden, and on a map bigger than 60×60
+  the panel would have to grow rather than scale — the projection is 1 px per
+  tile by construction.
+- **It ignores elevation.** A raised terrace and the ground beside it are the
+  same pixel. Correct at this size, but if the map ever gets seriously terraced
+  a one-step value shift per level would read.
+- The rebuild is 3600 `fillRect`s on any ground/grass change. Fine at 60×60;
+  it is the thing to watch if the map grows.
+
+**The move pad**
+
+- **The game does not fit a phone in portrait.** `pickScale` floors to integers
+  and clamps to a minimum of 1, so on a 390 px-wide screen the canvas is 640 CSS
+  px and overflows. Landscape is close (400 logical vs 390). The pad makes a big
+  map navigable *once you can see it* — it does not make the game fit, and no
+  amount of pad work will. Fixing it means either a non-integer scale (against
+  the law, and it would smear the pixel art) or a smaller logical screen.
+- **No diagonal panning**, and no two-finger drag. Holding two buttons does not
+  combine; the last press wins.
+- The 0.1 s `dt` clamp inside `panStep` means panning slows below 10 fps. That is
+  a stall guard and probably right, but it has never been felt.
+
+**The `?`**
+
+- **It only answers about the tile.** It says nothing about a *rung* — "this is
+  what the satyr is still waiting for" is the answer a player most wants and it
+  lives in the journal instead. Wiring the `?` to a creature's unmet requirement
+  is the highest-value follow-on in this section.
+- No hover preview: you must click. Deliberate, but unverified against a real
+  player.
+- The tool has no chip in the grid, only the topbar button and the `?` key.
+
+**`?garden=all`**
+
+- **It cannot promise anybody settles**, only that every counted demand is met.
+  Bands, patches and beats are outside what it does — see the doc.
+- The four quadrant homes are hard-coded (`QUADRANTS` in main.js). They are
+  comfortably outside each other's radii for the *current* requirement radii;
+  nothing asserts that, and a rung that grew its radius could bring two species
+  into conflict silently.
+- Nothing backdates the planting, so the proving ground opens on a field of
+  sprouts — unlike the opening glade, which is deliberately old. Worth copying.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
@@ -236,3 +290,15 @@ Then, same day: the **flourish layer** — poses beyond idle/walk/beat, one-shot
 gestures played off the agent's own clock, the piping satyr on the music trigger
 and the drinking satyr on the vessel scheduler · `docs/FLOURISHES.md` ·
 `tools/poseshot.mjs` · 283 tests, 46 playtest checks.
+
+Then, 07-31 later: the **front door** — title screen with a derived bubble
+wordmark, New Game as a navigation, a blank 60×60 map, WASD + arrows + letters +
+numbers, and the O(n²) settling scan (1205 ms → 58 ms) that made the big map
+possible · `docs/TITLE-AND-CONTROLS.md` · 290 tests.
+
+Then, 2026-08-01: **knowing where you are, and asking** — the minimap (diamond,
+one pixel per tile, blinking creatures, square camera border, click to jump),
+the move pad, the `?` help cursor, and `?garden=all`, the ladder-derived proving
+ground with all four species welcome. Plus the third and final recital bug: the
+score now starts on the same statement that raises the pipes, instead of on his
+arrival · 302 tests.

@@ -12,13 +12,16 @@ Reconciled against `proposals/BACKLOG.md` in the same pass, per the standing rul
 Repo `Syntaxswine/glades-of-arcadia`. Deployed and verified at HEAD, not merely pushed.
 
 ```
-290 tests            node --test "test/*.test.mjs"
+302 tests            node --test "test/*.test.mjs"
 46 playtest checks   node tools/playtest.mjs        no structural faults
 anchor audit         node tools/anchor-audit.mjs --strict     exit 0
 art debt             ZERO   (was 28 understudy sprites)
 map                  60 x 60, and a new game starts on plain meadow
 placeables           130
 dependencies         0        external assets   2 (the score, the title art)
+getting about        minimap (upper right), move pad (lower left), WASD/arrows
+asking               ? picks up a help cursor
+cheat                ?play=1&new=1&garden=all  — all four species welcome
 ```
 
 It is a **complete, playable game**. Terrain raises and lowers, five grasses
@@ -44,7 +47,7 @@ BACKLOG.
 | `AUDIO.md` | Relaxes "zero external assets" to exactly one. The satyr trigger. |
 | `CREATURE-MOVEMENT.md` | The off-map invariant and per-species water rules. |
 | `FLOURISHES.md` | Adds the idle life — repeatable acts that are NOT beats. Poses beyond idle/walk/beat, one-shot gestures, and why a flourish must never reach the journal. |
-| `TITLE-AND-CONTROLS.md` | **Supersedes SPEC §1's asset rule and §8's key bindings.** The front door, why the wipe is a navigation, the 60x60 blank map, the letter/number keyboard, and the caching that makes a reload lie. |
+| `TITLE-AND-CONTROLS.md` | **Supersedes SPEC §1's asset rule and §8's key bindings.** The front door, why the wipe is a navigation, the 60x60 blank map, the letter/number keyboard, the minimap, the move pad, the `?` cursor, `?garden=all`, and the caching that makes a reload lie. |
 
 **SPEC.md §5 still says "45–60 placeables". It is stale.** There are 130. The
 test asserting the old range was corrected, not suppressed.
@@ -371,3 +374,110 @@ down a vine.
 *— Claude Opus 5, 2026-07-31*
 
 *(Add below this line. Never overwrite a prior builder.)*
+
+---
+
+## Knowing where you are, and asking what things are — 2026-08-01
+
+The owner confirmed the piping works, reported one bug, and asked for three
+things. All four are done and one of them turned into the most interesting fix
+of the session.
+
+**The bug: "the music plays before the satyr playing music starts."** It did,
+structurally, and the previous fix is why. Two bugs had already shipped here,
+both of them the confusion between INTENT and SOUND, and the rule that came out
+of them — *arm the recital when a note is actually sounding* — was correct as far
+as it went and still had the arrow backwards. The score was started by his
+ARRIVAL, and arriving means walking in from the map rim; he could not raise the
+pipes until both feet were on the grass, several bars in.
+
+The rule now is one line and it is the same statement twice: **the score starts
+when he does.** Arrival arms the recital; the tick waits for the track to be
+decoded and the context to be running, asks him every step, and the step he
+raises the pipes is the step `audio.unlockMusic()` is called. audio.js fades in
+over ~4 s, so the music swells under the gesture instead of announcing it.
+
+There is a 30-second patience so a satyr deep in a revel cannot hold the score
+hostage; `pending` survives it, so he joins the music late rather than never.
+That is the old bug's shape — bounded, deliberate, and rare, instead of the
+default path. `docs/FLOURISHES.md` has the whole three-bug sequence.
+
+**The lesson worth keeping:** the first two fixes were about *when* to arm and
+the third was about *who is upstream*. The satyr is not reacting to the music; he
+is the reason there is any. Two things that must not drift are safest as one
+statement, and no amount of tightening the condition on the follower gets you
+there.
+
+### The minimap
+
+`js/minimap.js`, upper right, one pixel per tile, and a diamond — the same
+projection as the world, because a square minimap of an isometric map makes the
+player rotate 45° in their head every time they glance at it. The projection is
+two lines and the halving that looks lossy is not: `tx-ty` and `tx+ty` share
+parity, so the diagonals interleave and the diamond fills solid. Creatures blink
+(one static pixel among 3600 static pixels is not findable); the camera is a
+plain square because the rotation cancels in this projection.
+
+The surround started as the sky ramp — consistent with render.js's off-map haze,
+and wrong on sight: at this size the panel is mostly surround, so a pale blue
+rectangle sat in the corner shouting louder than the garden.
+
+### The move pad and the `?`
+
+The pad exists because on a touch screen the only way to cross the map was a
+drag, and a drag is the gesture that *places* things — a player holding a plant
+had no way to move at all. Two CSS lines in it are load-bearing and both are in
+`TITLE-AND-CONTROLS.md`: `pointer-events: none` on the box (or its transparent
+corners eat clicks on the garden) and `touch-action: none` on the buttons (or a
+phone claims the press as a scroll, the `pointerup` never lands, **and the pan
+runs away**).
+
+The `?` is a tool, not a tooltip, and `input.js` dispatches it before every other
+branch so a help cursor can never plant, raze, terrace or pan. It reuses
+`affinityWords()`, so "what does this attract" is answered in the vocabulary the
+player is already learning rather than in a second one.
+
+### The proving ground, and two things I got wrong building it
+
+`?garden=all` plants four quadrants, one per species. **Derived from the ladder,
+not authored** — an authored fixture is right on the day it is written and
+quietly wrong afterwards, and a stale test map is worse than none because the
+failure reads as a bug in the simulation.
+
+Deriving it only moves the staleness into the derivation, so
+`test/proving-ground.test.mjs` holds it to exactly what it promises: every
+counted demand met, no counted refusal broken. Not that anybody settles — bands
+are field maths, a patch needs real time, a beat has to be performed.
+
+Two mistakes, both worth the space:
+
+1. **I tracked `at-most 0` and dropped every cap with a number on it.** So the
+   centaur's six ash trees all landed inside her `at-most 4 tree within 3` — and
+   that cap *is* her open run to gallop on. The fixture built the one garden she
+   refuses. A cap of four is the same kind of statement as a cap of zero; the
+   fix pushes the surplus past the cap's radius, satisfying both, which is what
+   the two requirements were always describing between them.
+2. **I measured the result with `world.countTag` and it cannot see painted
+   ground.** A ground painter writes the tile's type and leaves no object behind.
+   I concluded the naiad was short a greensward and started fixing a garden that
+   was already correct — the instrument was blind, not the fixture. `fields`
+   keeps a synthetic placement for exactly this; measure zoning with `fields`.
+
+The second is the one I want a future builder to actually absorb. **A negative
+result from an instrument you have not checked is not a finding.** It cost twenty
+minutes here; it would cost a session on something subtler.
+
+### Two dead defaults, fixed on the way past
+
+`world.js` exported its own `MAP_W = 20` and `input.js` defaulted `map` to
+`{w:20,h:20}`. Neither was read, because main.js always passes explicit
+dimensions — so growing the map to 60 did not break, which is precisely the
+danger: `new World()` with no options, or a save with no `w`, silently built a
+20×20 world inside a 60×60 game. Both now come from iso.js. The law was already
+written down from the same mistake in the other direction; it had simply never
+been swept for.
+
+**The forward dream:** that the blinking dot in the corner is the thing you catch
+out of the corner of your eye, and you click it, and there he is, playing.
+
+*— Claude Opus 5, 2026-08-01*

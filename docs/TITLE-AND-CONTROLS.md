@@ -35,8 +35,46 @@ game at all** — no world, no autosave, no simulation, no renderer.
 ?play=1               straight into the game
 ?new=1&play=1         what New Game navigates to
 ?glade=1              plant the old opening glade instead of a blank map
+?garden=all           THE PROVING GROUND — see below
 ?seed=thicket         a different map, reproducibly, in its own save slot
 ```
+
+### `?garden=all` — the proving ground
+
+A cheat code, and a test fixture you can walk about in: four quadrants of the big
+map, one per species, all of them welcome at once. `?play=1&new=1&garden=all`.
+
+**It is derived from the ladder, not authored.** The obvious way to write this is
+to hand-place sixty things from the lore. That garden is right on the day it is
+written and quietly wrong for ever after — the requirements get tuned, the
+fixture stops satisfying them, and the failure reads as a bug in the simulation
+rather than as a stale test map. So `plantProvingGround` walks each creature's
+rungs up to `settles` and, for every `at-least n <tag> within r`, plants n
+carriers of that tag inside r of that species' corner, choosing the carrier that
+argues hardest for it (`catalog.byAffinity`).
+
+**What it promises:** every counted demand met, no counted refusal broken.
+**What it does not:** that anybody settles. Bands are field maths, a patch needs
+grass to spread over real time, and a beat has to be performed.
+
+`test/proving-ground.test.mjs` asserts the promise, so a ladder edit this fixture
+can no longer satisfy fails the suite.
+
+> **The cap trap, recorded because it shipped once.** The first version tracked
+> only `at-most 0` as a list of forbidden tags and dropped every cap with a
+> number on it. The centaur's six ash trees (an `at-least`) all landed inside her
+> `at-most 4 tree within 3` — and that cap IS her open run to gallop on, so the
+> fixture built the one garden she refuses. A cap of four is the same *kind* of
+> statement as a cap of zero. The fix pushes the surplus out past the cap's
+> radius, which satisfies the at-least and the at-most together, which is what
+> the two requirements were always describing between them.
+>
+> **And `world.countTag` cannot see painted ground.** A ground painter writes the
+> tile's type and leaves no object behind, so it is invisible to
+> `world.objects`. fields.js keeps a synthetic placement so the ladder can still
+> count it; the world cannot. A first pass measured the fixture with
+> `world.countTag`, concluded the naiad was short a greensward, and was wrong —
+> the instrument was blind, not the garden. Measure zoning with `fields`.
 
 ### The wipe is a NAVIGATION, and that is the whole point
 
@@ -123,11 +161,112 @@ which capped the keyboard at eight of the 130 placeables. Numbering counts only
 what is on screen — a locked or hidden placeable has no chip, so `3` cannot mean
 a different thing depending on what the player has discovered.
 
+### `?` — the question mark
+
+**Press `?`, or the `?` in the topbar, and the next thing you click is described
+instead of changed.** Creature first, then the object on the tile, then the
+ground; it never answers "nothing", because bare meadow gets a sentence too and
+a player who asks a question and is told there is no answer stops asking.
+
+Every builder of the period had one. It is the right shape for this game in
+particular because **Arcadia never shows a number** (SPEC §7) and therefore has
+nowhere else to put an answer. The text is the same text the info box and the
+journal use — `affinityWords()` for an object, so "what does this attract" is
+answered in the vocabulary the player is already learning, and one table each
+for the five grasses and the ten ground types.
+
+It is a TOOL, not a hover tip. A tooltip that follows the pointer around a
+garden you are trying to look at is noise; a question you asked is not.
+
+`input.js` dispatches it **before** every other branch, so a help cursor can
+never plant, raze, terrace or pan. That ordering is the whole safety property.
+
 ### Everything else, unchanged
 
 `R` cycles the terrain tools · `B` raze · `J` journal · `Tab` field overlay ·
 `Esc` cancel · `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `+` / `-` raise and lower
 the tile under the cursor · `Space` drag-pan · `Backspace` remove.
+
+### The move pad
+
+Four buttons in a diamond, bottom-left of the view (`css/style.css`, `.pad`).
+Hold one and the camera pans at 340 logical px per second; the rate is applied
+from the frame loop with the real `dt`, so it is the same speed at 30Hz and at
+144Hz. Enter or Space on a focused button is one nudge.
+
+**Why it exists.** On a touch screen there is no keyboard and no middle mouse
+button, so the only way to cross the map was a drag — and a drag is exactly the
+gesture that also *places* things. A player holding a plant had no way to move
+at all without putting it down first. That is not an inconvenience, it is a dead
+end.
+
+**It is a diamond, not a cross**, because the map is isometric: "up" on the pad
+is up ON SCREEN, and the arrows sit on the same diagonals the terrain does.
+
+**It is always on**, not gated behind a coarse-pointer media query. A control
+that appears on some devices and not others cannot be documented, cannot be
+screenshotted, and cannot be found by the player who needs it. It costs 42 × 42
+logical pixels at 72% opacity.
+
+Two traps, both load-bearing:
+
+- `.pad` itself is `pointer-events: none` and only `.pad-btn` takes the pointer.
+  `.ui > *` turns pointer events on for every direct child, so the transparent
+  middle and corners of the 42 × 42 square would otherwise swallow clicks on the
+  garden underneath — four small dead zones nobody would ever diagnose.
+- `.pad-btn` is `touch-action: none`. Without it a phone claims the press as a
+  scroll gesture, the `pointerup` never arrives, and **the pan runs away**.
+
+It routes through `input.panBy`, so there is one pan implementation and the pad
+cannot walk off the edge of the world in a way the keys cannot.
+
+### The minimap
+
+Upper right of the view. `js/minimap.js`, 119 × 60 logical pixels, **one pixel
+per tile**, always on.
+
+**It is a diamond** because every isometric game of the era drew its minimap in
+the same projection as its world — a square minimap of an isometric map forces
+the player to mentally rotate 45° every time they glance at it. The shape on the
+minimap is the shape on screen, turned the same way.
+
+The projection is two lines:
+
+```
+px = (tx - ty) + (mapH - 1)        py = (tx + ty) >> 1
+```
+
+That halving looks lossy and is not: `tx - ty` and `tx + ty` always have the same
+parity, so the tiles rounding onto a row interleave exactly with the ones
+rounding onto it from the next diagonal. `test/minimap.test.mjs` holds it — no
+collisions, no holes, and an exact round trip for all 3600 tiles.
+
+| | |
+|---|---|
+| ground + zoning | cached, rebuilt only on a `ground`/`level`/`grass` event |
+| objects | one pixel each, coloured by group |
+| creatures | **blinking**, 900 ms, two thirds on |
+| the camera | a plain square border |
+
+**They blink** because a single static pixel among 3600 static pixels is not
+findable. A blink is the one signal the eye picks out of a still field without
+being told to look, and it costs one pixel — the period solution, and why
+Caesar III flashes its walkers. The border is drawn UNDER them: a dot that
+vanishes behind it every time it crosses is a dot the player will chase.
+
+**The camera is a square** even though the view is a rotated rectangle in tile
+space — because the minimap is drawn in the same projection as the screen, so
+the rotation cancels and the bounding box of the projected corners is upright
+and is what the player is actually looking at.
+
+**Clicking it jumps there.** `ui.reserve()` registers the panel as chrome so a
+click cannot fall through and plant a tree behind it, and `input.js` checks the
+minimap *before* that test, since ui.js has by then already swallowed the click.
+
+Two colours worth keeping: the surround is `rock[0]`, not the sky ramp
+render.js uses off-map — a pale blue rectangle in the corner of a green map
+shouts louder than the garden. The camera border is the palest thing in the
+game and the creature dot is warm, so they never read as the same signal.
 
 ### The map in `ui.js`
 
