@@ -2131,7 +2131,9 @@ export const STILL_POOL = (() => {
       else if (y >= 26 && ((x + y) & 3) === 0) put(g, x, y, 'J');
     }
   }
-  skirt(g, 36, 34, 28);
+  // AT THE ANCHOR (34, 22), not twelve rows under it. r 30 against a 63px
+  // basin, inscribed in the 1x1 diamond (max 32).
+  skirt(g, 36, 23, 30);
   return composed('still-pool', g, [34, 22], {
     tags: ['water', 'unicorn', 'moisture', 'order', 'seclusion'],
     cycle: { ramp: 'water', rate: 11 },
@@ -3529,9 +3531,15 @@ export const TUMULUS = (() => {
   clump(g, cx + Math.round(rx * 0.64), cy + 15, 5.5, 3.4, SCRUB, { seed: 5.7, wobble: 0.45, lift: -1 });
   clump(g, cx - 16, cy + 24, 4, 2.4, SCRUB, { seed: 3.4, wobble: 0.45, lift: -1 });
 
-  // A low, tight skirt offset away from the light. Take one used the full base
-  // radius and put a black bar the width of two tiles under the barrow.
-  skirt(g, cx + 6, cy + ry + 2, rx * 0.62);
+  // A skirt offset a little away from the light, AT THE ANCHOR.
+  //
+  // Take one used the full base radius and put a black bar the width of two
+  // tiles under the barrow, so take two made it low and tight — which was
+  // right when `skirt` took an explicit 3px depth. It is not right now that
+  // depth is r/2: a tight r AND a low centre put the shade fifteen pixels
+  // past the tile's own front vertex, and the barrow read as floating over a
+  // puddle. r 60 against a 118px mound, inscribed in the 2x2 diamond (max 64).
+  skirt(g, cx + 2, cy + 1, 60);
   return composed('tumulus', g, [cx, cy], {
     footprint: [2, 2],
     tags: ['tomb', 'nullifier', 'grass', 'archaic', 'maturity'],
@@ -3943,7 +3951,16 @@ export const HEROON = (() => {
     }
   }
 
-  skirt(g, cx + 6, ay + 27, 42);
+  // The building's own shade, AT THE ANCHOR. r 60 against a 115px podium,
+  // inscribed in the 2x2 diamond (max 64). It used to sit 27 rows below the
+  // anchor, which was harmless when the ellipse was 3px deep and is not now
+  // that it is r/2: the shade landed 16px past the front vertex and 20px
+  // below the podium, and the heroon read as standing over a puddle.
+  skirt(g, cx + 2, ay + 1, 60);
+  // ...and the SECONDARY shade, under the altar inside the peristyle. This
+  // one is correctly NOT at the anchor — it belongs to a sub-object, not to
+  // the building — which is why the fix above is four call sites and not a
+  // blanket rule.
   skirt(g, ALT_X - 2, ALT_Y + 19, 13);
   return composed('heroon', g, [cx, ay], {
     footprint: [2, 2],
@@ -4046,7 +4063,9 @@ export const ARCADIAN_TOMB = (() => {
   }
   for (let k = 0; k < 5; k++) put(g, cx + 3 + k, cy + 6 - Math.round(k / 2), 'B');
 
-  skirt(g, cx + 6, ay + 20, 36);
+  // AT THE ANCHOR. r 44 against an 83px chest, inscribed in the 2x1 diamond
+  // (max 48).
+  skirt(g, cx + 2, ay + 1, 44);
   return composed('arcadian-tomb', g, [cx, ay], {
     footprint: [2, 1],
     tags: ['tomb', 'nullifier', 'marble', 'neoclassical', 'maturity'],
