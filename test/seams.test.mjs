@@ -521,3 +521,44 @@ test('a mover with fractional coordinates rounds to the tile it is over', () => 
   assert.ok(at(6.49, 8.49), 'just inside the other way');
   assert.equal(at(5.4, 8), null, 'over the next tile west');
 });
+
+// ---------------------------------------------------------------------------
+// THE LOGICAL SCREEN, which used to be declared four times
+//
+// `iso.VIEW_W/H`, `ui.LOGICAL_W/H`, `input.LOGICAL_W/H` and a private pair in
+// main.js. All four said 640 x 400, so nothing was ever wrong — which is the
+// whole danger. It is the shape of the bug that put `MAP_W = 20` in two files
+// and `LEVEL_H` in three, and it is the ONE number mobile mode has to change
+// (proposals/BACKLOG.md §4i).
+
+test('everybody reads the same logical screen', () => {
+  assert.equal(ui.LOGICAL_W, iso.VIEW_W);
+  assert.equal(ui.LOGICAL_H, iso.VIEW_H);
+  assert.equal(render.BACKING_W, iso.VIEW_W);
+  assert.equal(render.BACKING_H, iso.VIEW_H);
+});
+
+test('the chrome layout is DERIVED from it, not hand-written beside it', () => {
+  const { TOPBAR, VIEW, PANEL } = ui.LAYOUT;
+  // Every band spans the full width, and the three stack to exactly the height.
+  for (const band of [TOPBAR, VIEW, PANEL]) assert.equal(band.w, iso.VIEW_W, 'a band is not full width');
+  assert.equal(TOPBAR.y, 0);
+  assert.equal(VIEW.y, TOPBAR.h, 'the map does not start where the topbar ends');
+  assert.equal(PANEL.y, TOPBAR.h + VIEW.h, 'the panel does not start where the map ends');
+  assert.equal(TOPBAR.h + VIEW.h + PANEL.h, iso.VIEW_H, 'the three bands do not fill the screen');
+  // ...and the map rectangle is what is LEFT OVER, which is the property that
+  // makes a different screen size a change of one number rather than of four
+  // rectangles somebody has to remember to edit together.
+  assert.equal(VIEW.h, iso.VIEW_H - iso.TOPBAR_H - iso.PANEL_H);
+  assert.equal(VIEW.h, iso.VIEW_H_MAP);
+});
+
+test('the layout still comes out at the numbers the art was drawn against', () => {
+  // A derivation is only an improvement if it produces the same answer. Every
+  // sprite, every panel and every screenshot in docs/ assumes these exact four.
+  assert.deepEqual(ui.LAYOUT, {
+    TOPBAR: { x: 0, y: 0, w: 640, h: 14 },
+    VIEW: { x: 0, y: 14, w: 640, h: 286 },
+    PANEL: { x: 0, y: 300, w: 640, h: 100 },
+  });
+});

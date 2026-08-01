@@ -38,11 +38,13 @@
 // defensively so a broken sibling costs you its own feature and nothing else;
 // iso.js is exempt because it is pure arithmetic with no dependencies, and a
 // game that cannot project a tile has no feature left to lose.
-import { MAP_W, MAP_H } from './iso.js';
+import { MAP_W, MAP_H, VIEW_W, VIEW_H } from './iso.js';
 import { createMinimap } from './minimap.js';
 
-const LOGICAL_W = 640; // SPEC §2 — the backing store, exactly.
-const LOGICAL_H = 400;
+// SPEC §2 — the backing store, exactly. IMPORTED, not restated: this file used
+// to declare its own 640 x 400, as did input.js and ui.js. See iso.js §VIEW_W.
+const LOGICAL_W = VIEW_W;
+const LOGICAL_H = VIEW_H;
 
 const SIM_HZ = 20;
 const SIM_DT = 1 / SIM_HZ; // garden seconds per simulation step

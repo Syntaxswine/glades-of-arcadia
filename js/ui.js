@@ -51,6 +51,7 @@
 import { RAMPS, ACCENT, resolve as paletteResolve } from './palette.js';
 import { rasterise } from './art/format.js';
 import { TILE_W, TILE_H, tileToScreen } from './input.js';
+import { VIEW_W, VIEW_H, TOPBAR_H, PANEL_H, VIEW_H_MAP } from './iso.js';
 import { AXES as FIELD_AXES } from './fields.js';
 // docs/TOMBS.md. Imported rather than injected, on the same grounds as
 // fields.js's AXES above: these are DATA and RULES, not a sibling module's
@@ -67,16 +68,26 @@ import {
   tombTended,
 } from './catalog.js';
 
-export const LOGICAL_W = 640;
-export const LOGICAL_H = 400;
+// RE-EXPORTED, NOT RE-DECLARED. js/iso.js owns the logical screen; this file
+// used to carry its own copy of 640 x 400, as did input.js and main.js. Four
+// copies that happened to agree is the shape of the bug that put `MAP_W = 20`
+// in two files. See iso.js §VIEW_W — it is also the whole of mobile mode.
+export const LOGICAL_W = VIEW_W;
+export const LOGICAL_H = VIEW_H;
 export const MIN_SCALE = 1;
 export const MAX_SCALE = 3; // SPEC §2: 1x, 2x, 3x.
 
-/** Logical-pixel layout of the chrome. VIEW is the map's visible rectangle. */
+/**
+ * Logical-pixel layout of the chrome. VIEW is the map's visible rectangle.
+ *
+ * DERIVED, so that changing the logical screen moves the map rectangle instead
+ * of leaving four hand-written rects disagreeing with it. The two band heights
+ * are the design decision; the VIEW is simply what is left over.
+ */
 export const LAYOUT = {
-  TOPBAR: { x: 0, y: 0, w: 640, h: 14 },
-  VIEW: { x: 0, y: 14, w: 640, h: 286 },
-  PANEL: { x: 0, y: 300, w: 640, h: 100 },
+  TOPBAR: { x: 0, y: 0, w: LOGICAL_W, h: TOPBAR_H },
+  VIEW: { x: 0, y: TOPBAR_H, w: LOGICAL_W, h: VIEW_H_MAP },
+  PANEL: { x: 0, y: TOPBAR_H + VIEW_H_MAP, w: LOGICAL_W, h: PANEL_H },
 };
 
 /**

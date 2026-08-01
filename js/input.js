@@ -97,8 +97,11 @@ import * as iso from './iso.js';
 
 export const TILE_W = 64;
 export const TILE_H = 32;
-export const LOGICAL_W = 640;
-export const LOGICAL_H = 400;
+// RE-EXPORTED, NOT RE-DECLARED — js/iso.js owns the logical screen. This file
+// used to carry its own 640 x 400, as did ui.js and main.js; see iso.js
+// §VIEW_W for why four copies that agree is still the wrong shape.
+export const LOGICAL_W = iso.VIEW_W;
+export const LOGICAL_H = iso.VIEW_H;
 
 /**
  * The elevation range, for the preview-mode fallback ONLY. js/world.js is the

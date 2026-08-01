@@ -210,9 +210,36 @@ export function levelOf(obj) {
   return obj && obj.level != null ? clampLevel(obj.level) : 0;
 }
 
-/** The logical (backing) canvas. Integer-scaled to the window, never fractional. */
+/**
+ * THE LOGICAL (BACKING) CANVAS, defined here and nowhere else. Integer-scaled
+ * to the window, never fractional — SPEC §2.
+ *
+ * It used to be declared FOUR TIMES: here, and as `LOGICAL_W`/`LOGICAL_H` in
+ * `input.js`, `ui.js` and `main.js`. All four said 640 x 400, so nothing was
+ * ever wrong — which is the whole danger, because it is the shape of the bug
+ * that once put `MAP_W = 20` in two files and `LEVEL_H` in three.
+ *
+ * IT IS ALSO THE WHOLE OF MOBILE MODE (proposals/BACKLOG.md §4i). A phone in
+ * portrait cannot show a 640-wide canvas at an integer scale: `pickScale`
+ * floors and clamps at 1, so a 390 px screen gets 640 px of canvas and the
+ * rest goes off the edge. The two ways out are a fractional scale — which
+ * breaks SPEC §2 and smears the art — or a SECOND LOGICAL SCREEN SIZE. This
+ * is the number that would change, and until now there was no single number
+ * to change.
+ */
 export const VIEW_W = 640;
 export const VIEW_H = 400;
+
+/**
+ * The chrome's own bands, in logical pixels, and the map rectangle left over.
+ *
+ * `ui.js` LAYOUT is built from these rather than restating them, so a taller
+ * or narrower screen moves the map rectangle without anybody editing four
+ * rects by hand. The two band heights are the design; the VIEW is what remains.
+ */
+export const TOPBAR_H = 14;
+export const PANEL_H = 100;
+export const VIEW_H_MAP = VIEW_H - TOPBAR_H - PANEL_H; // 286
 
 /**
  * THE MAP SIZE, defined here and nowhere else.
