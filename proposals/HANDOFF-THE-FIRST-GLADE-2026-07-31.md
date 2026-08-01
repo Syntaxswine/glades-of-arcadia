@@ -163,7 +163,8 @@ Build the tool that proves the thing; the tool is part of the deliverable.
 | `tools/anchor-audit.mjs --strict` | a sprite floating above its own footprint. Multi-tile only, on purpose — a herm correctly stands at its tile centre |
 | `tools/snap.mjs` + `serve.mjs` | art authored without ever looking at it |
 | `tools/poseshot.mjs` | an animation judged one frame at a time. Lays a whole cycle out on real ground with each frame's hold printed. `--sil` first, always; `--only 0,3` to magnify past the ~2000px ceiling where a full strip stops getting bigger |
-| `tools/spritelab.html` | every sprite and composer at 1×/4×/8× with anchors marked |
+| `tools/spritelab.html` | every sprite and composer at 1×/4×/8× with anchors marked. **But see `iso-audit` below — the lab draws a SQUARE grid, which is the file's coordinate system and not the world's, and that blind spot hid a fault across a third of the art** |
+| `tools/iso-audit.mjs` | a sprite whose base ends in a horizontal edge — i.e. drawn on the screen plane instead of the ground plane. **NOT in `npm run check`: 32 of 103 sprites currently fail it.** Wire `--strict` in when the list is short, exactly as anchor-audit was |
 
 `npm run check` runs the lot.
 
@@ -187,6 +188,17 @@ a three-minute recital on every page refresh would turn the arrival into a chore
 See **`proposals/BACKLOG.md`**. The largest item is that the catalogue drifted to
 130 placeables against a designed ~93 and wants an audit for near-duplicates.
 The most visible is that **sward and fen read too similarly** at a glance.
+
+**The owner-set queue, as of 2026-08-01, in their own priority order:**
+
+| § | what | state |
+|---|---|---|
+| **4j** | **The art faces the viewer.** Think in hexagons: three planes, three line families, and the cube silhouette IS a hexagon. `iso-audit` census done, **nothing redrawn**. The smallest next step is a hexagon / 2:1-guide / ground-diamond overlay in the sprite lab — that is what stops it recurring, and it is far cheaper than the redraw | instrument + census only |
+| **4k** | **Middle wheel should turn an object's facing**, not pan. Sequel to 4j — build it after things have a front, or it is a control that visibly does nothing. Four facings cost **two** drawings (a horizontal flip is an exact NE↔NW turn). The hard part is `facing` in the save + a `SAVE_VERSION` bump that leaves every existing garden identical | not started |
+| **4e** | The **save screen**, Continue, named slots. Owner deferred it explicitly | not started |
+| **4i** | **Mobile mode** on the title screen. Owner: "kind of low on the priority list." Geometry, not controls — see the body | not started, low |
+| 4h | Edges left on the minimap / move tool / `?` / proving ground | shipped with known gaps |
+| 4g | What was never verified by hand — the keys, and nobody has *played* 60×60 | unverified |
 
 ---
 
@@ -492,6 +504,39 @@ danger: `new World()` with no options, or a save with no `w`, silently built a
 written down from the same mistake in the other direction; it had simply never
 been swept for.
 
+### The sprite lab has a blind spot, and it is a third of the art
+
+The owner, looking at the lab: *"there are several objects, like the cave, that
+are pointed straight at the viewer instead of in the direction of the grid like
+they are occupying 3D space"*, and *"do you think you would benefit from thinking
+in hexagons instead of squares since you are working in isometric space?"*
+
+Yes — and **the lab is why it was never caught.** It draws a square pixel grid
+and a rectangular bounds box. Both are the coordinate system of the *file*.
+Neither is the coordinate system of the *world*, so a sprite can sit perfectly
+inside the lab's grid and point at nothing the map contains. The instrument was
+answering a question nobody had asked.
+
+The geometry, so it never has to be re-derived: three visible planes (ground
+diamond, SE wall, SW wall), therefore three straight-line families (rising 1-in-2,
+falling 1-in-2, vertical). **A long horizontal run is not one of them.** The cube
+silhouette is a hexagon. The exception that makes it hard: rotational forms —
+column, urn, boulder — look the same from every side and *should* be mirrored.
+
+`tools/iso-audit.mjs` measures one thing, and **I had to rebuild it before it was
+worth anything.** The first draft scored four properties at once and ranked
+`COLUMN` the fourth-worst sprite in the game — a cylinder, punished by three of
+four measures for being drawn correctly. Narrowed to a single objective claim
+(how far the bottom silhouette lifts toward its corners), it reports **32 of 103
+sprites ending in a flat edge**, four of them at exactly 0.00.
+
+**Be honest about what it does not measure.** The fault the owner actually
+pointed at is the *form* facing the viewer — the cave's opening is a
+horizontal-axis ellipse that should be sheared onto a wall plane. That is
+listed by inspection in `BACKLOG §4j`, not detected, because the obvious detector
+(symmetry + horizontal major axis) is the same trap the first draft fell into: it
+convicts every urn in the catalogue.
+
 ### On the owner's desk, not started: MOBILE MODE
 
 > "My plan is to have a mobile mode on the title screen. Same game just
@@ -509,6 +554,28 @@ Grep for `640` before estimating.
 
 It is low priority by the owner's own word. Do not start it because it is
 written down.
+
+### And the one after the art: FACING ON THE WHEEL
+
+> "There are a few tiles that you should be able to alter the direction on.
+> Currently the middle scroll wheel scrolls up and down the map, I think it would
+> be better suited to pick between what direction an object faces in space."
+
+`BACKLOG §4k`. The wheel is barely earning its keep as a pan now that there are
+four other ways to move, and rotation is what an isometric builder always binds
+it to.
+
+**The economics are better than they look:** in 2:1 iso a horizontal flip turns
+an NE-facing wall into an NW-facing one *exactly*, so one drawing gives two
+facings and two drawings give all four. The mirror is a cache key, not a sprite.
+
+The cost is not in the art, it is in the save: `facing` becomes a per-object
+field and `SAVE_VERSION` bumps, and **every existing garden must load at facing 0
+and look identical to today.** That is the part that must not be got wrong.
+
+**Sequencing, and it matters: §4j before §4k.** Give things a front, then let the
+player turn it. A rotation control over sprites that all face the viewer is a
+control that visibly does nothing.
 
 **The forward dream:** that the blinking dot in the corner is the thing you catch
 out of the corner of your eye, and you click it, and there he is, playing.
