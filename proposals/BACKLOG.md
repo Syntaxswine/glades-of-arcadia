@@ -335,54 +335,98 @@ the owner's word and the right envelope to draw inside. The exception is real an
 must not be forgotten: **rotational forms** (column, urn, boulder, trunk) look
 the same from every side and *should* be bilaterally symmetric on screen.
 
-### Two different faults, and only one is measured so far
+### The instrument — SHIPPED
 
-**(A) The base ends in a flat edge.** `tools/iso-audit.mjs`, new. Measures how
-far the bottom silhouette rises from its lowest point toward its corners, over
-the sprite's width. A round foot or a square foot lying in the grid both lift by
-about W/4; a slab drawn on the screen plane lifts by nothing.
+`tools/isogeom.mjs` states the geometry once and is imported by the headless
+census (`tools/iso-audit.mjs`), by the sprite lab's overlay, and by the tests.
+The lab and the audit disagreeing about what a legal edge is would be worse
+than either being wrong, because the disagreement is invisible.
 
 ```
-node tools/iso-audit.mjs [--all] [--strict]
+node tools/iso-audit.mjs [--all] [--strict] [--runs]
 ```
 
-**32 of 103 sprites end in a flat edge** (lift < 0.125). Worst first:
-`ROCKY_FORD`, `EXEDRA`, `RUINED_ARCHWAY`, `WALL_FOUNTAIN` all measure **0.00** —
-a perfectly horizontal bottom edge. Then `FALLEN_LOG`, `MOSSY_TRUNK`, `BRIDGE`,
-`AXE_MARKER`, `BROKEN_COLUMN_FLUTED`, `HEROON`, `ALTAR`, `BENCH`, `FERN_GROTTO`,
-and the whole hedge/wall family (`CYPRESS_SCREEN`, `CLIPPED_HEDGE`,
-`DRYSTONE_WALL`, `HEDGE_ARCH`, `TALL_HEDGE`) at 0.05.
+The sprite lab has the overlay the owner asked for: **ground diamond**, **cube
+hexagon** at any height, **2:1 guide lattice**, and the measured **base contour
+painted onto the sprite** — green where it steps, red where it runs level.
+`?iso=diamond,hex,guide,base,only` in the URL, `__lab.shot('name')` to put one
+sprite on disk through `snap.mjs`.
 
-> **The tool was rebuilt once before it was trusted.** The first version scored
-> four things at once and ranked `COLUMN` the fourth-worst sprite in the game — a
-> column is a cylinder, it is *supposed* to be symmetric with a wide flat waist,
-> and three of the four measures were punishing it for being drawn correctly. One
-> measure votes now; the other three are printed for the reader. A checker whose
-> resolution cannot support its question returns noise shaped like an answer.
+> **THE MEASURE WAS WRONG TWICE**, and both ways are easy to walk back into.
+>
+> *v1, `lift`* — how far the contour's ends rise above its deepest point. That
+> answer depends on the sprite's overall SHAPE, and two correct shapes give
+> opposite answers: a chest corner-on lifts toward both ends, a single cliff
+> face toward one. The terrain tiles exposed it — `foot-rock-se-a` scored
+> `diag 1.00` (every edge on a 2:1 slope) and `lift 0.02` (broken) at once.
+>
+> *v2* — level runs anywhere in the bottom silhouette. Convicts the underside
+> of a tree canopy, which is not a base. Leaves hang in the air.
+>
+> *v3, shipped* — level runs WHERE THE OBJECT MEETS THE GROUND, against a bar
+> that SCALES: a correct ground circle's lowest row is flat for `2*sqrt(2r)`
+> columns, so a fixed threshold convicts every large contact for being round.
+> A checker whose threshold does not scale with its subject is measuring its
+> subject's size.
+>
+> And before all three, a first draft that scored four things at once and
+> ranked `COLUMN` the fourth-worst sprite in the game. A column is a cylinder.
 
-**(B) The FORM faces the viewer** — the fault the owner actually pointed at, and
-**it is not yet measured.** The cave mouth's opening is an ellipse with a
-horizontal major axis, mirror-symmetric about the vertical. It should be sheared
-onto one of the two wall planes, so the hole reads as going *into* a hillside
-that has a direction. Same family, by inspection rather than by instrument:
-`CAVE_MOUTH`, `GROTTO_MOUTH`, `CLIFF_CAVE_MOUTH`, `CAVE_MOUTH_WOODED`,
-`RUINED_ARCHWAY`, `HEDGE_ARCH`, `PERGOLA_ARCH`, `WALL_FOUNTAIN`, `EXEDRA`.
+### The redraws — 48 down to 11
 
-A detector for (B) is worth having but was NOT attempted, because the obvious
-one (symmetry + horizontal major axis) is the same trap the first draft of the
-tool fell into: it convicts every urn in the catalogue.
+Three shared helpers did thirty-seven of them, which is why the census was
+worth having before the art wave:
 
-### What is NOT done
+| what | where | was |
+|---|---|---|
+| contact skirt | `props.js skirt()` | an ellipse at 3.7:1, not 2:1 — and clipped by a grid one row too short, and a clipped ellipse is a straight line. It makes room for itself now |
+| contact skirt | `decor.js skirt()` | a RECTANGULAR BAND, three rows of solid `m`, under 16 props |
+| contact band | `props.js groundContact()` | 48 hand-typed `mmmm` rows, replaced with a real ground ellipse at the anchor |
 
-- **No sprite has been redrawn.** This is a census and an instrument, nothing
-  more. The redraw is an art wave and wants the owner's steer on scope.
-- **The sprite lab has no hexagon overlay.** It should be able to draw: the iso
-  cube hexagon for the sprite's footprint, a 2:1 diagonal guide grid, and the
-  ground diamond the base has to meet. That is the change that stops this
-  recurring, and it is smaller than the redraw.
-- `iso-audit --strict` is **not** wired into the test suite or the playtest,
-  deliberately: 32 known offenders means it would fail on day one. Wire it when
-  the list is short, exactly as `anchor-audit` was.
+`GROUND_ELLIPSE` in **js/iso.js** is the constant underneath all three: a circle
+on the ground is an ellipse exactly twice as wide as it is tall.
+
+**The three caves were individually redrawn** — the fault the owner actually
+pointed at. `CLIFF_CAVE_MOUTH` is now a block (turf diamond on top, two wall
+planes, foot on the ground diamond, mouth cut into the east wall with its sill
+on that wall's own foot). `CAVE_MOUTH` and `GROTTO_MOUTH` use `rockKnoll()`: a
+dome springing from a 2:1 ground ellipse, returning the sill function so
+whatever is cut into it sits on that line and nothing else.
+
+### What is left — eleven sprites, each its own job
+
+`test/iso-ground.test.mjs` is the ratchet: it fails if a passing sprite starts
+failing, AND if one of these starts passing without being struck off the list.
+
+| sprite | px | what it needs |
+|---|---|---|
+| `willow-water` | 42 | the pool rim, cut straight across the front |
+| `wall-fountain` | 33 | a front elevation — the cave family. Wants a wall plane |
+| `jet-basin` | 33 | the basin's lower rim drawn as a line, not an ellipse |
+| `rocky-ford` | 32 | the water strip's front cut |
+| `fountain-tiered` | 25 | the bowl's lower rim |
+| `arbour-seat` | 24 | the seat frame's feet |
+| `axe-marker` | 24 | the base block |
+| `balustrade` | 21 | the plinth |
+| `pergola` | 14 | the post feet |
+| `broken-column` (decor) | 14 | the drum lying on its side |
+| `stone-bench` | 14 | the two supports |
+
+**Fault (B), the FORM facing the viewer, is closed for the caves and open for
+the arch family**: `RUINED_ARCHWAY`, `HEDGE_ARCH`, `PERGOLA_ARCH`, `EXEDRA`,
+`WALL_FOUNTAIN`. There is still no detector for it, and the obvious one
+(symmetry + horizontal major axis) is the trap the first draft fell into — it
+convicts every urn in the catalogue. Inspection, for now.
+
+**And two blind spots found on the way**, both from the same cause — a module
+list written before the module:
+
+- the sprite lab's `CANDIDATES` never included `decor.js` or `extras.js`, so
+  **47 sprites had never once appeared in it**;
+- `tools/propshot.mjs` only ever imported `PROPS`, so asking it for a decor
+  sprite printed `MISSING` as though the art did not exist.
+
+Both now read `AUDITED_MODULES`.
 
 ## 4k · FACING — the middle wheel should turn things (2026-08-01)
 
