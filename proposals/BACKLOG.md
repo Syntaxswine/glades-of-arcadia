@@ -145,36 +145,54 @@ These are the survivors — real, but not worth stopping for:
   which would put it comfortably inside a frame. Not done yet; the map was the
   goal and the freeze was the blocker.
 
-## 4e · The front door — specced, agreed, NOT built (2026-07-31)
+## 4e · The front door — the SAVE SCREEN ✅ SHIPPED (2026-08-01)
 
-The title screen shipped with exactly one entry: New Game. These were discussed
-and deliberately left. See `docs/TITLE-AND-CONTROLS.md` for what does exist.
+The owner's words when it was deferred: *"at a later point we will scope in a
+save screen."* This is that point. `js/saves.js` is the reading and the storage
+arithmetic; `js/titlescreen.js` is the presentation.
 
-- **A SAVE SCREEN.** The owner's words: *"at a later point we will scope in a
-  save screen."* Explicitly deferred, explicitly wanted. What it implies:
-  - **Continue** on the title screen, which needs the title to know whether a
-    save exists and to summarise it (how big, how old, who lives there).
-    `?play=1` already boots without wiping, so the mechanism is there — it is
-    the *presentation* and the "is there anything to continue" probe that are
-    missing.
-  - **Named slots.** There is already a slot mechanism (`?seed=name` writes to
-    `arcadia.garden:name`), so multiple gardens are half-built by accident. A
-    save screen would make it deliberate.
-  - **The `.previous` copy is invisible.** New Game preserves the old garden at
-    `<key>.previous` and nothing can reach it. That is a guarantee the player
-    cannot currently collect on — a save screen is where it becomes real.
-- **Nothing on the title but New Game.** No settings, no mute, no credits. The
-  music licence (the owner's Suno track, non-commercial) is stated only in the
-  README; a credits line is the honest place for it.
-- **The bubble font is 11 letters** — exactly `GLADES OF ARCADIA`. The menu is
-  DOM text, styled to match, which is why the font could stop there. Any menu
-  item drawn *in the canvas* needs the rest of the alphabet;
+| | |
+|---|---|
+| **Continue** | opens the most recently saved LIVE garden. Focused on arrival, because a returning player came back for their garden and New Game is the destructive one — the two used to be the same button, and only the destructive one existed |
+| **Gardens** | every slot, live and archived, with what is in it. Only appears when there is more than one room behind the door |
+| **Recover** | brings back a garden `?new=1` set aside. It **swaps** rather than overwrites, so recovering is itself undoable |
+| **Name a new garden** | `?seed=name` has always written to its own slot, so multiple gardens were half-built by accident. Now they are deliberate |
+| **Credits** | the music is the owner's own Suno track, non-commercial, licensed separately from the code. The README always said so; the front door is where someone who never reads a repo can see it |
+
+Each row reads as a place rather than a schema: *"9 things planted · Asbolos the
+centaur · 1 day ago"*. The resident line comes from `extra.creatures`, counting
+only those past `visits` — a visitor does not live there.
+
+**A DAMAGED SAVE IS STILL SHOWN**, with its size and the word *damaged*. The one
+thing a save screen must never do is refuse to show you a garden.
+
+**A browser with nothing in it is unchanged**: one button, New game, and the
+same note it always had. Verified, because that is the first-run path and it is
+the one nobody would notice breaking.
+
+`js/saves.js` **imports nothing** so the title screen does not drag `world.js`
+and `catalog.js` in behind it, which costs one duplicated constant — and
+`test/saves.test.mjs` opens by asserting `saves.BASE_KEY === world.SAVE_KEY`.
+That assertion is the entire reason the duplication is allowed to exist.
+
+### What is NOT done
+
+- **No delete.** Deliberate for now: nothing in this game has ever removed a
+  garden, and the first thing that does deserves its own thought about
+  confirmation. Storage will fill eventually; that is the trigger to revisit.
+- **No rename**, and no way to name the default slot after the fact.
+- **No cloud, no export.** A garden lives in one browser's localStorage. An
+  export/import pair (the save is already plain JSON) is the cheap version of
+  "I got a new laptop" and is not built.
+- **`TitleScreen.png` is still 1.9 MB, truecolour.** It is pixel art with a
+  limited palette and is almost certainly a 3–4× saving as an indexed PNG. It
+  is the first thing the player waits for, so it is the one asset where load
+  time is felt. Nobody has measured the colour count.
+- **The bubble font is still 11 letters** — exactly `GLADES OF ARCADIA`. Every
+  menu item is DOM text styled to match, which is why the font can stop there.
+  Anything drawn *in the canvas* needs the rest of the alphabet;
   `js/art/title.js` derives all four tones from a flat mask, so adding a glyph
   is one mask and nothing else.
-- **`TitleScreen.png` is 1.9 MB, truecolour.** It is pixel art with a limited
-  palette and is almost certainly a 3–4× saving as an indexed PNG. It is the
-  first thing the player waits for, so it is the one asset where load time is
-  felt. Nobody has measured the colour count.
 
 ## 4f · The reload problem — half fixed
 

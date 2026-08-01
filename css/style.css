@@ -809,6 +809,100 @@ button:disabled {
   text-shadow: 0 1px 2px rgba(22, 34, 30, 0.9);
 }
 
+/* ---------------------------------------------------------------------------
+   The save screen. BACKLOG §4e.
+
+   It lives INSIDE `.title-menu` rather than beside it, so choosing "Gardens"
+   swaps what the panel offers without the backdrop or the wordmark flickering.
+   The panel is capped and scrolls on its own: a browser with a dozen gardens
+   in it must not push the wordmark off the top of the screen.
+   --------------------------------------------------------------------------- */
+
+#title .title-btn-small {
+  font-size: clamp(11px, 1.3vw, 15px);
+  padding: 0.4em 1.1em;
+  letter-spacing: 0.1em;
+}
+
+#title .title-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  width: min(34em, 86vw);
+  max-height: min(42vh, 22em);
+  overflow-y: auto;
+}
+
+#title .title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  padding: 0.45em 0.7em;
+  background: rgba(22, 34, 30, 0.72);
+  border: 1px solid rgba(232, 143, 158, 0.5);
+  border-radius: 2px;
+  text-align: left;
+}
+
+/* An archived garden reads as quieter than a live one, but never as disabled:
+   it is the one the player is most relieved to find. */
+#title .title-row.is-previous {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+#title .title-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#title .title-row-name {
+  font-size: clamp(12px, 1.4vw, 17px);
+  color: #f2eada;
+  letter-spacing: 0.06em;
+}
+
+#title .title-row-meta {
+  font-size: clamp(10px, 1.1vw, 13px);
+  color: #ddd2be;
+  opacity: 0.78;
+}
+
+#title .title-new {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+#title .title-input {
+  font: inherit;
+  font-size: clamp(11px, 1.3vw, 15px);
+  color: #f2eada;
+  background: rgba(22, 34, 30, 0.72);
+  border: 2px solid rgba(232, 143, 158, 0.55);
+  border-radius: 2px;
+  padding: 0.4em 0.7em;
+  min-width: 0;
+  width: 12em;
+}
+
+#title .title-input::placeholder {
+  color: #ddd2be;
+  opacity: 0.5;
+}
+
+#title .title-credit {
+  margin: 0.4em 0 0;
+  font-size: clamp(9px, 1vw, 12px);
+  color: #ddd2be;
+  opacity: 0.55;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(22, 34, 30, 0.9);
+}
+
 #title .title-stamp {
   position: absolute;
   right: 0.7em;

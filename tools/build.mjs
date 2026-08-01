@@ -291,8 +291,15 @@ const LOADER = `
 let out = html;
 
 // 1. the stylesheet
+//
+// The href may carry a cache-busting query — `css/style.css?v=<build>` — which
+// index.html gained when the front door shipped, because a stylesheet whose URL
+// never changes is one the browser is entitled to keep for ever. This pattern
+// did not allow for it, so from that day the link survived the build and the
+// self-contained audit failed on every run. `[^"]*` is the fix and the reason
+// it is not simply `"` is that the query is the whole point.
 out = out.replace(
-  /<link rel="stylesheet" href="css\/style\.css"[^>]*\/?>/,
+  /<link rel="stylesheet" href="css\/style\.css[^"]*"[^>]*\/?>/,
   `<style>\n${css}\n    </style>`
 );
 

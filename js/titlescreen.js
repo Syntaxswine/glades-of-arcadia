@@ -22,6 +22,10 @@
 
 import { TITLE } from './art/title.js';
 import { resolve as pal } from './palette.js';
+import {
+  listGardens, mostRecent, recover, playHref, newHref, residentLine,
+  cleanName, defaultStorage, DEFAULT_NAME,
+} from './saves.js';
 
 /** Where the picture lives, relative to the page. */
 export const BACKDROP = 'TitleScreen.png';
@@ -72,6 +76,108 @@ export function newGameHref(search) {
   return '?' + params.toString();
 }
 
+// ---------------------------------------------------------------------------
+// THE SAVE SCREEN — BACKLOG §4e, deferred once by the owner and now built.
+//
+// Three things it exists to do, in the order they matter:
+//
+//   CONTINUE   The commonest thing anyone wants from a front door, and until
+//              now the only way to reach it was to know that `?play=1` boots
+//              without wiping. A door you have to know a URL to open is a door
+//              in name only.
+//   GARDENS    `?seed=name` has always written to its own slot, so multiple
+//              gardens were half-built by accident. This makes them deliberate.
+//   RECOVER    New Game has always set the old garden aside at
+//              `<key>.previous` — "nothing is ever taken from you" — and
+//              nothing in the game could reach one. A PROMISE THE PLAYER
+//              CANNOT COLLECT ON IS NOT A PROMISE. It is a button now.
+//
+// The reading and the storage arithmetic live in js/saves.js, which imports
+// nothing; this file is the presentation.
+
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+
+/** One line summarising a garden, in a person's words rather than a schema's. */
+function describe(row) {
+  if (!row.ok) return `damaged — ${Math.round(row.bytes / 1024)} kB still on disk`;
+  const bits = [];
+  bits.push(row.objects === 0 ? 'nothing planted yet' : `${row.objects} thing${row.objects === 1 ? '' : 's'} planted`);
+  const who = residentLine(row.residents);
+  if (who) bits.push(who);
+  bits.push(row.age);
+  return bits.join(' · ');
+}
+
+/**
+ * The gardens list. Built into `menu`, replacing whatever was there — the
+ * title screen is one panel that changes what it offers, not two screens, so
+ * the backdrop and the wordmark never flicker.
+ */
+function buildGardens(menu, ctx) {
+  menu.textContent = '';
+  const rows = listGardens(ctx.storage, ctx.now);
+
+  const list = el('div', 'title-list');
+  list.setAttribute('role', 'list');
+  if (!rows.length) list.appendChild(el('p', 'title-note', 'No gardens saved in this browser yet.'));
+
+  for (const row of rows) {
+    const item = el('div', `title-row${row.previous ? ' is-previous' : ''}`);
+    item.setAttribute('role', 'listitem');
+    const label = el('div', 'title-row-text');
+    const title = row.name === DEFAULT_NAME ? 'Your glade' : row.name;
+    label.appendChild(el('span', 'title-row-name', row.previous ? `${title} — set aside` : title));
+    label.appendChild(el('span', 'title-row-meta', describe(row)));
+    item.appendChild(label);
+
+    const go = el('button', 'title-btn title-btn-small', row.previous ? 'Recover' : 'Play');
+    go.type = 'button';
+    go.disabled = !row.ok;
+    go.addEventListener('click', () => {
+      if (row.previous) {
+        // Swaps rather than overwrites, so recovering is itself undoable. The
+        // player reaching for this button already lost something once.
+        if (recover(ctx.storage, row.key)) buildGardens(menu, { ...ctx, now: Date.now() });
+        return;
+      }
+      ctx.onStart(playHref(row.name, ctx.search));
+    });
+    item.appendChild(go);
+    list.appendChild(item);
+  }
+  menu.appendChild(list);
+
+  // A named new garden. The field is optional: an empty name is the default
+  // slot, which is what "New game" on the front panel already does.
+  const form = el('form', 'title-new');
+  const input = el('input', 'title-input');
+  input.type = 'text';
+  input.placeholder = 'name a new garden';
+  input.maxLength = 32;
+  input.setAttribute('aria-label', 'Name for a new garden');
+  const make = el('button', 'title-btn title-btn-small', 'Start it');
+  make.type = 'submit';
+  form.appendChild(input);
+  form.appendChild(make);
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    ctx.onStart(newHref(cleanName(input.value) || DEFAULT_NAME, ctx.search));
+  });
+  menu.appendChild(form);
+
+  const back = el('button', 'title-btn title-btn-small', 'Back');
+  back.type = 'button';
+  back.addEventListener('click', () => ctx.buildMain(menu, ctx));
+  menu.appendChild(back);
+
+  try { (list.querySelector('button') || back).focus({ preventScroll: true }); } catch (_) {}
+}
+
 /**
  * Put the title screen up inside `stage`.
  *
@@ -106,17 +212,65 @@ export function showTitle(stage, opts = {}) {
 
   const menu = document.createElement('div');
   menu.className = 'title-menu';
-  const start = document.createElement('button');
-  start.type = 'button';
-  start.className = 'title-btn';
-  start.textContent = 'New game';
-  start.addEventListener('click', () => onStart(newGameHref()));
-  menu.appendChild(start);
 
-  const note = document.createElement('p');
-  note.className = 'title-note';
-  note.textContent = 'A new garden. Sixty tiles square, and nothing on it yet.';
-  menu.appendChild(note);
+  const ctx = {
+    onStart,
+    storage: opts.storage !== undefined ? opts.storage : defaultStorage(),
+    search: (typeof location !== 'undefined' && location.search) || '',
+    now: opts.now || Date.now(),
+    buildGardens,
+    buildMain,
+  };
+
+  /**
+   * The front panel: Continue if there is anything to continue, New game
+   * always, Gardens when there is more than one thing in storage.
+   *
+   * CONTINUE COMES FIRST AND IS FOCUSED, because a returning player's garden
+   * is the thing they came back for and New Game is the destructive one. The
+   * two were the same button until now and only the destructive one existed.
+   */
+  function buildMain(host, c) {
+    host.textContent = '';
+    const rows = listGardens(c.storage, c.now);
+    const last = mostRecent(c.storage, c.now);
+
+    let first = null;
+    if (last) {
+      const cont = el('button', 'title-btn', 'Continue');
+      cont.type = 'button';
+      cont.addEventListener('click', () => c.onStart(playHref(last.name, c.search)));
+      host.appendChild(cont);
+      host.appendChild(el('p', 'title-note', describe(last)));
+      first = cont;
+    }
+
+    const start = el('button', 'title-btn', 'New game');
+    start.type = 'button';
+    start.addEventListener('click', () => c.onStart(newGameHref()));
+    host.appendChild(start);
+    if (!last) {
+      host.appendChild(el('p', 'title-note', 'A new garden. Sixty tiles square, and nothing on it yet.'));
+      first = start;
+    }
+
+    // Only worth a door when there is more than one room behind it.
+    if (rows.length > 1 || (rows.length === 1 && !last)) {
+      const more = el('button', 'title-btn title-btn-small', 'Gardens');
+      more.type = 'button';
+      more.addEventListener('click', () => c.buildGardens(host, { ...c, now: Date.now() }));
+      host.appendChild(more);
+    }
+
+    // The music is the owner's own track, made with Suno, and licensed
+    // SEPARATELY from the code. The README has always said so; a front door is
+    // the honest place for it to be visible to someone who never reads a repo.
+    host.appendChild(el('p', 'title-credit', 'Music by the author · non-commercial · code and audio licensed separately'));
+
+    try { (first || start).focus({ preventScroll: true }); } catch (_) {}
+  }
+
+  buildMain(menu, ctx);
   root.appendChild(menu);
 
   // The build stamp. Small, dim, and in a corner — but present, because
@@ -131,15 +285,21 @@ export function showTitle(stage, opts = {}) {
 
   stage.appendChild(root);
   // Focus so Enter and Space work without a click, and so a screen reader lands
-  // on the one thing there is to do.
+  // on the thing the player most likely came back for. `buildMain` chooses
+  // which that is — Continue when there is a garden, New game when there is
+  // not — and focuses it again on every panel change, which is what keeps the
+  // keyboard working across Gardens and Back.
   try {
-    start.focus({ preventScroll: true });
-  } catch (_) {
-    try { start.focus(); } catch (_) {}
-  }
+    const f = menu.querySelector('button');
+    if (f) f.focus({ preventScroll: true });
+  } catch (_) {}
 
   return {
     el: root,
+    /** For tests and for a host that wants to drive the panel itself. */
+    showGardens() {
+      buildGardens(menu, { ...ctx, now: Date.now() });
+    },
     remove() {
       try { root.remove(); } catch (_) {}
     },
