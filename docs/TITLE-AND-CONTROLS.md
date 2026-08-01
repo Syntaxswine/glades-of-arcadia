@@ -39,6 +39,38 @@ game at all** — no world, no autosave, no simulation, no renderer.
 ?seed=thicket         a different map, reproducibly, in its own save slot
 ```
 
+### The save screen
+
+The title screen offers **Continue** when there is a garden to continue,
+**New game** always, and **Gardens** when there is more than one room behind the
+door. Continue is the one that gets focus: a returning player came back for
+their garden, and New Game is the destructive one — the two used to be the same
+button, and only the destructive one existed.
+
+| | |
+|---|---|
+| Continue | the most recently saved **live** garden. Never an archive |
+| Gardens | every slot, live and archived, with what is in it |
+| Recover | brings back a garden `?new=1` set aside. **Swaps** rather than overwrites, so recovering is itself undoable |
+| name a new garden | writes to `arcadia.garden:<name>`, which `?seed=` has always used |
+
+Each row reads as a place rather than a schema — *"9 things planted · Asbolos
+the centaur · 1 day ago"*. The resident line counts only creatures past
+`visits`, because a visitor does not live there. **A damaged save is still
+shown**, with its size and the word *damaged*: the one thing a save screen must
+never do is refuse to show you a garden.
+
+`js/saves.js` holds the reading and the storage arithmetic and **imports
+nothing** — the title screen comes up before the game boots and must stay cheap,
+so it does not drag `world.js` and `catalog.js` in behind it. That costs one
+duplicated constant, and `test/saves.test.mjs` opens by asserting
+`saves.BASE_KEY === world.SAVE_KEY`. That assertion is the entire reason the
+duplication is allowed to exist.
+
+> **`.previous` is reachable at last.** New Game has always set the old garden
+> aside — *"nothing is ever taken from you"* — and nothing in the game could get
+> to one. A promise the player cannot collect on is not a promise.
+
 ### `?garden=all` — the proving ground
 
 A cheat code, and a test fixture you can walk about in: four quadrants of the big
