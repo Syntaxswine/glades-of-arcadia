@@ -12,12 +12,13 @@ Reconciled against `proposals/BACKLOG.md` in the same pass, per the standing rul
 Repo `Syntaxswine/glades-of-arcadia`. Deployed and verified at HEAD, not merely pushed.
 
 ```
-283 tests            node --test "test/*.test.mjs"
+290 tests            node --test "test/*.test.mjs"
 46 playtest checks   node tools/playtest.mjs        no structural faults
 anchor audit         node tools/anchor-audit.mjs --strict     exit 0
 art debt             ZERO   (was 28 understudy sprites)
+map                  60 x 60, and a new game starts on plain meadow
 placeables           130
-dependencies         0        external assets   1 (the score)
+dependencies         0        external assets   2 (the score, the title art)
 ```
 
 It is a **complete, playable game**. Terrain raises and lowers, five grasses
@@ -43,9 +44,16 @@ BACKLOG.
 | `AUDIO.md` | Relaxes "zero external assets" to exactly one. The satyr trigger. |
 | `CREATURE-MOVEMENT.md` | The off-map invariant and per-species water rules. |
 | `FLOURISHES.md` | Adds the idle life — repeatable acts that are NOT beats. Poses beyond idle/walk/beat, one-shot gestures, and why a flourish must never reach the journal. |
+| `TITLE-AND-CONTROLS.md` | **Supersedes SPEC §1's asset rule and §8's key bindings.** The front door, why the wipe is a navigation, the 60x60 blank map, the letter/number keyboard, and the caching that makes a reload lie. |
 
 **SPEC.md §5 still says "45–60 placeables". It is stale.** There are 130. The
 test asserting the old range was corrected, not suppressed.
+
+**SPEC.md §1 says "one external asset, and exactly one. No image files."** There
+are now TWO and one of them is an image: the score and `TitleScreen.png`, both
+the owner's, both outside the simulation. `TITLE-AND-CONTROLS.md` is where that
+is written down. The game WORLD is still entirely authored pixels and that part
+must stay true.
 
 ## The laws — do not "improve" these
 
@@ -64,6 +72,13 @@ wrong, read its comment before changing it; they carry the measurements.
   black** — it greys the whole scene and is the clearest tell of a modern fake.
 - **Light is upper-left. Always.** Consistency matters more than the direction.
 - **`LEVEL_H` is defined in `iso.js` and nowhere else.** Do not re-type 16.
+- **`MAP_W` / `MAP_H` are defined in `iso.js` and nowhere else** — and `main.js`
+  carrying a second copy was worse than a duplicate, because iso.js's pair were
+  DEAD (default parameters only). Editing the obvious declaration changed
+  nothing. **Measure `_rescan` before growing the map again**; it is the thing
+  that goes quadratic, and 60x60 is already 58 ms a scan.
+- **The New Game wipe is a NAVIGATION, not a teardown.** A fresh document cannot
+  inherit stale state. Do not "optimise" it into an in-place reset.
 - **Cosy guarantees (SPEC §0) are absolute.** No fail state, no score, no
   economy, nothing ever taken. **A settled creature never leaves the garden** —
   it goes restless and relocates. A journal entry is never un-filled.
@@ -195,8 +210,6 @@ right rather than because a card told them to, and hears the pipes start.
 
 *— Claude Opus 5, 2026-07-31*
 
-*(Add below this line. Never overwrite a prior builder.)*
-
 ---
 
 ## The idle life — 2026-07-31, later
@@ -302,6 +315,58 @@ The lesson worth keeping: **a field with one consumer still has two meanings if
 two places write it.** Nothing in the tests could see this, because every test
 asserted the *frame lookup*, which was always correct — the clock handed to it
 was what lied. Measure the dynamic, not the end state.
+
+*— Claude Opus 5, 2026-07-31*
+
+---
+
+## A front door, and a map nine times the size — 2026-07-31, later still
+
+The owner reported that reloading did not reset the game and proposed the cure:
+a title screen with a New Game behind it. They were right about the symptom and
+their fix was the right one, but there were **two** causes and a title screen
+only addresses one.
+
+**The other is HTTP caching, and it had been lying to me all session.** The
+preview server was `python -m http.server`, which sends no cache headers, so the
+browser kept ES modules against a heuristic and served them back. It cost three
+false readings — including one where I "verified" a title screen that was not
+running, and one where I declared a fix working with the old code on screen.
+`launch.json` now points at `tools/serve.mjs`, which has always sent `no-store`
+and was sitting unused in the repo the whole time. On Pages the window is real
+and only half closed; `docs/TITLE-AND-CONTROLS.md` says exactly how far.
+
+**Then the map could not be made bigger.** 3x in both directions is 9x the tiles
+and `_rescan` cost **1205 ms** at 60x60, every 1.5 garden-seconds. The cause was
+one line whose comment asserted the opposite — `Zoning.claimed` calls
+`fields.grassCounts()`, commented *"cheap, because grassGrid is cached"*.
+grassGrid is cached. grassCounts walked the whole map on every call, and
+`claimed` is read once per tile. 1205 ms -> **58 ms**, and the live 20x20 game
+picked up 2.7x it had been losing since it shipped.
+
+I guessed wrong twice before measuring properly — per-tile context allocation,
+then per-tile flood fills. Both were real, both are fixed, neither was the cause.
+**Attributing cost per requirement is what named it in one line.** The lesson is
+not "profile first"; it is that a comment claiming something is cheap is a claim,
+and claims about cost are the ones that rot silently as a project grows.
+
+**On the art:** the wordmark's letters are derived, not painted. Each glyph is a
+flat mask; the code computes outline, highlight, shade and fill, plus one erosion
+pass that knocks the corner off every convex right angle. That last pass is the
+whole difference between bubble letters and block letters, and doing it in code
+is why all eleven round identically — my hand-authored chamfers came out square,
+because a one-pixel corner is exactly what the eye skips while typing hashes into
+a grid.
+
+**What is NOT done is written down** in BACKLOG §4e-4g: the save screen the owner
+explicitly deferred, Continue, the unversioned module graph, and — honestly — the
+fact that nobody has yet pressed the new keys in a real browser. "Not checked"
+and "checked and fine" are different states and the backlog now says which is
+which.
+
+**The forward dream:** that someone opens the front door, sees sixty tiles square
+of empty meadow, and finds that daunting for about four seconds before they put
+down a vine.
 
 *— Claude Opus 5, 2026-07-31*
 

@@ -98,12 +98,16 @@ Master of Olympus*** (2000). Warm, chunky, readable, Mediterranean, with
 *The Settlers II* (1996) for cosiness.
 
 - 64×32 tiles, a 640×400 logical screen scaled by a **whole number** only.
-- **No external image assets.** No spritesheets, no fonts, no CDN. Every pixel
-  in the game is authored as text against eleven colour ramps in
-  `js/palette.js`. The one file the page fetches is the music (see
-  [Music](#music)); the ambient layer above it — birdsong, water, wind and the
-  satyr's pipes — is still Web Audio, generated live and reacting to the tiles
-  on screen.
+- **The game world is 100% authored pixels.** No spritesheets, no fonts, no CDN,
+  no icon set. Every pixel of every tile, plant, creature and building is
+  authored as text against eleven colour ramps in `js/palette.js` — including
+  the pink bubble wordmark on the title screen.
+  **Two files the page fetches are not:** the music (see [Music](#music)) and
+  `TitleScreen.png`, the title backdrop. Both are the owner's, both sit outside
+  the simulation, and nothing that draws a tile loads either. See
+  `docs/TITLE-AND-CONTROLS.md`. The ambient audio layer — birdsong, water, wind
+  and the satyr's pipes — is still Web Audio, generated live and reacting to the
+  tiles on screen.
 - Foliage is *composed*, not drawn — hand-authored 12–20px leaf clumps stamped
   into a buffer from a per-plant seed and then shaded, which is how period
   artists actually did it. No two oaks in your garden are the same oak.

@@ -145,6 +145,73 @@ These are the survivors — real, but not worth stopping for:
   which would put it comfortably inside a frame. Not done yet; the map was the
   goal and the freeze was the blocker.
 
+## 4e · The front door — specced, agreed, NOT built (2026-07-31)
+
+The title screen shipped with exactly one entry: New Game. These were discussed
+and deliberately left. See `docs/TITLE-AND-CONTROLS.md` for what does exist.
+
+- **A SAVE SCREEN.** The owner's words: *"at a later point we will scope in a
+  save screen."* Explicitly deferred, explicitly wanted. What it implies:
+  - **Continue** on the title screen, which needs the title to know whether a
+    save exists and to summarise it (how big, how old, who lives there).
+    `?play=1` already boots without wiping, so the mechanism is there — it is
+    the *presentation* and the "is there anything to continue" probe that are
+    missing.
+  - **Named slots.** There is already a slot mechanism (`?seed=name` writes to
+    `arcadia.garden:name`), so multiple gardens are half-built by accident. A
+    save screen would make it deliberate.
+  - **The `.previous` copy is invisible.** New Game preserves the old garden at
+    `<key>.previous` and nothing can reach it. That is a guarantee the player
+    cannot currently collect on — a save screen is where it becomes real.
+- **Nothing on the title but New Game.** No settings, no mute, no credits. The
+  music licence (the owner's Suno track, non-commercial) is stated only in the
+  README; a credits line is the honest place for it.
+- **The bubble font is 11 letters** — exactly `GLADES OF ARCADIA`. The menu is
+  DOM text, styled to match, which is why the font could stop there. Any menu
+  item drawn *in the canvas* needs the rest of the alphabet;
+  `js/art/title.js` derives all four tones from a flat mask, so adding a glyph
+  is one mask and nothing else.
+- **`TitleScreen.png` is 1.9 MB, truecolour.** It is pixel art with a limited
+  palette and is almost certainly a 3–4× saving as an indexed PNG. It is the
+  first thing the player waits for, so it is the one asset where load time is
+  felt. Nobody has measured the colour count.
+
+## 4f · The reload problem — half fixed
+
+`docs/TITLE-AND-CONTROLS.md` has the full account. Two of three done:
+
+- ✅ Dev preview now serves `no-store` (`.claude/launch.json` points at
+  `tools/serve.mjs` instead of `python -m http.server`).
+- ✅ Stylesheet versioned, build stamp printed on the title screen.
+- ❌ **The module graph is not versioned, and on GitHub Pages that is a real
+  ten-minute staleness window** (`Cache-Control: max-age=600`). Busting the entry
+  does not help: a module's own relative imports resolve without the query. The
+  fix is a build step that rewrites every relative specifier to carry
+  `?v=<hash>` — either into a deployed tree, or by generating an import map.
+  **Until then a hard reload after deploy is the workaround**, which is exactly
+  the workaround a player should never need.
+
+## 4g · Left unverified by hand
+
+Recorded because "not checked" and "checked and fine" are different states.
+
+- **The new key bindings were never pressed in a live browser.** Both halves are
+  verified directly (`ui.selectGroupByKey` over all eight letters plus two that
+  must be ignored; `ui.selectItemIndex` at 1/2/3/9 and out of range) and the
+  event code was reviewed — but the preview pane runs hidden, so rAF is
+  suspended and synthetic key events get eaten by the tab strip's own arrow
+  handler. Somebody should press the keys.
+- **SUSPECTED, from that same session: selecting a category by letter may move
+  focus into the toolbar and swallow the next keypress.** `selectGroup` focuses
+  the tab, and `input.js` ignores keys while focus is in the chrome. It looked
+  exactly like that while testing, but the hidden pane makes it unsafe to call
+  it confirmed. If pressing `T` then `3` does nothing, this is why, and the fix
+  is to return focus to the canvas after a keyboard-driven category change.
+- **Nothing has been played on a 60×60 map for any length of time.** The scan
+  cost is measured; the *feel* of a map nine times the size — how long it takes
+  to cross, whether the camera speed still suits it, whether creatures now feel
+  sparse — is not.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
