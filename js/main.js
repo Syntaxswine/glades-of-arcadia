@@ -1931,11 +1931,6 @@ async function bootOnce(shell = {}) {
         on: {
           undo: doUndo,
           audio: (on) => audio.setMuted(!on),
-          // The move pad. Late-bound on purpose: the UI is built before the
-          // input is, and the input owns the camera clamp — routing the pad
-          // through `panBy` means one pan implementation, so the pad cannot
-          // walk off the edge of the world in a way the keys cannot.
-          pan: (dx, dy) => invoke(input, ['panBy'], dx, dy),
         },
       });
     } catch (err) {

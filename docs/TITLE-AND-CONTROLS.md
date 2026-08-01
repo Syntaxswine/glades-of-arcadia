@@ -183,42 +183,58 @@ never plant, raze, terrace or pan. That ordering is the whole safety property.
 
 ### Everything else, unchanged
 
-`R` cycles the terrain tools · `B` raze · `J` journal · `Tab` field overlay ·
+`R` cycles the terrain tools · `B` raze · `J` journal · `X` move · `?` ask ·
+`Tab` field overlay ·
 `Esc` cancel · `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `+` / `-` raise and lower
 the tile under the cursor · `Space` drag-pan · `Backspace` remove.
 
-### The move pad
+### The move tool — `X`, or the four-arrow mark left of the `?`
 
-Four buttons in a diamond, bottom-left of the view (`css/style.css`, `.pad`).
-Hold one and the camera pans at 340 logical px per second; the rate is applied
-from the frame loop with the real `dt`, so it is the same speed at 30Hz and at
-144Hz. Enter or Space on a focused button is one nudge.
+Pick it up and **the map answers your clicks instead of the garden**. Click to
+centre on that spot; click and drag to shove the map about. Nothing you do with
+it can plant, clear or terrace anything.
 
 **Why it exists.** On a touch screen there is no keyboard and no middle mouse
 button, so the only way to cross the map was a drag — and a drag is exactly the
-gesture that also *places* things. A player holding a plant had no way to move
-at all without putting it down first. That is not an inconvenience, it is a dead
+gesture that also *places* things. A player holding a plant had no way to move at
+all without putting it down first. That is not an inconvenience, it is a dead
 end.
 
-**It is a diamond, not a cross**, because the map is isometric: "up" on the pad
-is up ON SCREEN, and the arrows sit on the same diagonals the terrain does.
+**It is the `?`'s sibling and is built the same way.** Both take the click away
+from the garden; both keep whatever is selected; both suppress the ghost, because
+a ghost hovering under a cursor that will not plant is a promise the click does
+not keep. The pointer changes (`#app.is-moving`, `#app.is-asking`) — the only
+feedback there is once the player's eyes have left the toolbar.
 
-**It is always on**, not gated behind a coarse-pointer media query. A control
-that appears on some devices and not others cannot be documented, cannot be
-screenshotted, and cannot be found by the player who needs it. It costs 42 × 42
-logical pixels at 72% opacity.
+**It is the one tool that does NOT take your plant out of your hand.** Every
+other tool clears the selection, because "what does a click do" must have one
+answer. Move is the exception *on purpose*: crossing the map without putting your
+plant down is the entire thing drag-to-pan could never offer.
 
-Two traps, both load-bearing:
+**The icon is drawn per pixel, not lettered**, and specifically not a unicode
+glyph — `✥` and its neighbours are not in Consolas, so the button would show a
+tofu box on exactly the machines the icon matters most on. 9 × 9: odd so the
+shaft has a true centre column, and one pixel inside the 10-logical-pixel bar
+button, because the topbar is 14 tall in total and there is no room to grow the
+button instead.
 
-- `.pad` itself is `pointer-events: none` and only `.pad-btn` takes the pointer.
-  `.ui > *` turns pointer events on for every direct child, so the transparent
-  middle and corners of the 42 × 42 square would otherwise swallow clicks on the
-  garden underneath — four small dead zones nobody would ever diagnose.
-- `.pad-btn` is `touch-action: none`. Without it a phone claims the press as a
-  scroll gesture, the `pointerup` never arrives, and **the pan runs away**.
+**A press that never travelled is a click, not a drag** — the threshold is the
+same `DRAG_SLOP` (3 logical px) the rest of `input.js` uses, so a hand that
+shakes three pixels on a touch screen reads as a tap rather than as a pan of
+three pixels that then snaps nowhere.
 
-It routes through `input.panBy`, so there is one pan implementation and the pad
-cannot walk off the edge of the world in a way the keys cannot.
+> **What this replaced.** The first version was a held four-way d-pad in the
+> bottom-left corner. It worked, and it was not the gesture anybody actually has
+> in their hands — every builder of the period lets you grab the map itself. The
+> owner asked for the tool instead, and the tool is better on its merits: it
+> resolves the drag-conflict at the source rather than routing round it, and it
+> costs one topbar button instead of a permanent 42 × 42 patch of meadow.
+>
+> Two traps died with the pad and are worth remembering if anything like it ever
+> comes back: `.ui > *` turns pointer-events on for **every** direct child, so a
+> transparent container swallows clicks on the garden through its empty corners;
+> and a held button on a phone needs `touch-action: none` or the browser claims
+> the press as a scroll, the `pointerup` never arrives, and **the pan runs away**.
 
 ### The minimap
 

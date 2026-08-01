@@ -893,6 +893,19 @@ export function createInput(opts = {}) {
     const tool = (ui && ui.tool && ui.tool()) || 'place';
     const item = (ui && ui.selection && ui.selection()) || null;
 
+    // THE MOVE TOOL. Drag to shove the map about; a press that never moves is
+    // a click, and lands as "centre me there" in onPointerUp.
+    //
+    // It comes before the ordinary pan branch below because that one only fires
+    // when NOTHING is selected — the whole point of this tool is that you can
+    // move the map with a plant still in your hand.
+    if (tool === 'move') {
+      state.painting = false;
+      state.terrain = null;
+      state.panning = true;
+      return;
+    }
+
     // THE QUESTION MARK asks and changes nothing. Before every other branch,
     // because "click a thing to find out what it is" must not also plant,
     // raze, terrace or pan — a help cursor that edits the garden is a trap.
@@ -987,6 +1000,17 @@ export function createInput(opts = {}) {
       } catch (_) {
         /* ignore */
       }
+    }
+    // THE MOVE TOOL'S CLICK. A press that never travelled is not a drag, it is
+    // "take me there" — the same gesture the minimap answers, on the map itself.
+    //
+    // `state.moved` is the accumulated travel in logical pixels; the threshold
+    // is the same DRAG_SLOP the rest of the file uses, so a hand that shakes
+    // three pixels on a touch screen still reads as a tap rather than as a pan
+    // of three pixels that then snaps nowhere.
+    if (state.panning && (ui && ui.tool && ui.tool()) === 'move' && state.moved <= DRAG_SLOP) {
+      centreOn(state.tx, state.ty);
+      if (ui && ui.announce) ui.announce(`looking at ${state.tx}, ${state.ty}`);
     }
     // The terrain drag lands here, once, as a single undoable edit. A press with
     // no movement is a one-tile region, which is the ordinary click.
@@ -1209,6 +1233,15 @@ export function createInput(opts = {}) {
       case 'J':
         ev.preventDefault();
         if (ui && ui.toggleJournal) ui.toggleJournal();
+        return;
+      // The move tool. `X` because `M` is mute, `V` reads as "view" but is one
+      // letter from the categories' alphabet, and X is the only free key that
+      // nothing else in the game wants.
+      case 'x':
+      case 'X':
+        ev.preventDefault();
+        if (ui && ui.toggleTool) ui.toggleTool('move');
+        refreshGhost();
         return;
       case ' ':
         ev.preventDefault();

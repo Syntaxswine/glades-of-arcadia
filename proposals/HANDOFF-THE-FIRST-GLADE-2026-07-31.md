@@ -19,7 +19,7 @@ art debt             ZERO   (was 28 understudy sprites)
 map                  60 x 60, and a new game starts on plain meadow
 placeables           130
 dependencies         0        external assets   2 (the score, the title art)
-getting about        minimap (upper right), move pad (lower left), WASD/arrows
+getting about        minimap (upper right), the move tool (X), WASD/arrows
 asking               ? picks up a help cursor
 cheat                ?play=1&new=1&garden=all  — all four species welcome
 ```
@@ -422,18 +422,33 @@ The surround started as the sky ramp — consistent with render.js's off-map haz
 and wrong on sight: at this size the panel is mostly surround, so a pale blue
 rectangle sat in the corner shouting louder than the garden.
 
-### The move pad and the `?`
+### The move tool and the `?` — two tools that answer instead of building
 
-The pad exists because on a touch screen the only way to cross the map was a
-drag, and a drag is the gesture that *places* things — a player holding a plant
-had no way to move at all. Two CSS lines in it are load-bearing and both are in
-`TITLE-AND-CONTROLS.md`: `pointer-events: none` on the box (or its transparent
-corners eat clicks on the garden) and `touch-action: none` on the buttons (or a
-phone claims the press as a scroll, the `pointerup` never lands, **and the pan
-runs away**).
+Both take the click away from the garden, both keep whatever is selected, both
+suppress the ghost (a ghost under a cursor that will not plant is a promise the
+click does not keep), and both change the pointer, which is the only feedback
+there is once the player's eyes leave the toolbar.
 
-The `?` is a tool, not a tooltip, and `input.js` dispatches it before every other
-branch so a help cursor can never plant, raze, terrace or pan. It reuses
+**Move** is `X` or the four-arrow mark immediately left of the `?`. Click to
+centre, drag to shove. It is the one tool that does **not** take your plant out
+of your hand, on purpose: crossing the map without putting it down is the entire
+thing drag-to-pan could never offer, because dragging is *also* how you place.
+
+> **I built this twice.** The first version was a held four-way d-pad in the
+> corner. It worked and the owner did not want it — "I imagine a logo just to the
+> left of the question mark ... a move cursor that does not place items, but
+> rather centers the map on that spot on a click, or moves the map with a click
+> and drag." They were right, and not only as taste: the tool resolves the
+> drag-conflict **at its source** instead of routing round it, and it costs one
+> topbar button rather than a permanent 42 × 42 patch of meadow.
+>
+> The lesson I want to keep is that I solved the *stated* problem (no way to pan
+> on touch) with the first thing that solved it, rather than asking what the
+> gesture should be. Every builder of the period lets you grab the map itself.
+> The research was on the shelf and I did not go and look.
+
+The `?` is a tool, not a tooltip, and `input.js` dispatches both before every
+other branch so a help cursor can never plant, raze, terrace or pan. It reuses
 `affinityWords()`, so "what does this attract" is answered in the vocabulary the
 player is already learning rather than in a second one.
 
@@ -476,6 +491,24 @@ danger: `new World()` with no options, or a save with no `w`, silently built a
 20×20 world inside a 60×60 game. Both now come from iso.js. The law was already
 written down from the same mistake in the other direction; it had simply never
 been swept for.
+
+### On the owner's desk, not started: MOBILE MODE
+
+> "My plan is to have a mobile mode on the title screen. Same game just
+> different. That's kind of low on the priority list, but it should be on our
+> todo."
+
+`BACKLOG §4i`, and read it before you touch anything shaped like it. The short
+version: **the game does not fit a phone in portrait**, and that is geometry, not
+controls. `pickScale` floors to an integer and clamps at 1, so a 390 px screen
+gets a 640 px canvas. The only two ways out are a non-integer scale (which breaks
+SPEC §2 and smears the art) or a **second logical screen size** — and
+`LOGICAL_W/H` are module constants that render.js, input.js and index.html each
+read for themselves. **Making the logical screen a variable is the whole job.**
+Grep for `640` before estimating.
+
+It is low priority by the owner's own word. Do not start it because it is
+written down.
 
 **The forward dream:** that the blinking dot in the corner is the thing you catch
 out of the corner of your eye, and you click it, and there he is, playing.

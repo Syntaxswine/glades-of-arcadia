@@ -1126,7 +1126,30 @@ export function createUI(opts = {}) {
   btnAsk.setAttribute('aria-pressed', 'false');
   btnAsk.setAttribute('aria-label', 'Ask about a thing');
 
-  barRight.append(btnAsk, btnJournal, btnField, btnRaze, btnUndo);
+  /**
+   * THE MOVE TOOL, immediately left of the question mark.
+   *
+   * Its sibling in every sense: pick it up and the map answers your clicks
+   * instead of the garden. Click to centre on that spot, click and drag to
+   * shove the map about, and nothing you do can plant or clear anything.
+   *
+   * WHY A TOOL AND NOT A D-PAD. The first version was four held buttons in the
+   * corner — which works, and is not the gesture anybody actually has in their
+   * hands. Every builder of the period lets you grab the map itself; the reason
+   * this game could not was that dragging is also how you PLACE things, so a
+   * player holding a plant had nowhere to put the gesture. Giving "move" its own
+   * tool resolves that at the source instead of routing round it, and it costs
+   * one button rather than a permanent 42x42 patch of the meadow.
+   *
+   * It also gives touch the thing it was missing without a second control
+   * scheme: tap the arrows, then drag the map with one finger.
+   */
+  const btnMove = btn('bar-btn has-icon', '', () => toggleTool('move'), 'Move the map (X)');
+  btnMove.append(moveIcon());
+  btnMove.setAttribute('aria-pressed', 'false');
+  btnMove.setAttribute('aria-label', 'Move the map');
+
+  barRight.append(btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
   bar.append(timeOut, overlayName, barRight);
 
   function doUndo() {
@@ -1191,82 +1214,7 @@ export function createUI(opts = {}) {
   const jCard = el('div', 'journal-card');
   journal.append(jTitle, jClose, jList, jCard);
 
-  // ------------------------------------------------------------- move pad --
-  //
-  // A four-way pad for a map that is now sixty tiles square.
-  //
-  // WHY IT EXISTS. On a touch screen there is no keyboard and no middle mouse
-  // button, so the only way to cross the map was a drag — and a drag is exactly
-  // the gesture that also PLACES things, so a player with a plant in hand had
-  // no way to move at all without putting it down first. That is not a mobile
-  // inconvenience, it is a dead end.
-  //
-  // WHY IT IS ALWAYS ON, not gated behind a coarse-pointer query. A control that
-  // appears on some devices and not others cannot be documented, cannot be
-  // screenshotted, and cannot be found by the player who needs it. It is small,
-  // it is quiet, and a mouse player who never touches it has lost 34 x 34
-  // logical pixels in the corner of a meadow.
-  //
-  // HELD, not tapped: pointerdown starts panning and pointerup stops it, so one
-  // long press crosses the map. The rate is per SECOND and applied from the
-  // frame loop, so it is the same speed at 30Hz and at 144Hz.
-  const pad = el('div', 'pad');
-  pad.setAttribute('role', 'group');
-  pad.setAttribute('aria-label', 'Move the view');
-
-  /** Logical pixels per second while a pad button is held. */
-  const PAD_SPEED = 340;
-  const padHeld = { dx: 0, dy: 0 };
-
-  const PAD_DIRS = [
-    { cls: 'pad-n', dx: 0, dy: -1, label: 'Move up', glyph: '▲' },
-    { cls: 'pad-w', dx: -1, dy: 0, label: 'Move left', glyph: '◀' },
-    { cls: 'pad-e', dx: 1, dy: 0, label: 'Move right', glyph: '▶' },
-    { cls: 'pad-s', dx: 0, dy: 1, label: 'Move down', glyph: '▼' },
-  ];
-  for (const d of PAD_DIRS) {
-    const b = btn('pad-btn ' + d.cls, d.glyph, null, d.label);
-    b.setAttribute('aria-label', d.label);
-    const grab = (ev) => {
-      ev.preventDefault();
-      padHeld.dx = d.dx;
-      padHeld.dy = d.dy;
-      // Capture, so sliding a thumb off the button still stops when it lifts.
-      try {
-        b.setPointerCapture(ev.pointerId);
-      } catch (_) {}
-    };
-    const let_go = () => {
-      if (padHeld.dx === d.dx && padHeld.dy === d.dy) {
-        padHeld.dx = 0;
-        padHeld.dy = 0;
-      }
-    };
-    b.addEventListener('pointerdown', grab);
-    b.addEventListener('pointerup', let_go);
-    b.addEventListener('pointercancel', let_go);
-    b.addEventListener('pointerleave', let_go);
-    // Keyboard: the pad is focusable chrome, so Enter and Space must work. One
-    // press is one nudge — holding a key on a button does not repeat reliably.
-    b.addEventListener('click', () => {
-      if (on.pan) on.pan(d.dx * 64, d.dy * 32);
-    });
-    pad.appendChild(b);
-  }
-
-  /**
-   * Called from the frame loop with the real dt. Returns true if it moved,
-   * which is only so a caller can skip work when nothing is held.
-   */
-  function panStep(dt) {
-    if (!padHeld.dx && !padHeld.dy) return false;
-    if (!on.pan) return false;
-    const d = Math.max(0, Math.min(0.1, dt || 0));
-    on.pan(padHeld.dx * PAD_SPEED * d, padHeld.dy * PAD_SPEED * d);
-    return true;
-  }
-
-  mount.append(bar, legend, toast, pad, panel, journal, liveRegion);
+  mount.append(bar, legend, toast, panel, journal, liveRegion);
 
   // ------------------------------------------------------------- the palette --
 
@@ -1359,6 +1307,51 @@ export function createUI(opts = {}) {
     b.addEventListener('blur', () => showInfo(null));
     b.addEventListener('keydown', onGridKey);
     return b;
+  }
+
+  /**
+   * The move tool's mark: a cross of four arrows, drawn per pixel.
+   *
+   * Drawn rather than lettered for the same reason the terrain icons are —
+   * a toolbar is recognised, not read — and specifically NOT a unicode glyph.
+   * `✥` and its neighbours are not in Consolas, so the button would show a
+   * tofu box on exactly the machines the icon matters most on.
+   *
+   * 9 x 9 — odd, so the shaft has a true centre column, and one pixel short of
+   * the 10-logical-pixel bar button so it sits IN the button rather than
+   * straining against it. The topbar is 14 tall in total; there is no room to
+   * grow the button instead.
+   */
+  function moveIcon() {
+    const S = 9;
+    const cv = blank(S, S);
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const c = (S - 1) / 2;
+    const put = (x, y) => ctx.fillRect(x, y, 1, 1);
+    ctx.fillStyle = RAMPS.marble.hex[3];
+    // The two shafts.
+    for (let i = 1; i < S - 1; i++) {
+      put(c, i);
+      put(i, c);
+    }
+    // Four heads, each a two-step barb. Nothing at the very tip but the shaft,
+    // so the arrow reads as pointed rather than as a blob.
+    for (let k = 1; k <= 2; k++) {
+      put(c - k, k); // north
+      put(c + k, k);
+      put(c - k, S - 1 - k); // south
+      put(c + k, S - 1 - k);
+      put(k, c - k); // west
+      put(k, c + k);
+      put(S - 1 - k, c - k); // east
+      put(S - 1 - k, c + k);
+    }
+    cv.classList.add('pixels');
+    cv.style.width = `calc(${S} * var(--u))`;
+    cv.style.height = `calc(${S} * var(--u))`;
+    cv.style.verticalAlign = 'middle';
+    return cv;
   }
 
   /**
@@ -1871,6 +1864,7 @@ export function createUI(opts = {}) {
   const TOOL_SAID = {
     place: 'Placing',
     ask: 'Asking. Click anything.',
+    move: 'Moving the map. Click to centre, or drag.',
     raze: 'Clearing',
     raise: 'Raising the land',
     lower: 'Lowering the land',
@@ -1884,9 +1878,17 @@ export function createUI(opts = {}) {
    */
   function selectTool(t) {
     const next =
-      t === 'place' || t === 'raze' || t === 'ask' || TERRAIN_TOOL_IDS.includes(t) ? t : 'place';
+      t === 'place' || t === 'raze' || t === 'ask' || t === 'move' || TERRAIN_TOOL_IDS.includes(t)
+        ? t
+        : 'place';
     S.tool = next;
-    if (next !== 'place') S.selectedId = null;
+    // Every other tool takes what you were holding out of your hand, because
+    // "what does a click do" must have one answer. MOVE is the exception, and
+    // deliberately: it exists so that you can shove the map about WITHOUT
+    // putting your plant down, which was the thing the drag-to-pan gesture
+    // could never offer. Its ghost is suppressed below, so nothing pretends it
+    // is about to be planted.
+    if (next !== 'place' && next !== 'move') S.selectedId = null;
     setGhost(null);
     syncPressed();
     showInfo(null);
@@ -1904,6 +1906,15 @@ export function createUI(opts = {}) {
     btnRaze.classList.toggle('is-on', S.tool === 'raze');
     btnAsk.setAttribute('aria-pressed', String(S.tool === 'ask'));
     btnAsk.classList.toggle('is-on', S.tool === 'ask');
+    btnMove.setAttribute('aria-pressed', String(S.tool === 'move'));
+    btnMove.classList.toggle('is-on', S.tool === 'move');
+    // The pointer itself says which of the two "answer me instead of the
+    // garden" tools is up. Cheap, and it is the only feedback a player gets
+    // once their eyes have left the toolbar.
+    if (app) {
+      app.classList.toggle('is-moving', S.tool === 'move');
+      app.classList.toggle('is-asking', S.tool === 'ask');
+    }
     btnField.setAttribute('aria-pressed', String(S.overlay != null));
     btnField.classList.toggle('is-on', S.overlay != null);
     btnJournal.classList.toggle('is-on', S.journal);
@@ -2483,6 +2494,11 @@ export function createUI(opts = {}) {
    * under the placeable's own art; `drawGhost` below is only for preview mode.
    */
   function setGhost(g) {
+    // No ghost while moving or asking. Both keep whatever is selected — move so
+    // you do not have to put your plant down to cross the map, ask so you do
+    // not lose your place — but a ghost hovering under a cursor that will not
+    // plant is a promise the click does not keep.
+    if (S.tool === 'move' || S.tool === 'ask') g = null;
     const next = g && g.tx != null ? { w: 1, h: 1, legal: true, ...g } : null;
     const before = S.ghost;
     S.ghost = next;
@@ -2532,9 +2548,6 @@ export function createUI(opts = {}) {
   function update(a, b) {
     if (typeof a === 'number') {
       const g = b || game;
-      // The move pad, every frame and before the quarter-second work below —
-      // panning must be smooth, and the journal refresh must not be.
-      panStep(a);
       S.cardClock += a;
       // Four times a second is plenty for a journal; the ladder does not move
       // faster than the player can read.

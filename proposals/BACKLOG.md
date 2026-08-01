@@ -232,18 +232,16 @@ are the edges left showing.
 - The rebuild is 3600 `fillRect`s on any ground/grass change. Fine at 60×60;
   it is the thing to watch if the map grows.
 
-**The move pad**
+**The move tool**
 
-- **The game does not fit a phone in portrait.** `pickScale` floors to integers
-  and clamps to a minimum of 1, so on a 390 px-wide screen the canvas is 640 CSS
-  px and overflows. Landscape is close (400 logical vs 390). The pad makes a big
-  map navigable *once you can see it* — it does not make the game fit, and no
-  amount of pad work will. Fixing it means either a non-integer scale (against
-  the law, and it would smear the pixel art) or a smaller logical screen.
-- **No diagonal panning**, and no two-finger drag. Holding two buttons does not
-  combine; the last press wins.
-- The 0.1 s `dt` clamp inside `panStep` means panning slows below 10 fps. That is
-  a stall guard and probably right, but it has never been felt.
+- **Never used on an actual touch screen.** Click-to-centre and drag-to-pan are
+  both verified with synthetic pointer events, which is not the same as a thumb.
+  The `DRAG_SLOP` of 3 logical px is the number most likely to be wrong for a
+  real hand; it was chosen because the rest of `input.js` already uses it.
+- **No pinch, no two-finger pan, no momentum.** A drag stops dead when the
+  finger lifts. Momentum is the single thing that would make a 60×60 map feel
+  good to cross on a phone, and it is not there.
+- **It has no chip in the grid**, only the topbar button and `X`. Same as `?`.
 
 **The `?`**
 
@@ -265,6 +263,51 @@ are the edges left showing.
   into conflict silently.
 - Nothing backdates the planting, so the proving ground opens on a field of
   sprouts — unlike the opening glade, which is deliberately old. Worth copying.
+
+## 4i · MOBILE MODE — the owner's plan, not yet started (2026-08-01)
+
+**Owner's words: "my plan is to have a mobile mode on the title screen. Same
+game just different. That's kind of low on the priority list, but it should be on
+our todo."** Recorded here so it survives the session that heard it.
+
+It is **low priority and deliberately so** — do not start it because it is
+written down. But when it is started, this is the ground it has to stand on:
+
+**The problem it exists to solve.** The game does not fit a phone in portrait.
+`pickScale` floors to an integer and clamps to a minimum of 1, so on a 390 px
+screen the canvas is 640 CSS px and overflows the viewport. Landscape is *close*
+(400 logical against 390 available) and still short. This is not a control
+problem — the move tool makes a big map navigable *once you can see it* — it is a
+geometry problem, and no amount of control work touches it.
+
+**The two ways out, and why neither is free:**
+
+1. **A non-integer scale.** One line, and it breaks the founding law: SPEC §2's
+   integer scaling is what keeps the pixel art crisp. A 0.61× canvas is a smeared
+   canvas. Off the table unless the owner reverses that law explicitly.
+2. **A smaller logical screen** — a second layout, e.g. 400 × 640 portrait, with
+   the panel as a drawer rather than a fixed 100 px strip. This is what "same
+   game just different" points at, and it is the real work.
+
+**What a mobile mode would have to own, roughly in order of nastiness:**
+
+- `LAYOUT` in ui.js is three hard-coded rectangles and `LOGICAL_W/H` are module
+  constants that `render.js`, `input.js` and `index.html` all read independently.
+  **Making the logical screen a variable is the whole job**; everything else is
+  layout taste. Grep for `640` before estimating.
+- The panel: 8 tabs × 130 placeables does not fit a phone width. A drawer that
+  slides over the map, or one category at a time.
+- The topbar's six buttons at 20 px each.
+- The minimap is 119 × 60 and would be over a third of a 400-wide screen.
+- Touch gestures the desktop build has no equivalent for: pinch, two-finger pan,
+  long-press as right-click (right-click currently means *remove*).
+- A choice on the title screen, which means the title screen needs a second
+  button and the mode needs to persist — probably `?mode=mobile` in the URL, to
+  keep the "wipe is a navigation" property that made the front door work.
+
+**The honest sequencing note:** the title screen already has the New Game / save
+screen work queued in §4e. Mobile mode adds a third thing to that screen. Doing
+§4e first and mobile mode second means designing the menu once.
 
 ## 5 · Housekeeping
 
@@ -298,7 +341,8 @@ possible · `docs/TITLE-AND-CONTROLS.md` · 290 tests.
 
 Then, 2026-08-01: **knowing where you are, and asking** — the minimap (diamond,
 one pixel per tile, blinking creatures, square camera border, click to jump),
-the move pad, the `?` help cursor, and `?garden=all`, the ladder-derived proving
-ground with all four species welcome. Plus the third and final recital bug: the
+the move tool (`X` — click to centre, drag to pan, never places), the `?` help
+cursor, and `?garden=all`, the ladder-derived proving ground with all four
+species welcome. Plus the third and final recital bug: the
 score now starts on the same statement that raises the pipes, instead of on his
 arrival · 302 tests.
