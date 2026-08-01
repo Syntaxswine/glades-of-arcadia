@@ -29,7 +29,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TILE_W, TILE_H, CUBE_H, WANT, RUN_MIN, GROUND_ELLIPSE,
+  TILE_W, TILE_H, CUBE_H, WANT, RUN_MIN, GROUND_ELLIPSE, curveAllowance,
   project, groundDiamond, boxHull, nearEdgeProfile,
   baseProfile, baseLift, flatRuns, groundRuns, measure, measurable,
 } from '../tools/isogeom.mjs';
@@ -299,4 +299,70 @@ test('ROTATIONAL forms are not convicted of being symmetric', () => {
   const q = measure(col.s);
   assert.ok(q.mirror > 0.8, 'COLUMN stopped being symmetric — check the sprite, not the tool');
   assert.equal(q.ok, true, `COLUMN measured lift ${q.lift}: a cylinder foot must pass`);
+});
+
+// ---------------------------------------------------------------------------
+// The allowance, checked against the shape itself rather than against algebra.
+//
+// The first derivation of `curveAllowance` was WRONG — it solved for the row
+// where the curve holds within half a pixel of its lowest point, when the
+// binding case is the widest row that SURVIVES once the true bottom row rounds
+// away. It under-predicted every wide case, and three correctly-shadowed
+// sprites failed by two or three pixels looking exactly like art faults.
+//
+// So this test does not restate the formula. It DRAWS the ellipse, the same
+// way js/art/*.js `skirt` draws it, measures the flat span of its own bottom
+// contour, and requires the allowance to cover it. An algebra error cannot
+// survive that, because the algebra is not consulted.
+// ---------------------------------------------------------------------------
+
+/** The widest level run in the bottom contour of an ideal 2:1 ground ellipse. */
+function ellipseFlat(r, halfPixel) {
+  const ry = r / 2;
+  const cx = 40 + (halfPixel ? 0.5 : 0);
+  const cy = 60;
+  const low = new Map();
+  for (let y = Math.round(cy - ry); y <= Math.round(cy + ry); y++) {
+    for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
+      const nx = (x - cx) / r;
+      const ny = (y - cy) / ry;
+      if (nx * nx + ny * ny <= 1) low.set(x, Math.max(low.get(x) ?? -1, y));
+    }
+  }
+  const xs = [...low.keys()].sort((a, b) => a - b);
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < xs.length; i++) {
+    run = low.get(xs[i]) === low.get(xs[i - 1]) && xs[i] === xs[i - 1] + 1 ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
+test('the allowance covers what a correct ground ellipse actually does', () => {
+  const short = [];
+  for (let r = 6; r <= 48; r++) {
+    for (const halfPixel of [false, true]) {
+      const flat = ellipseFlat(r, halfPixel);
+      const allowed = curveAllowance(r);
+      if (flat > allowed) short.push(`r=${r}${halfPixel ? '.5' : ''}: draws ${flat}, allows ${allowed}`);
+    }
+  }
+  assert.deepEqual(
+    short,
+    [],
+    'The allowance is under the flat span a correctly drawn shadow of that size ' +
+      'produces, so correct art will be convicted. This is the exact error the ' +
+      'first derivation made.'
+  );
+});
+
+test('the allowance is not so generous that a slab walks through it', () => {
+  // An upper bound is only useful if it is still a bound. A 64px level edge —
+  // a tile's whole width — must be caught at every plausible contact size.
+  for (let r = 6; r <= 48; r++) {
+    assert.ok(curveAllowance(r) < 64, `r=${r} allows ${curveAllowance(r)}, which lets a full tile edge pass`);
+  }
+  // ...and the run length that matters most: half a tile.
+  assert.ok(curveAllowance(16) < 32, 'a 32px edge on a 32px-wide contact must still be a fault');
 });

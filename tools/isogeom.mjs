@@ -272,27 +272,48 @@ export const RUN_MIN = 12;
 /**
  * ...AND THE ALLOWANCE, WHICH SCALES, because a correct curve is flat too.
  *
- * A circle of radius r lying in the ground plane projects to an ellipse with
- * ry = r/2. Its lowest row holds within half a pixel while
- *
- *     ry * (1 - sqrt(1 - nx^2)) < 0.5     ~    ry * nx^2 / 2 < 0.5
- *
- * so |nx| < 1/sqrt(ry), and the flat spot spans 2*r/sqrt(ry) = 2*sqrt(2r)
- * columns. Thirteen pixels for a 22-radius shadow; eighteen for a 42. THOSE
- * ARE NOT FAULTS — they are what a correctly drawn circle looks like on this
- * grid, and a fixed threshold convicts every large ground contact in the game
+ * A circle of radius r in the ground plane is an ellipse with ry = r/2, and on
+ * an integer grid its bottom is FLAT for a stretch. That stretch is what an
+ * audit has to allow, or it convicts every large ground contact in the game
  * for being round.
  *
- * The half-pixel of slack on top is for rounding: `put` snaps to integers, and
- * an ellipse centred on a half-pixel can land one column either way.
+ * ---------------------------------------------------------------------------
+ * THE FIRST DERIVATION WAS WRONG AND THE MEASUREMENT IS WHY WE KNOW.
  *
- * This is the third time the measure had to learn that the answer depends on
- * the size of the thing being asked about. It is worth stating the rule
- * plainly: A CHECKER WHOSE THRESHOLD DOES NOT SCALE WITH ITS SUBJECT IS
- * MEASURING THE SUBJECT'S SIZE, not the property it claims to measure.
+ * It solved for the row where the curve holds within half a pixel of its
+ * lowest point — `ry*(1 - sqrt(1-nx^2)) < 0.5`, giving `2*sqrt(2r)`. That is
+ * the right answer to the wrong question. The binding case is not that row at
+ * all: when the ellipse's true bottom row ROUNDS AWAY (which it does whenever
+ * the centre sits on a half pixel, i.e. whenever `skirt` is called at
+ * `cx + 0.5`, i.e. usually), the widest surviving row is the chord at
+ * `dy = ry - 1`:
+ *
+ *     nx^2 = 1 - ((ry-1)/ry)^2  ->  width = 2r*sqrt(2ry-1)/ry  =  4*sqrt(r-1)
+ *
+ * Drawing ideal ellipses and measuring their own contours settles it, and the
+ * numbers are not close:
+ *
+ *     r     measured   2*sqrt(2r)   4*sqrt(r-1)
+ *     10       12          8.9         12.0
+ *     12       14          9.8         13.3
+ *     26       20         14.4         20.0
+ *     42       26         18.3         25.6
+ *
+ * The old formula under-predicted every wide case, which is why three
+ * correctly-shadowed sprites kept failing by two or three pixels and looked
+ * like art faults. THEY WERE ARITHMETIC FAULTS, MINE.
+ *
+ * `4*sqrt(r-1)` is an upper bound: exact where the bottom row is lost, and
+ * generous where it survives (r=15 measures 10 against an allowance of 15).
+ * Generous is the right direction for an instrument whose false positives cost
+ * an artist a day and whose false negatives cost one flat edge.
+ *
+ * A CHECKER WHOSE THRESHOLD DOES NOT SCALE WITH ITS SUBJECT IS MEASURING THE
+ * SUBJECT'S SIZE, not the property it claims to measure — and a threshold
+ * derived rather than measured is measuring the derivation.
  */
 export function curveAllowance(rBase) {
-  return Math.ceil(2 * Math.sqrt(2 * Math.max(1, rBase))) + 1;
+  return Math.ceil(4 * Math.sqrt(Math.max(1, rBase - 1)));
 }
 
 /**

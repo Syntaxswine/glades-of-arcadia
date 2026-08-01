@@ -1,53 +1,56 @@
-// iso-ground.test.mjs — no sprite may GROW a horizontal edge at ground level.
+// iso-ground.test.mjs — no sprite may have a horizontal edge at ground level.
 //
 // `tools/iso-audit.mjs --strict` promoted to an assertion, the same way
-// `tools/anchor-audit.mjs` was — but as a RATCHET rather than a clean gate,
-// because the list is eleven long and not yet zero.
+// `tools/anchor-audit.mjs` was — and, since 2026-08-01, a CLEAN GATE: the
+// offender list below is empty and the audit is in `npm run check`.
 //
 // ---------------------------------------------------------------------------
-// WHY A RATCHET, AND WHY IT FAILS IN BOTH DIRECTIONS
+// IT WAS BUILT AS A RATCHET, and the ratchet is what got the list to zero.
 //
-// A gate that cannot be turned on until the last offender is fixed protects
-// nothing in the meantime, and "meantime" is where regressions live. This one
-// fails if a passing sprite starts failing (the point), AND if a failing sprite
-// starts passing without being struck off the list (so the list cannot quietly
-// become a lie about how much is left).
+// A gate that cannot be switched on until the last offender is fixed protects
+// nothing in the meantime, and "meantime" is where regressions live. So this
+// was written with eleven names in it and made to fail in BOTH directions: if
+// a passing sprite starts failing (the point), AND if a failing sprite starts
+// passing without being struck off (so the list could never quietly become a
+// lie about how much was left). The second half is what emptied it — every fix
+// had to come here and delete a name.
 //
-// It exists because of a real one. A change that made eighteen sprites right
-// made the heroon much worse — from a 12px level edge to a 106px one, the worst
-// reading in the catalogue — and nothing in `npm test` noticed, because the
-// audit was a report you had to remember to run. The instrument found it on the
-// next manual pass. This is that pass, automated.
+// It exists because of a real regression. A change that made eighteen sprites
+// right made the heroon much worse — from a 12 px level edge to a 106 px one,
+// the worst reading in the catalogue — and nothing in `npm test` noticed,
+// because the audit was a report somebody had to remember to run.
 //
-// TO CLEAR A NAME: fix the sprite, run `node tools/iso-audit.mjs`, delete the
-// name. That is the whole ceremony, and the second test below insists on it.
+// TO ADD A NAME: a name, a reason and a plan. Not a shrug.
+// TO CLEAR ONE: fix the sprite, run the audit, delete the name.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AUDITED_MODULES, spritesIn, measure } from '../tools/isogeom.mjs';
 
 /**
- * The sprites that still end in a horizontal edge where they meet the ground,
- * as of 2026-08-01. Every one is an individual redraw, not a helper: see
- * proposals/BACKLOG.md §4j for what each of them actually needs.
+ * THE LIST IS EMPTY. Every sprite in the game meets the ground in the ground
+ * plane, and `node tools/iso-audit.mjs --strict` exits 0 — it is in
+ * `npm run check`, so this is now a gate and not a ratchet.
  *
- * It was FORTY-EIGHT. What cleared the other thirty-seven was three shared
- * helpers, not thirty-seven redraws — the contact skirt in props.js and
- * decor.js, and the hand-typed contact band in the sprite() constructor.
+ * It was FORTY-EIGHT. What closed it was four shared helpers and four sprites,
+ * not forty-eight redraws, which is the whole argument for building the census
+ * before starting the art:
+ *
+ *   props.js  skirt()          an ellipse at 3.7:1, clipped by a short grid
+ *   decor.js  skirt()          a rectangular band, three rows of solid 'm'
+ *   props.js  groundContact()  48 hand-typed 'mmmm' contact bands
+ *   props.js  pool()           EVERY pool in the game, at ratios 0.24 to 0.45
+ *                              where the ground plane allows exactly 0.5
+ *
+ *   plus: the three caves rebuilt as blocks and knolls, the ford's water
+ *   clipped to its own tile diamond, and nine decor props given the contact
+ *   shadow they never had.
+ *
+ * KEEP IT EMPTY. If something has to go in here, it is a name and a reason and
+ * a plan — not a shrug. The second test below will not let a name sit here
+ * after it has been fixed.
  */
-const KNOWN = new Set([
-  'willow-water', // the pool's own rim, cut straight across the front
-  'wall-fountain', // a front elevation — the cave family, still to do
-  'jet-basin', // the basin's lower rim
-  'rocky-ford', // the water strip's front cut
-  'fountain-tiered', // the bowl's lower rim
-  'arbour-seat', // the seat frame's feet
-  'axe-marker', // the marker's base block
-  'balustrade', // the balustrade's plinth
-  'pergola', // the post feet
-  'broken-column', // decor's, not props' — the drum lying on its side
-  'stone-bench', // the bench's two supports
-]);
+const KNOWN = new Set([]);
 
 const sprites = [];
 for (const name of AUDITED_MODULES) {

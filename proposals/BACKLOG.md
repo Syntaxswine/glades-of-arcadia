@@ -356,7 +356,7 @@ screen — so §4e went first and the menu was designed once. It shipped
 2026-08-01 (Continue / Gardens / Recover), and a mode switch is one more button
 on a panel that already knows how to swap what it offers.
 
-## 4j · THINKING IN HEXAGONS — the art faces the viewer (2026-08-01)
+## 4j · THINKING IN HEXAGONS — the art faces the viewer ✅ CLOSED (2026-08-01)
 
 The owner, looking at the sprite lab: *"there are several objects, like the cave,
 that are pointed straight at the viewer instead of in the direction of the grid
@@ -440,40 +440,50 @@ on that wall's own foot). `CAVE_MOUTH` and `GROTTO_MOUTH` use `rockKnoll()`: a
 dome springing from a 2:1 ground ellipse, returning the sill function so
 whatever is cut into it sits on that line and nothing else.
 
-### What is left — eleven sprites, each its own job
+### What is left — NOTHING. 48 down to 0.
 
-`test/iso-ground.test.mjs` is the ratchet: it fails if a passing sprite starts
-failing, AND if one of these starts passing without being struck off the list.
+`node tools/iso-audit.mjs --strict` exits 0 and is **in `npm run check`**;
+`test/iso-ground.test.mjs` is a clean gate with an empty list. Every sprite in
+the game meets the ground in the ground plane.
 
-| sprite | px | what it needs |
+**Four shared helpers and four sprites did all forty-eight**, which is the whole
+argument for building the census before starting the art:
+
+| what | where | was |
 |---|---|---|
-| `willow-water` | 42 | the pool rim, cut straight across the front |
-| `wall-fountain` | 33 | a front elevation — the cave family. Wants a wall plane |
-| `jet-basin` | 33 | the basin's lower rim drawn as a line, not an ellipse |
-| `rocky-ford` | 32 | the water strip's front cut |
-| `fountain-tiered` | 25 | the bowl's lower rim |
-| `arbour-seat` | 24 | the seat frame's feet |
-| `axe-marker` | 24 | the base block |
-| `balustrade` | 21 | the plinth |
-| `pergola` | 14 | the post feet |
-| `broken-column` (decor) | 14 | the drum lying on its side |
-| `stone-bench` | 14 | the two supports |
+| contact skirt | `props.js skirt()` | an ellipse at 3.7:1, and clipped by a grid one row too short — a clipped ellipse is a straight line |
+| contact skirt | `decor.js skirt()` | a RECTANGULAR BAND, three rows of solid `m`, under 16 props |
+| contact band | `props.js groundContact()` | 48 hand-typed `mmmm` rows, converted to a real ground ellipse at the anchor |
+| **every pool in the game** | `props.js pool()` | ratios from **0.24 to 0.45** where the ground plane allows exactly 0.5. Not one of the eight was right |
+| nine decor props | `spriteAt({ contact: r })` | no contact shadow AT ALL — which is why their square-cut feet were the lowest thing in every column |
+| the three caves | rebuilt | a block with a turf diamond and a mouth in one wall; two knolls springing from a ground ellipse |
+| the ford | clipped | water is GROUND, so it is bounded by the tile diamond, not by its bitmap |
+
+> **And the ALLOWANCE was wrong, which is the most useful thing in this
+> section.** `curveAllowance` derived the flat span of a correct ground circle
+> as `2*sqrt(2r)`, solving for the row where the curve holds within half a pixel
+> of its lowest point. The binding case is different: when the ellipse's true
+> bottom row rounds away — which it does whenever the centre sits on a half
+> pixel, i.e. usually — the widest surviving row is the chord at `dy = ry-1`,
+> which is `4*sqrt(r-1)`. Drawing ideal ellipses and measuring them settles it:
+> at r=26 the real span is 20 and the old formula said 14.4.
+>
+> Three correctly-shadowed sprites kept failing by two or three pixels and
+> looked exactly like art faults. **They were arithmetic faults, mine.**
+> `test/iso-geometry.test.mjs` now DRAWS the ellipse and measures it rather
+> than restating the algebra, because an algebra error cannot survive that.
 
 **Fault (B), the FORM facing the viewer, is closed for the caves and open for
-the arch family**: `RUINED_ARCHWAY`, `HEDGE_ARCH`, `PERGOLA_ARCH`, `EXEDRA`,
-`WALL_FOUNTAIN`. There is still no detector for it, and the obvious one
-(symmetry + horizontal major axis) is the trap the first draft fell into — it
-convicts every urn in the catalogue. Inspection, for now.
+the arch family** — `RUINED_ARCHWAY`, `HEDGE_ARCH`, `PERGOLA_ARCH`, `EXEDRA`,
+`WALL_FOUNTAIN` are still mirror-symmetric things that ought to have a front.
+There is still no detector for it and the obvious one (symmetry + horizontal
+major axis) is the trap the first draft fell into — it convicts every urn.
+Inspection, and an art wave whenever the owner wants one.
 
-**And two blind spots found on the way**, both from the same cause — a module
-list written before the module:
-
-- the sprite lab's `CANDIDATES` never included `decor.js` or `extras.js`, so
-  **47 sprites had never once appeared in it**;
-- `tools/propshot.mjs` only ever imported `PROPS`, so asking it for a decor
-  sprite printed `MISSING` as though the art did not exist.
-
-Both now read `AUDITED_MODULES`.
+**Two blind spots found on the way**, both from a module list written before the
+module: the sprite lab's `CANDIDATES` never included `decor.js` or `extras.js`
+(**47 sprites had never once appeared in it**), and `tools/propshot.mjs` printed
+`MISSING` for any decor sprite. Both read `AUDITED_MODULES` now.
 
 ## 4k · FACING — the middle wheel turns things ✅ SHIPPED (2026-08-01)
 

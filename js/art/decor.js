@@ -83,6 +83,21 @@ function sprite(name, [dx, up], rows, opts = {}) {
 
 /** Generated sprite: the grid already knows exactly where its anchor is. */
 function spriteAt(name, [ax, ay], g, opts = {}) {
+  // `contact: r` lays the standard 2:1 contact shadow down at the ANCHOR —
+  // which is the tile's centre point, and therefore exactly where the circle
+  // under an object is centred. Opt-in and stated at the call site, beside the
+  // anchor it depends on.
+  //
+  // NOT AUTOMATIC, and that is the interesting part. Nine props in this file
+  // had no contact shadow at all, which is why they were the last nine sprites
+  // the iso audit flagged: with nothing under them, the lowest thing in each
+  // column was the object's own base, cut off square by the bottom of its grid.
+  // But a blanket "give everything a shadow" would put a dark ring around every
+  // PAVING tile in the file — gravel walk, flagstone, terrace paving — and
+  // those lie IN the ground plane rather than standing on it. There is no
+  // predicate that separates the two; there is only knowing which is which,
+  // so it is written down one sprite at a time.
+  if (opts.contact) skirt(g, ax + 0.5, ay, opts.contact);
   const rows = g.map((r) => r.join(''));
   const w = Math.max(...rows.map((r) => r.length));
   return defineSprite({
@@ -427,6 +442,7 @@ function benchGrid() {
   return g;
 }
 export const STONE_BENCH = spriteAt('stone-bench', [16, 30], benchGrid(), {
+  contact: 25,
   tags: ['decor', 'furniture', 'marble', 'neoclassical', 'seat'],
 });
 
@@ -1126,6 +1142,7 @@ function arbourSeatGrid() {
   return g;
 }
 export const ARBOUR_SEAT = spriteAt('arbour-seat', [18, 46], arbourSeatGrid(), {
+  contact: 21,
   tags: ['decor', 'furniture', 'timber', 'seat', 'needs-design'],
 });
 
@@ -1310,7 +1327,10 @@ function brokenColumnGrid() {
     put(g, dx0 + i, dy0 - 5 + (i >> 2), 'A');
     put(g, dx0 + i, dy0 + 5 + (i >> 2), 'A');
   }
-  skirt(g, 14.5, base + plinthH(1), 14);
+  // ONE shadow, and it is centred on the ANCHOR rather than on the standing
+  // stump: this sprite is a broken column AND the drum fallen beside it, so
+  // the ground it touches is the whole pair. r 13 against a 26px foot.
+  skirt(g, cx + 0.5, base + plinthH(1) - 1, 13);
   return { g, cx, ay: base + plinthH(1) - 1 };
 }
 {
@@ -1410,6 +1430,7 @@ function balustradeGrid() {
   return g;
 }
 export const BALUSTRADE = spriteAt('balustrade', [10, 29], balustradeGrid(), {
+  contact: 21,
   tags: ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'],
 });
 
@@ -2019,6 +2040,7 @@ function tieredFountainGrid() {
   return g;
 }
 export const FOUNTAIN_TIERED = spriteAt('fountain-tiered', [25, 58], tieredFountainGrid(), {
+  contact: 21,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 4 },
 });
@@ -2101,6 +2123,7 @@ function wallFountainGrid() {
   return g;
 }
 export const WALL_FOUNTAIN = spriteAt('wall-fountain', [18, 50], wallFountainGrid(), {
+  contact: 17,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 5 },
 });
@@ -2134,6 +2157,7 @@ function jetBasinGrid() {
   return g;
 }
 export const JET_BASIN = spriteAt('jet-basin', [22, 32], jetBasinGrid(), {
+  contact: 21,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 4 },
 });
@@ -3474,6 +3498,7 @@ function axeMarkerGrid() {
   return g;
 }
 export const AXE_MARKER = spriteAt('axe-marker', [15, 46], axeMarkerGrid(), {
+  contact: 15,
   tags: ['sculpture', 'rock', 'archaic', 'votive', 'quiet'],
 });
 

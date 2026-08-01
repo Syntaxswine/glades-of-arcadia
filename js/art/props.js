@@ -66,7 +66,13 @@ function sprite(name, [dx, up], rows, opts = {}) {
     name,
     anchor,
     // `contact: false` for anything COMPOSED — see groundContact's warning.
-    rows: opts.contact === false ? padded : groundContact(padded, anchor),
+    // `contact: <number>` for a hand-authored sprite that never had a contact
+    // band to convert: the radius is stated at the call site and the ellipse
+    // is laid down at the anchor, exactly as decor.js `spriteAt` does it.
+    rows:
+      opts.contact === false
+        ? padded
+        : groundContact(padded, anchor, typeof opts.contact === 'number' ? opts.contact : 0),
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
@@ -114,7 +120,7 @@ function sprite(name, [dx, up], rows, opts = {}) {
  * here the honest signal is not in the pixels at all — it is which constructor
  * the author used.
  */
-function groundContact(rows, [ax, ay]) {
+function groundContact(rows, [ax, ay], explicitR = 0) {
   const w = rows[0].length;
   const isBand = (r) => /^[.m]*$/.test(r) && r.includes('m');
 
@@ -126,9 +132,13 @@ function groundContact(rows, [ax, ay]) {
     x0 = Math.min(x0, rows[cut].indexOf('m'));
     x1 = Math.max(x1, rows[cut].lastIndexOf('m'));
   }
-  if (cut === rows.length || cut === 0) return rows; // no band, or all band
+  // An explicit radius means "this sprite never had a band to convert, give it
+  // the shadow it has been missing" — so there is nothing to strip and the
+  // whole sprite is kept.
+  if (explicitR > 0) cut = rows.length;
+  else if (cut === rows.length || cut === 0) return rows; // no band, or all band
 
-  const r = Math.max(6, (x1 - x0 + 1) / 2);
+  const r = explicitR > 0 ? explicitR : Math.max(6, (x1 - x0 + 1) / 2);
   const ry = r * GROUND_ELLIPSE;
   const g = rows.slice(0, cut).map((s) => s.split(''));
   while (g.length <= Math.round(ay + ry)) g.push(new Array(w).fill('.'));
@@ -787,7 +797,13 @@ export const PERGOLA = sprite(
     '.mmmm..............mmmm.....',
     '..mm................mm......',
   ],
-  { tags: ['structure', 'timber', 'satyr', 'shade', 'seclusion'] }
+  {
+    tags: ['structure', 'timber', 'satyr', 'shade', 'seclusion'],
+    // Four posts standing on the turf, and nothing under them: it was the last
+    // hand-authored sprite in the file with no contact shadow at all, which is
+    // why its square-cut feet were the lowest thing in every column.
+    contact: 12,
+  }
 );
 
 /**
@@ -1331,13 +1347,29 @@ function skirt(g, cx, cy, r) {
  * it, lighter toward the viewer, with dithered 'K' glints — SPEC 3 allows the
  * checkerboard only on areas over ~24px, which every pool here is.
  * `rim` draws a stone lip; pass null for water that just meets the grass.
+ *
+ * A POOL IS A BODY OF WATER LYING IN THE GROUND PLANE, so its depth on screen
+ * is not the caller's to choose: `ry = r * GROUND_ELLIPSE`, exactly as for the
+ * contact shadow. This used to take an explicit `ry` and ALL EIGHT call sites
+ * passed something flatter than the ground allows — ratios from 0.24 to 0.45,
+ * not one of them 0.5. A 4:1 "ellipse" is a circle seen from a shallower angle
+ * than this game's camera; it reads as a decal, and its lowest rows are level
+ * for long enough to be a horizontal edge. `willow-water` was the one the audit
+ * caught (42 px of it) but every pool in the game had the same geometry.
+ *
+ * It makes room for itself for the same reason `skirt` does: `put` drops
+ * anything past the last row, and a clipped ellipse is a straight line.
  */
-function pool(g, cx, cy, rx, ry, opt = {}) {
+function pool(g, cx, cy, r, opt = {}) {
+  const rx = r;
+  const ry = r * GROUND_ELLIPSE;
   const rimRamp = opt.rim === null ? null : opt.rim || STONE;
   const rw = opt.rimW === undefined ? 3 : opt.rimW;
   const seed = opt.seed || 0;
   const wob = opt.wobble === undefined ? 0.06 : opt.wobble;
   const glint = opt.glint === undefined ? 0.6 : opt.glint;
+  const need = Math.ceil(cy + ry + rw + 3);
+  while (g.length < need) g.push(new Array(g[0].length).fill('.'));
   for (let y = Math.floor(cy - ry - rw - 2); y <= Math.ceil(cy + ry + rw + 2); y++) {
     for (let x = Math.floor(cx - rx - rw - 2); x <= Math.ceil(cx + rx + rw + 2); x++) {
       const nx = (x - cx) / rx;
@@ -1513,7 +1545,7 @@ export const APPLE_TREE = (() => {
  *  nearly to the waterline and hang in a continuous curtain. */
 export const WILLOW_WATER = (() => {
   const g = G(84, 92);
-  pool(g, 42, 80, 40, 10, { rim: null, seed: 1.2, wobble: 0.1 });
+  pool(g, 42, 80, 40, { rim: null, seed: 1.2, wobble: 0.1 });
   bough(g, 34, 80, 29, 44, 12, 7);
   bough(g, 29, 48, 17, 36, 5, 2);
   bough(g, 29, 47, 48, 33, 5, 2);
@@ -1901,7 +1933,7 @@ export const SPRING_BASIN = (() => {
     }
   }
   // The basin: dressed marble, a shallow bowl, water to the brim.
-  pool(g, 28, 44, 19, 6, { rim: 'ABCD', rimW: 5, wobble: 0.02, glint: 0.5 });
+  pool(g, 28, 44, 19, { rim: 'ABCD', rimW: 5, wobble: 0.02, glint: 0.5 });
   for (let x = 10; x < 47; x++) {
     const t = (x - 10) / 36;
     put(g, x, 50 + Math.round(Math.sin(t * Math.PI) * 3), 'B');
@@ -2005,7 +2037,7 @@ export const VOTIVE_SHELF = (() => {
  *  a reed bed is a patch of tall grass. */
 export const REED_BED = (() => {
   const g = G(60, 50);
-  pool(g, 30, 42, 27, 7, { rim: null, seed: 2.2, wobble: 0.12 });
+  pool(g, 30, 42, 27, { rim: null, seed: 2.2, wobble: 0.12 });
   for (let i = 0; i < 44; i++) {
     const bx = 4 + Math.round(nz(i, 1) * 52);
     const by = 38 + Math.round(nz(i, 2) * 6);
@@ -2090,7 +2122,7 @@ export const LILY_BED = (() => {
  *  regular kerb — the unicorn asks for order as much as for water. */
 export const STILL_POOL = (() => {
   const g = G(68, 40);
-  pool(g, 34, 20, 27, 12, { rim: 'ABCD', rimW: 4, wobble: 0.015, glint: 0.94 });
+  pool(g, 34, 20, 27, { rim: 'ABCD', rimW: 4, wobble: 0.015, glint: 0.94 });
   // A single soft reflection band across the near half instead of glitter.
   for (let y = 22; y < 29; y++) {
     for (let x = 12; x < 56; x++) {
@@ -2472,7 +2504,7 @@ export const UNBASINED_SPRING = (() => {
     put(g, 31 + w + 1, y, 'G');
   }
   // The plunge itself: an irregular hollow worn in bare rock, no masonry.
-  pool(g, 31, 32, 17, 7, { rim: STONE, rimW: 5, seed: 4.4, wobble: 0.22, glint: 0.48 });
+  pool(g, 31, 32, 17, { rim: STONE, rimW: 5, seed: 4.4, wobble: 0.22, glint: 0.48 });
   // Outflow over the near lip — a spring with no outlet is standing water.
   for (let y = 40; y < 47; y++) {
     const w = 1 + Math.round((y - 40) / 3);
@@ -2527,28 +2559,52 @@ export const MOSSY_TRUNK = (() => {
  *  the water broken white around them, and a worn approach on both banks. */
 export const ROCKY_FORD = (() => {
   const g = G(70, 40);
+  const CX = 34;
+  const CY = 20; // the anchor: the tile's centre point
+  /**
+   * WATER IS GROUND, so it is bounded by the GROUND DIAMOND and not by the
+   * edges of its bitmap. The channel used to run from row 2 to row 35 and stop
+   * there, which cut it off across a straight line 32 px wide — a horizontal
+   * edge at ground level, in a world that has none.
+   *
+   * A stream crossing a tile leaves that tile at the tile's own boundary. This
+   * is that boundary: |dx|/32 + |dy|/16 <= 1, the diamond, stated as the
+   * integer inequality |dx|/2 + |dy| <= 16.
+   *
+   * The BOULDERS are drawn after this and are deliberately NOT clipped: they
+   * stand up out of the water, and a thing with height is allowed above the
+   * ground plane. That distinction is the whole reason this is a clip on the
+   * water rather than on the sprite.
+   */
+  const onTile = (x, y) => Math.abs(x - CX) / 2 + Math.abs(y - CY) <= 16;
+  const wet = (x, y, k) => {
+    if (onTile(x, y)) put(g, x, y, k);
+  };
   // The channel, running along the -ty axis so it crosses the +tx run.
-  for (let y = 2; y < 36; y++) {
-    const mid = 34 + (y - 18) * 0.9;
+  for (let y = 2; y < 38; y++) {
+    const mid = CX + (y - 18) * 0.9;
     const half = 15 - Math.abs(y - 18) * 0.18;
     for (let x = Math.round(mid - half); x <= Math.round(mid + half); x++) {
       const d = Math.abs(x - mid) / half;
       let i = 2 + Math.round((1 - d) * 1.6);
       if (((x + y) & 1) === 0 && nz(x * 1.4, y) > 0.55) i += 1;
-      put(g, x, y, 'FGHIJK'[Math.max(0, Math.min(5, i))]);
+      wet(x, y, 'FGHIJK'[Math.max(0, Math.min(5, i))]);
     }
     for (const s of [-1, 1]) {
       const x = Math.round(mid + s * half) + s;
-      for (let k = 0; k < 3; k++) put(g, x + s * k, y, k === 0 ? 'x' : nz(x, y) > 0.5 ? 'w' : 'v');
+      for (let k = 0; k < 3; k++) wet(x + s * k, y, k === 0 ? 'x' : nz(x, y) > 0.5 ? 'w' : 'v');
     }
   }
   // The crossing stones, in a line along +tx, with broken water on the
   // upstream side of each.
   for (const [sx, sy, r] of [[16, 12, 5], [27, 17, 6], [39, 22, 5], [50, 27, 6], [60, 32, 4]]) {
     boulder(g, sx, sy, r, r * 0.62, STONE, { seed: sx, lift: 1 });
+    // The broken water upstream and down. Clipped like the channel — it is
+    // water, and water is ground: unclipped it left blue dashes lying out on
+    // the grass beyond the ford, which read as litter rather than as spray.
     for (let k = -r; k <= r; k++) {
-      if (nz(sx + k, sy) > 0.4) put(g, sx + k, sy - Math.round(r * 0.62) - 1, 'K');
-      if (nz(sx + k, sy + 3) > 0.55) put(g, sx + k + 1, sy + Math.round(r * 0.62) + 1, 'J');
+      if (nz(sx + k, sy) > 0.4) wet(sx + k, sy - Math.round(r * 0.62) - 1, 'K');
+      if (nz(sx + k, sy + 3) > 0.55) wet(sx + k + 1, sy + Math.round(r * 0.62) + 1, 'J');
     }
   }
   return composed('rocky-ford', g, [34, 20], {
@@ -2617,7 +2673,7 @@ export const MEADOW_RUN = (() => {
  */
 export const LILY_POOL = (() => {
   const g = G(70, 44);
-  pool(g, 35, 22, 30, 13, { rim: STONE, rimW: 3, seed: 3.3, wobble: 0.09, glint: 0.72 });
+  pool(g, 35, 22, 30, { rim: STONE, rimW: 3, seed: 3.3, wobble: 0.09, glint: 0.72 });
   const pads = [[20, 16, 7], [31, 12, 6], [44, 17, 7], [26, 24, 8], [41, 27, 6], [52, 23, 5], [15, 25, 5], [35, 20, 5], [48, 12, 5]];
   for (const [px, py, r] of pads) {
     for (let y = py - Math.round(r * 0.5); y <= py + Math.round(r * 0.5); y++) {
@@ -2774,7 +2830,7 @@ export const FERN_GROTTO = (() => {
   for (const sx of [24, 33, 44]) {
     for (let y = 27; y < 44; y++) if (nz(sx, y) > 0.35) put(g, sx + Math.round(Math.sin(y * 0.4)), y, y > 40 ? 'H' : 'G');
   }
-  pool(g, 35, 46, 17, 4, { rim: null, wobble: 0.2, glint: 0.75 });
+  pool(g, 35, 46, 17, { rim: null, wobble: 0.2, glint: 0.75 });
   // Ferns. A frond is a TAPERING SPINE with pinnae stepping off it — draw it
   // as a leaf-shaped blob and it is a shrub.
   const fronds = [[12, 44, 1, 16], [19, 47, 1, 20], [27, 49, -1, 18], [44, 49, 1, 17], [52, 46, -1, 21], [58, 43, -1, 15], [35, 50, 1, 13], [8, 40, 1, 13]];
@@ -2828,7 +2884,7 @@ export const WATERING_PLACE = (() => {
     put(g, 37 - half, y, y < 21 ? 'u' : 'q');
     put(g, 37 + half, y, y < 21 ? 't' : 'q');
   }
-  pool(g, 37, 21, 22, 10, { rim: 'qrst', rimW: 3, wobble: 0.03, glint: 0.66 });
+  pool(g, 37, 21, 22, { rim: 'qrst', rimW: 3, wobble: 0.03, glint: 0.66 });
   // A cut kerb along the far edge — one dressed edge is all it takes to say
   // tended, and it is the only marble in the object.
   // Take one drew this as a straight bright bar and it floated over the pond

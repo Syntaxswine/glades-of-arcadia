@@ -13,7 +13,7 @@
     "test": "node --test \"test/*.test.mjs\"",
     "playtest": "node tools/playtest.mjs",
     "build": "node tools/build.mjs",
-    "check": "npm run test && npm run playtest && npm run build"
+    "check": "npm run test && npm run playtest && node tools/iso-audit.mjs --strict && npm run build"
   },
   "//": "No dependencies, and there will not be any. SPEC §1: Node built-ins only, and only in tools/ and test/. The game itself needs no build step to run — tools/build.mjs exists to emit a single-file dist, not to make the source work."
 }
