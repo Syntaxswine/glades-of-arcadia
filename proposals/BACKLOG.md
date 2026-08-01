@@ -309,6 +309,125 @@ geometry problem, and no amount of control work touches it.
 screen work queued in §4e. Mobile mode adds a third thing to that screen. Doing
 §4e first and mobile mode second means designing the menu once.
 
+## 4j · THINKING IN HEXAGONS — the art faces the viewer (2026-08-01)
+
+The owner, looking at the sprite lab: *"there are several objects, like the cave,
+that are pointed straight at the viewer instead of in the direction of the grid
+like they are occupying 3D space"* — and *"do you think you would benefit from
+thinking in hexagons instead of squares since you are working in isometric
+space?"*
+
+**Yes, and the sprite lab is why it was never caught.** The lab draws a square
+pixel grid and a rectangular bounds box. Both are the coordinate system of the
+FILE. Neither is the coordinate system of the WORLD, so a sprite can sit
+perfectly inside the lab's grid and point at nothing the map contains.
+
+### The geometry, so it only has to be argued once
+
+In a 2:1 isometric projection there are exactly **three visible planes**: the
+ground (a 2:1 diamond), the SE-facing wall, and the SW-facing wall. So there are
+exactly **three straight-line families**: rising 1-in-2, falling 1-in-2, and
+vertical. A long horizontal run is not one of them — it is the signature of a
+front elevation pasted into a world that has no front.
+
+And the silhouette of a unit cube in this projection is a **hexagon**, which is
+the owner's word and the right envelope to draw inside. The exception is real and
+must not be forgotten: **rotational forms** (column, urn, boulder, trunk) look
+the same from every side and *should* be bilaterally symmetric on screen.
+
+### Two different faults, and only one is measured so far
+
+**(A) The base ends in a flat edge.** `tools/iso-audit.mjs`, new. Measures how
+far the bottom silhouette rises from its lowest point toward its corners, over
+the sprite's width. A round foot or a square foot lying in the grid both lift by
+about W/4; a slab drawn on the screen plane lifts by nothing.
+
+```
+node tools/iso-audit.mjs [--all] [--strict]
+```
+
+**32 of 103 sprites end in a flat edge** (lift < 0.125). Worst first:
+`ROCKY_FORD`, `EXEDRA`, `RUINED_ARCHWAY`, `WALL_FOUNTAIN` all measure **0.00** —
+a perfectly horizontal bottom edge. Then `FALLEN_LOG`, `MOSSY_TRUNK`, `BRIDGE`,
+`AXE_MARKER`, `BROKEN_COLUMN_FLUTED`, `HEROON`, `ALTAR`, `BENCH`, `FERN_GROTTO`,
+and the whole hedge/wall family (`CYPRESS_SCREEN`, `CLIPPED_HEDGE`,
+`DRYSTONE_WALL`, `HEDGE_ARCH`, `TALL_HEDGE`) at 0.05.
+
+> **The tool was rebuilt once before it was trusted.** The first version scored
+> four things at once and ranked `COLUMN` the fourth-worst sprite in the game — a
+> column is a cylinder, it is *supposed* to be symmetric with a wide flat waist,
+> and three of the four measures were punishing it for being drawn correctly. One
+> measure votes now; the other three are printed for the reader. A checker whose
+> resolution cannot support its question returns noise shaped like an answer.
+
+**(B) The FORM faces the viewer** — the fault the owner actually pointed at, and
+**it is not yet measured.** The cave mouth's opening is an ellipse with a
+horizontal major axis, mirror-symmetric about the vertical. It should be sheared
+onto one of the two wall planes, so the hole reads as going *into* a hillside
+that has a direction. Same family, by inspection rather than by instrument:
+`CAVE_MOUTH`, `GROTTO_MOUTH`, `CLIFF_CAVE_MOUTH`, `CAVE_MOUTH_WOODED`,
+`RUINED_ARCHWAY`, `HEDGE_ARCH`, `PERGOLA_ARCH`, `WALL_FOUNTAIN`, `EXEDRA`.
+
+A detector for (B) is worth having but was NOT attempted, because the obvious
+one (symmetry + horizontal major axis) is the same trap the first draft of the
+tool fell into: it convicts every urn in the catalogue.
+
+### What is NOT done
+
+- **No sprite has been redrawn.** This is a census and an instrument, nothing
+  more. The redraw is an art wave and wants the owner's steer on scope.
+- **The sprite lab has no hexagon overlay.** It should be able to draw: the iso
+  cube hexagon for the sprite's footprint, a 2:1 diagonal guide grid, and the
+  ground diamond the base has to meet. That is the change that stops this
+  recurring, and it is smaller than the redraw.
+- `iso-audit --strict` is **not** wired into the test suite or the playtest,
+  deliberately: 32 known offenders means it would fail on day one. Wire it when
+  the list is short, exactly as `anchor-audit` was.
+
+## 4k · FACING — the middle wheel should turn things (2026-08-01)
+
+Owner: *"there are a few tiles that you should be able to alter the direction on.
+Currently the middle scroll wheel scrolls up and down the map, I think it would
+be better suited to pick between what direction an object faces in space."*
+
+Right on both halves — the wheel is barely earning its keep as a pan (there are
+now four other ways to pan) and rotation is the thing an isometric builder
+always binds. This is the natural **sequel to §4j**: it is only worth building
+once sprites have a direction to be turned to.
+
+**The economics are better than they look.** In 2:1 iso, a horizontal flip turns
+an NE-facing wall into an NW-facing one *exactly* — the projection is symmetric
+about the vertical. So:
+
+| drawings | facings |
+|---|---|
+| 1 | 2 (itself + its mirror) |
+| 2 | 4 (all of them) |
+
+**Four facings cost two drawings, not four.** The renderer already has variant
+resolvers (`palette.variant`, the ghost's desaturation) so a mirrored raster is
+a cache key, not a new sprite.
+
+What it would touch, roughly in order of nastiness:
+
+- **The save.** `facing` becomes a per-object field, and `SAVE_VERSION` bumps.
+  Every existing garden must load with facing 0 and look exactly as it does
+  today — this is the part that must not be got wrong.
+- `world.place()` and the undo stack carry it.
+- The ghost previews the facing you are about to place at, or the wheel teaches
+  nothing.
+- `render.js` picks the raster: `art + facing` as the cache key, with the
+  mirror derived rather than stored.
+- **Which placeables are rotatable at all** is a catalogue field, not a global.
+  A boulder has no facing; a bench, a wall, a cave and an exedra do. Roughly the
+  same list as §4j(B), which is not a coincidence.
+- The wheel binding itself is four lines in `input.js` — and the pan it replaces
+  should probably survive on `Shift`+wheel rather than vanish.
+
+**Sequencing:** §4j(B) first (give things a front), then this (let the player
+turn it). Building the facing system over sprites that all face the viewer would
+be a rotation control that visibly does nothing.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
