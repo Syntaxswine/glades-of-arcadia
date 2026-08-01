@@ -27,10 +27,21 @@
 // Constants
 // ---------------------------------------------------------------------------
 
+// THE MAP SIZE COMES FROM iso.js AND FROM NOWHERE ELSE.
+//
+// It used to be declared here as well, and the two copies were the real trap:
+// iso.js's pair were only ever used as default parameters inside iso.js, so
+// they were dead — main.js's were the ones the game actually ran on, and
+// editing the "obvious" declaration would have changed nothing at all.
+//
+// This is the only static import in this file. Everything else is loaded
+// defensively so a broken sibling costs you its own feature and nothing else;
+// iso.js is exempt because it is pure arithmetic with no dependencies, and a
+// game that cannot project a tile has no feature left to lose.
+import { MAP_W, MAP_H } from './iso.js';
+
 const LOGICAL_W = 640; // SPEC §2 — the backing store, exactly.
 const LOGICAL_H = 400;
-const MAP_W = 20;
-const MAP_H = 20;
 
 const SIM_HZ = 20;
 const SIM_DT = 1 / SIM_HZ; // garden seconds per simulation step
@@ -1510,8 +1521,22 @@ async function bootOnce(shell = {}) {
   if (fields && extra.fields) invoke(fields, ['hydrate'], extra.fields);
   if (bestiary && extra.creatures) invoke(bestiary, ['hydrate'], extra.creatures);
 
-  // ---- a fresh glade ------------------------------------------------------
-  if (!restored && (cat.CATALOG || []).length && has(world, ['place'])) {
+  // ---- a fresh map --------------------------------------------------------
+  //
+  // A new game starts on PLAIN NEUTRAL MEADOW, sixty tiles square, with nothing
+  // on it. The owner asked for a clean map and this is it.
+  //
+  // That is a deliberate departure from RESEARCH C§2 ("an empty canvas too
+  // early is an anti-pattern") and C§5 ("the first creature should arrive from
+  // an action you would take on turn one anyway"), which is why the opening
+  // glade is KEPT rather than deleted — `?glade=1` still plants it, the docs
+  // images were shot in it, and it is the fastest way to see a satyr arrive.
+  // If the blank map ever feels like homework, that research is the argument
+  // for putting it back, and the code is still here to do it with.
+  const wantGlade = /(?:^|[?&])glade=1(?:&|$)/.test(
+    (typeof location !== 'undefined' && location.search) || ''
+  );
+  if (wantGlade && !restored && (cat.CATALOG || []).length && has(world, ['place'])) {
     plantOpeningGlade(world, cat, rng, (mWorld && mWorld.DAY_MS) || 0);
     dirty = true;
   }

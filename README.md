@@ -123,9 +123,17 @@ Then open <http://localhost:8801/>. That is the whole setup — there is no buil
 step and nothing to install. Node 22+ for the tools; the game itself is just
 the browser.
 
-`?seed=thicket` starts a different opening glade, reproducibly, in its own save
-slot. `?new=1` starts over (your previous garden is copied aside first, because
-nothing is ever taken from you).
+The game opens on a **title screen**; New Game starts a fresh sixty-by-sixty map
+of plain meadow with nothing on it. That wipe is a NAVIGATION (`?new=1&play=1`)
+rather than a teardown, so starting over is a new document that cannot inherit
+anything from the last one — see `js/titlescreen.js` for why that matters.
+
+`?seed=thicket` starts a different map, reproducibly, in its own save slot.
+`?new=1` starts over (your previous garden is copied aside first, because
+nothing is ever taken from you). `?play=1` skips the title. **`?glade=1` plants
+the old opening glade** — the small wild hollow the game used to start you in,
+kept because the research behind it is sound and it is the fastest way to watch
+a satyr arrive.
 
 To get one file you can mail to somebody:
 
@@ -135,10 +143,27 @@ npm run build            # -> dist/index.html, ~600 KB, opens from file://
 
 ### Playing
 
-Drag to pan, or arrow keys, or push the pointer to the edge. Pick a category
-tab, pick a thing, click the map. Right-click takes it back. `Esc` cancels,
-`Ctrl+Z` undoes (64 steps). `J` opens the journal. Number keys pick categories,
-`W A S D` move a tile cursor, `Enter` places. Everything is reachable from the
+Drag to pan, or **`W A S D`**, or the **arrow keys**, or push the pointer to the
+edge. Pick a category, pick a thing, click the map. Right-click takes it back.
+`Esc` cancels, `Ctrl+Z` undoes (64 steps). `J` opens the journal.
+
+**A letter picks a category and a number picks a thing inside it.** The letter is
+printed on each tab:
+
+| | | | |
+|---|---|---|---|
+| `G` Ground | `L` Land | `Q` Water | `P` Plants |
+| `T` Trees | `C` Statuary | `H` Building | `F` Furniture |
+
+Water is `Q` rather than `W`, and Statuary `C` rather than `S`, because `W` and
+`S` pan the camera. `Q` is at least the key next to the one it wanted.
+
+Then `1`–`9` select from the category you are in — which is why they no longer
+select the category. Eight numbers could only ever reach eight of the 130
+placeables.
+
+**Hold `Shift`** with a movement key to nudge the tile cursor instead of the
+camera, and `Enter` to place at it. Everything is still reachable from the
 keyboard.
 
 **Shaping ground.** The `Land` tab holds raise, lower and level, beside the

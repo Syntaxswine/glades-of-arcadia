@@ -564,6 +564,29 @@ const GROUP_LABEL = {
   structure: 'Building',
   decor: 'Furniture',
 };
+/**
+ * THE CATEGORY KEYS — one letter each, shown as a prefix on the tab.
+ *
+ * Chosen around two sets of keys that were already spoken for:
+ *   W A S D  pan the camera (and so `Water` cannot have W, and `Statuary`
+ *            cannot have S)
+ *   R B J    cycle terrain tools / raze / journal
+ *
+ * So Water takes Q, which is at least the key next to the W it wanted, and
+ * Statuary and Building take C and H. Every one of them is DRAWN on its tab —
+ * a mnemonic nobody can see is not a mnemonic.
+ */
+const GROUP_KEY = {
+  ground: 'G',
+  terrain: 'L',
+  water: 'Q',
+  plants: 'P',
+  trees: 'T',
+  sculpture: 'C',
+  structure: 'H',
+  decor: 'F',
+};
+
 const GROUP_SWATCH = {
   ground: RAMPS.earth.hex[2],
   terrain: RAMPS.rock.hex[2],
@@ -1140,13 +1163,18 @@ export function createUI(opts = {}) {
     const gs = groups();
     if (S.group == null || !gs.includes(S.group)) S.group = gs[0] || null;
     gs.forEach((g, i) => {
-      const t = btn('tab', GROUP_LABEL[g] || cap(g), () => selectGroup(g));
+      const label = GROUP_LABEL[g] || cap(g);
+      const key = GROUP_KEY[g] || '';
+      const t = btn('tab', key ? `${key} ${label}` : label, () => selectGroup(g));
+      if (key) t.dataset.key = key;
       t.setAttribute('role', 'tab');
       t.setAttribute('aria-controls', 'arcadia-grid');
       t.setAttribute('aria-selected', String(g === S.group));
       t.tabIndex = g === S.group ? 0 : -1;
       t.dataset.group = g;
-      t.title = `${GROUP_LABEL[g] || cap(g)} (${i + 1})`;
+      t.title = key
+        ? `${label} — press ${key}. Then 1-9 for the things in it.`
+        : `${label} (${i + 1})`;
       t.addEventListener('keydown', (ev) => {
         const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
         if (!d) return;
@@ -1552,6 +1580,42 @@ export function createUI(opts = {}) {
     if (i < 0 || i >= gs.length) return;
     selectGroup(gs[i]);
     announce(GROUP_LABEL[gs[i]] || cap(gs[i]));
+  }
+
+  /** Pick a category by its letter. Unknown letters are ignored. */
+  function selectGroupByKey(ch) {
+    const want = String(ch || '').toUpperCase();
+    if (!want) return false;
+    for (const g of groups()) {
+      if ((GROUP_KEY[g] || '') === want) {
+        selectGroup(g);
+        announce(GROUP_LABEL[g] || cap(g));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Pick the Nth thing in the CURRENT category — what the number keys do now.
+   *
+   * They used to pick the category itself, which capped the keyboard at eight
+   * things and left the other 122 reachable only by pointer. Categories moved
+   * to letters so the numbers could do the job they look like they should.
+   *
+   * Counts only what is actually on screen: a locked or hidden placeable has no
+   * chip, so numbering past it would make 3 mean a different thing depending on
+   * what the player had discovered.
+   */
+  function selectItemIndex(i) {
+    if (!(i >= 0)) return false;
+    const list = S.placeables.filter(
+      (p) => p.group === S.group && isUnlocked(p) && !isHidden(p)
+    );
+    const item = list[i];
+    if (!item) return false;
+    selectItem(item.id);
+    return true;
   }
 
   function selectItem(id) {
@@ -2337,6 +2401,9 @@ export function createUI(opts = {}) {
     clearSelection,
     selectGroup,
     selectGroupIndex,
+    selectGroupByKey,
+    selectItemIndex,
+    groupKeys: () => ({ ...GROUP_KEY }),
 
     tool: () => S.tool,
     toggleTool,

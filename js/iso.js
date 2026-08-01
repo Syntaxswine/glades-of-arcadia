@@ -142,9 +142,25 @@ export function levelOf(obj) {
 export const VIEW_W = 640;
 export const VIEW_H = 400;
 
-/** Default map size. Screen extent works out at 1280 x 640. */
-export const MAP_W = 20;
-export const MAP_H = 20;
+/**
+ * THE MAP SIZE, defined here and nowhere else.
+ *
+ * 60 x 60 — three times the original 20 in both directions, so nine times the
+ * ground. Screen extent works out at 3840 x 1920 against a 640 x 400 view, so
+ * the map is comfortably larger than a screenful and panning is now a real part
+ * of playing rather than a nicety.
+ *
+ * `main.js` used to carry its OWN copy of these two numbers. It does not any
+ * more: the same trap as `LEVEL_H`, and a map that is 60 in one file and 20 in
+ * another is a class of bug with no good failure mode.
+ *
+ * Growing this is not free. The settling scan visits every tile for every
+ * creature; it was O(n^2) until `fields.grassCounts()` was memoised, and at
+ * 60x60 that difference is 1205 ms against 58 ms per scan. If this number grows
+ * again, MEASURE `_rescan` before shipping it — see proposals/BACKLOG.md.
+ */
+export const MAP_W = 60;
+export const MAP_H = 60;
 
 const ORIGIN = Object.freeze({ x: 0, y: 0 });
 

@@ -677,3 +677,122 @@ button:disabled {
     overflow: auto;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The title screen
+   ---------------------------------------------------------------------------
+   Sits inside #stage, so it inherits the letterbox and the integer scaling the
+   rest of the game already lives in. The backdrop is the one raster image in
+   the project besides the score; everything drawn ON it is pixel art from the
+   same palette (js/art/title.js).
+*/
+#title {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background: #16221e;
+  z-index: 40;
+}
+
+#title .title-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Pixel art. Never let the browser smooth it. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* A soft dark wash top and bottom so pink letters and pale text hold against
+   whatever part of the picture ends up behind them. The middle is left alone —
+   the temple and the pond are the reason the picture is here. */
+#title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(22, 34, 30, 0.55) 0%,
+    rgba(22, 34, 30, 0.1) 32%,
+    rgba(22, 34, 30, 0.12) 55%,
+    rgba(22, 34, 30, 0.78) 100%
+  );
+  pointer-events: none;
+}
+
+#title .title-plate {
+  position: relative;
+  z-index: 1;
+  margin-top: 6%;
+  line-height: 0;
+}
+
+#title .title-plate canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  /* The letters carry their own outline, so this is a cast shadow rather than
+     a stroke — it lifts them off the sky without touching their colour. */
+  filter: drop-shadow(0 3px 0 rgba(22, 34, 30, 0.45));
+}
+
+#title .title-menu {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  margin-bottom: 7%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+}
+
+#title .title-btn {
+  font: inherit;
+  font-size: clamp(15px, 2.1vw, 26px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f2eada;
+  background: rgba(22, 34, 30, 0.72);
+  border: 2px solid #e88f9e;
+  border-radius: 2px;
+  padding: 0.5em 1.6em;
+  cursor: pointer;
+  transition: background 120ms linear, color 120ms linear;
+}
+
+#title .title-btn:hover,
+#title .title-btn:focus-visible {
+  background: #e88f9e;
+  color: #16221e;
+  outline: none;
+}
+
+#title .title-note {
+  margin: 0;
+  font-size: clamp(11px, 1.2vw, 15px);
+  color: #ddd2be;
+  opacity: 0.82;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(22, 34, 30, 0.9);
+}
+
+#title .title-stamp {
+  position: absolute;
+  right: 0.7em;
+  bottom: 0.5em;
+  z-index: 1;
+  margin: 0;
+  font-size: clamp(9px, 0.9vw, 12px);
+  color: #ddd2be;
+  opacity: 0.45;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}

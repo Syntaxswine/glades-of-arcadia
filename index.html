@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-build="7257ceb-20260731">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -9,7 +9,10 @@
       content="Arcadia — a cosy isometric garden. Tend a glade and the wild things come."
     />
     <title>Glades of Arcadia</title>
-    <link rel="stylesheet" href="css/style.css" />
+    <!-- Versioned on purpose. A stylesheet whose URL never changes is a
+         stylesheet the browser is entitled to keep for ever, and "I reloaded
+         and nothing changed" is the bug this whole screen exists to fix. -->
+    <link rel="stylesheet" href="css/style.css?v=7257ceb-20260731" />
   </head>
   <body>
     <!-- The whole game is one 640x400 logical screen, integer-scaled and
@@ -23,7 +26,7 @@
           height="400"
           tabindex="0"
           role="application"
-          aria-label="The glade. Arrow keys pan; W A S D move the tile cursor; Enter places; Tab shows the field overlay."
+          aria-label="The glade. Arrow keys or W A S D pan; hold Shift to move the tile cursor; a letter picks a category and 1-9 picks a thing in it; Enter places; Tab shows the field overlay."
         ></canvas>
         <div id="ui" class="ui"></div>
       </div>
@@ -52,6 +55,7 @@
       //     tile mapping and the ghost can be checked by eye.
       import { createUI, watchStage, fitStage, LAYOUT } from './js/ui.js';
       import { createInput, tileToScreen, TILE_W, TILE_H } from './js/input.js';
+      import { MAP_W, MAP_H } from './js/iso.js';
 
       const app = document.getElementById('app');
       const canvas = document.getElementById('screen');
@@ -62,18 +66,41 @@
       // including when another module re-sizes the canvas on its own.
       let stopWatching = watchStage(app, canvas, null);
 
-      let game = null;
-      try {
-        const main = await import('./js/main.js');
-        // main.js self-boots on import and boot() is idempotent, so this awaits
-        // the boot already in flight rather than starting a second one.
-        if (typeof main.boot === 'function') game = await main.boot();
-        else if (typeof main.start === 'function') game = await main.start({ app, canvas });
-      } catch (err) {
-        console.info('[arcadia] the game did not boot — chrome preview mode.', err);
+      // ---------------------------------------------------------------------
+      // The front door
+      // ---------------------------------------------------------------------
+      //
+      // Without `?play=1` the player gets the title screen and the game is NOT
+      // booted at all — no world, no autosave, no simulation. New Game then
+      // navigates to `?new=1&play=1`, so starting over is a fresh document
+      // rather than a teardown. A page that has never booted the game cannot
+      // leak anything into the one that follows it, which is the entire reason
+      // the wipe is a navigation. See js/titlescreen.js.
+      const { showTitle, wantsPlay } = await import('./js/titlescreen.js');
+      const play = wantsPlay();
+
+      if (!play) {
+        const stage = document.getElementById('stage') || app;
+        showTitle(stage, { build: document.documentElement.dataset.build || '' });
       }
 
-      if (game) {
+      let game = null;
+      if (play) {
+        try {
+          const main = await import('./js/main.js');
+          // main.js self-boots on import and boot() is idempotent, so this
+          // awaits the boot already in flight rather than starting a second one.
+          if (typeof main.boot === 'function') game = await main.boot();
+          else if (typeof main.start === 'function') game = await main.start({ app, canvas });
+        } catch (err) {
+          console.info('[arcadia] the game did not boot — chrome preview mode.', err);
+        }
+      }
+
+      if (!play) {
+        // The title screen is up and the game was never booted. Nothing else to
+        // do; its only exit is a navigation.
+      } else if (game) {
         // Re-attach now that there is a renderer: it keeps its own `scale`, and
         // its picking divides by it, so it must be the one doing the sizing.
         stopWatching();
@@ -112,7 +139,7 @@
           placeables: Array.isArray(placeables) ? placeables : [],
           creatures: Array.isArray(creatures) ? creatures : [],
         });
-        const map = { w: 20, h: 20 };
+        const map = { w: MAP_W, h: MAP_H };
         const input = createInput({ canvas, ui, map, selfDrive: true });
 
         // Preview mode only: a handle so the chrome can be driven from the

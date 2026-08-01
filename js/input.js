@@ -1070,33 +1070,53 @@ export function createInput(opts = {}) {
         if (typeof on.cancel === 'function') on.cancel();
         refreshGhost();
         return;
+      // ---- moving about ----------------------------------------------------
+      //
+      // WASD AND the arrows both pan the camera. They used to disagree — the
+      // arrows panned, WASD nudged a tile cursor — which is the one thing a
+      // player will never guess and never forgive on a map sixty tiles square.
+      //
+      // The tile cursor is still there and still places things; it moved to
+      // SHIFT + the same keys. SPEC section 8 wants the whole game reachable
+      // from the keyboard, so the cursor could not simply be deleted, and
+      // giving it its own letters would have cost four more out of an alphabet
+      // that is already carrying the categories.
       case 'ArrowLeft':
       case 'ArrowRight':
       case 'ArrowUp':
-      case 'ArrowDown':
+      case 'ArrowDown': {
         ev.preventDefault();
+        if (ev.shiftKey) {
+          moveKeyCursor(
+            k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0,
+            k === 'ArrowUp' ? -1 : k === 'ArrowDown' ? 1 : 0
+          );
+          return;
+        }
         keys.add(k);
         return;
+      }
       case 'w':
       case 'W':
-        ev.preventDefault();
-        moveKeyCursor(0, -1);
-        return;
-      case 's':
-      case 'S':
-        ev.preventDefault();
-        moveKeyCursor(0, 1);
-        return;
       case 'a':
       case 'A':
-        ev.preventDefault();
-        moveKeyCursor(-1, 0);
-        return;
+      case 's':
+      case 'S':
       case 'd':
-      case 'D':
+      case 'D': {
         ev.preventDefault();
-        moveKeyCursor(1, 0);
+        const low2 = k.toLowerCase();
+        const dx = low2 === 'a' ? -1 : low2 === 'd' ? 1 : 0;
+        const dy = low2 === 'w' ? -1 : low2 === 's' ? 1 : 0;
+        if (ev.shiftKey) {
+          moveKeyCursor(dx, dy);
+          return;
+        }
+        // Held, like the arrows: `keys` is drained by the pan loop, and the
+        // arrow name is what that loop already understands.
+        keys.add(dx < 0 ? 'ArrowLeft' : dx > 0 ? 'ArrowRight' : dy < 0 ? 'ArrowUp' : 'ArrowDown');
         return;
+      }
       case 'Enter': {
         ev.preventDefault();
         const c = state.keyCursor || { tx: state.tx, ty: state.ty };
@@ -1161,14 +1181,44 @@ export function createInput(opts = {}) {
         break;
     }
 
+    // NUMBERS pick the thing, LETTERS pick the drawer it is in.
+    //
+    // The numbers used to pick the category, which capped the keyboard at the
+    // eight categories and left the other hundred-and-some placeables reachable
+    // only with a pointer. Categories are letters now (see GROUP_KEY in ui.js,
+    // and they are printed on the tabs), so 1-9 can mean what they look like
+    // they mean.
     if (k >= '1' && k <= '9') {
       ev.preventDefault();
-      if (ui && ui.selectGroupIndex) ui.selectGroupIndex(Number(k) - 1);
+      if (ui && ui.selectItemIndex) ui.selectItemIndex(Number(k) - 1);
+      else if (ui && ui.selectGroupIndex) ui.selectGroupIndex(Number(k) - 1);
+      refreshGhost();
+      return;
+    }
+
+    // A single letter that names a category. Reached only after the switch
+    // above, so a letter already spoken for by a tool (R, B, J) never gets
+    // here, and neither do W A S D.
+    if (/^[a-z]$/i.test(k) && ui && ui.selectGroupByKey) {
+      if (ui.selectGroupByKey(k)) {
+        ev.preventDefault();
+        refreshGhost();
+      }
     }
   }
 
+  /** W A S D are held under the arrow name they pan as. */
+  const PAN_ALIAS = {
+    w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight',
+  };
+
   function onKeyUp(ev) {
     keys.delete(ev.key);
+    // AND the alias, or releasing D leaves 'ArrowRight' held and the camera
+    // slides east for ever. `keys` is a Set drained by the pan loop; it does
+    // not care who put a name in it, so whoever puts one in owes it a delete.
+    const alias = PAN_ALIAS[String(ev.key).toLowerCase()];
+    if (alias) keys.delete(alias);
     if (ev.key === ' ') state.panning = false;
   }
 
