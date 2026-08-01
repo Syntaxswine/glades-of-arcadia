@@ -141,6 +141,7 @@ import {
   TILE_H,
   HALF_W,
   HALF_H,
+  GROUND_ELLIPSE,
   VIEW_W,
   VIEW_H,
   MAP_W,
@@ -168,7 +169,7 @@ import {
 
 import { RAMPS, ACCENT, PALETTE, resolve as basePalette, shade, contactShadow, cycleWater } from './palette.js';
 
-import { rasterise } from './art/format.js';
+import { rasterise, groundCentre } from './art/format.js';
 
 // ---------------------------------------------------------------------------
 // Constants.
@@ -180,8 +181,23 @@ export const MAX_SCALE = 3;
 /** Light comes from the upper left, so contact shadows fall down-right. */
 const SHADOW_DX = 2;
 const SHADOW_DY = 1;
-const SHADOW_SCALE = 0.5; // fraction of the footprint diamond
+/**
+ * The FALLBACK size only — a fraction of the footprint diamond, used when a
+ * piece of art cannot be measured. Every sprite and every composed tree is
+ * measured instead; see `contactRadius`.
+ */
+const SHADOW_SCALE = 0.5;
 const SHADOW_RING = 1.6; // px of the softer outer tone
+/**
+ * The penumbra: how far the shade spreads past the foot itself, in px.
+ *
+ * SPEC §3 calls for "a 1-2 px skirt hugging the object's base diamond", and
+ * this is that skirt. It is not decoration — A SHADOW EXACTLY THE SIZE OF THE
+ * BASE IS INVISIBLE UNDER IT, because the base is what occludes it, so without
+ * a few px of spread the whole pass draws nothing a player can see. Tuned on
+ * `tools/shadow-probe.mjs` rather than by eye; see the note above shadowStamp.
+ */
+const SHADOW_SKIRT = 3;
 
 /** Water palette cycling, RESEARCH A7: 6-12 Hz for a rippling shallow. */
 const WATER_HZ = 8;
@@ -1275,17 +1291,58 @@ function plainWaterTile(tx, ty, phase) {
 // the whole scene and is the single clearest modern tell. Two opaque tones:
 // the core in ground-2 and a one-pixel ring in ground-1, which softens the
 // edge without touching alpha.
+//
+// ---------------------------------------------------------------------------
+// SIZED FROM THE ART, NOT FROM THE TILE (2026-08-01)
+//
+// It used to be `((fw + fh) / 2) * 0.5` of the tile diamond, which had three
+// faults, all measured rather than argued — `node tools/shadow-probe.mjs`
+// renders one object on flat ground three times (bare / shadow only / whole)
+// and counts what survives:
+//
+//   TOO SMALL TO SEE. Thirteen placeables drew a stamp that was 100% hidden
+//   behind their own art — heroon, tholos, the arcadian tomb, every cave.
+//   Across the catalogue only 44% of stamp pixels reached the screen. That is
+//   dead work every frame, and it is why deleting the baked skirts first would
+//   have left the big buildings with no shade at all.
+//
+//   BLIND TO THE OBJECT. Every 1x1 got the same stamp, so a cypress and a
+//   plane tree standing on the same tile cast the same shadow. That is the
+//   thing the `shadow:` scene field was invented for and never once did —
+//   `catalog.js` sets it nowhere, so every object arrived with `scale = 1`.
+//
+//   WRONG ON NON-SQUARE PLOTS. `(fw + fh) / 2` collapses a 3x1 and a 2x2 to
+//   one number, so the colonnade's shadow was the tholos's.
+//
+// So the radius now comes from `groundCentre(art).r` — the half-width of the
+// band where the object's own pixels meet the ground, blind to any shadow
+// already baked into them (js/art/format.js). A herm gets a herm's shadow.
+//
+// AND IT IS AN ELLIPSE, NOT A RHOMBUS. The old stamp was `|u| + |v| <= 1`, the
+// tile diamond; every baked skirt in the game is `u^2 + v^2 <= 1`, a circle
+// lying in the ground plane. Two systems drawing the same thing in two shapes
+// is a seam, and the ellipse wins on the argument that decides it: WE MEASURE
+// ONE NUMBER. A radius determines a circle and nothing else — a diamond would
+// need two axes and an orientation, none of which is measured, so drawing one
+// would mean inventing the parts we did not look at.
 
 const shadowCache = new Map();
 
-function shadowStamp(fw, fh, groundKey, scale = 1) {
-  const key = `${fw}x${fh}:${groundKey}:${scale}`;
+/**
+ * `r` is the contact radius in SCREEN pixels — half the width of the object's
+ * foot. The stamp is that circle seen at 2:1, plus SHADOW_SKIRT of penumbra:
+ * a shadow exactly the size of the base is invisible under it, which is the
+ * fault this whole rewrite exists to fix, and SPEC §3's "1-2 px skirt" is the
+ * bit that makes contact readable.
+ */
+function shadowStamp(r, groundKey) {
+  const rr = Math.max(4, Math.round(r)) + SHADOW_SKIRT;
+  const key = `${rr}:${groundKey}`;
   const hit = shadowCache.get(key);
   if (hit) return hit;
 
-  const span = ((fw + fh) / 2) * SHADOW_SCALE * scale;
-  const hw = Math.max(5, Math.round(HALF_W * span));
-  const hh = Math.max(3, Math.round(HALF_H * span));
+  const hw = rr;
+  const hh = Math.max(3, Math.round(rr * GROUND_ELLIPSE));
   const w = hw * 2 + 4;
   const h = hh * 2 + 4;
 
@@ -1301,7 +1358,7 @@ function shadowStamp(fw, fh, groundKey, scale = 1) {
     for (let x = 0; x < w; x++) {
       const u = (x - w / 2 + 0.5) / hw;
       const v = (y - h / 2 + 0.5) / hh;
-      const t = Math.abs(u) + Math.abs(v);
+      const t = Math.sqrt(u * u + v * v);
       if (t > ringT) continue;
       const c = t <= 1 ? core : ring;
       const i = (y * w + x) * 4;
@@ -1315,6 +1372,105 @@ function shadowStamp(fw, fh, groundKey, scale = 1) {
   const stamp = { canvas: cv, ax: w >> 1, ay: h >> 1 };
   shadowCache.set(key, stamp);
   return stamp;
+}
+
+/**
+ * The contact radius for one piece of art, memoised on the art itself.
+ *
+ * A WeakMap and not a string key because composed trees are regenerated per
+ * (id, seed, stage) and there is no name that distinguishes two oaks; the art
+ * record IS the identity, and it is cached upstream in main.js, so the entry
+ * lives exactly as long as the tree does.
+ *
+ * The fallback is the OLD footprint rule, unchanged, so anything the measure
+ * cannot read — a bare canvas, a raw RGBA buffer, a sprite that is all shadow —
+ * comes out exactly as it did before. A rewrite that also changes what happens
+ * when it fails cannot be told apart from a rewrite that fails.
+ */
+/**
+ * The most common opaque palette key in a piece of art — for a terrain tile,
+ * the colour of that ground. Memoised on the art, like `contactRadius`.
+ *
+ * MODAL AND NOT, SAY, THE DARKEST OR THE FIRST. A gravel tile is speckled with
+ * three ramp steps plus grit; its darkest key is the grit and its first key is
+ * whatever the top-left pixel happened to be. The one that appears most often
+ * is the one a player would name if asked what colour the ground is, which is
+ * the question `contactShadow` is really asking.
+ */
+const modalKeys = new WeakMap();
+function modalKey(art) {
+  if (!art || typeof art !== 'object' || !Array.isArray(art.rows)) return null;
+  let k = modalKeys.get(art);
+  if (k === undefined) {
+    const count = new Map();
+    for (const row of art.rows) {
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        if (ch === '.') continue;
+        count.set(ch, (count.get(ch) || 0) + 1);
+      }
+    }
+    let best = null;
+    let n = 0;
+    for (const [ch, c] of count) {
+      if (c > n) {
+        n = c;
+        best = ch;
+      }
+    }
+    k = best;
+    modalKeys.set(art, k);
+  }
+  return k;
+}
+
+const contactRadii = new WeakMap();
+function contactRadius(art, fw, fh) {
+  const fallback = (fw + fh) * HALF_W * SHADOW_SCALE * 0.5;
+  if (!art || typeof art !== 'object' || !art.rows) return fallback;
+  let r = contactRadii.get(art);
+  if (r === undefined) {
+    const gc = groundCentre(art);
+    r = gc ? gc.r : fallback;
+    contactRadii.set(art, r);
+  }
+  return r;
+}
+
+/**
+ * The contact radius for one draw-list entry, in px. Three sources, in order:
+ *
+ *   `shadow: false`     handled by the caller — no shadow at all.
+ *   `shadow: <number>`  a radius, stated. THIS IS A CHANGE OF MEANING from the
+ *                       old "a scale factor", and it is safe only because
+ *                       nothing ever set a number: `catalog.js` has zero
+ *                       matches for `shadow:`, so the documented per-object
+ *                       scale had never once been used.
+ *   `shadow: <sprite>`  CREATURES. `main.js` passes `CREATURE_SHADOWS[id]`
+ *                       here, and the old code's `typeof === 'number'` test
+ *                       quietly threw it away — so those five hand-authored
+ *                       shadow sprites in creatures.js have NEVER ONCE BEEN
+ *                       DRAWN, and every creature got the default 1x1 stamp.
+ *   otherwise           measure the art.
+ *
+ * A CREATURE MUST NOT FALL THROUGH TO "MEASURE THE ART", and that is the whole
+ * reason this is a function rather than a ternary. A mover's `art` is its
+ * CURRENT FRAME: a walk cycle changes silhouette every few hundred ms, so a
+ * measured radius would breathe in and out under its feet, which is the sort of
+ * fault nobody can name from a screenshot and everybody can feel.
+ *
+ * Only the sprite's WIDTH is read, not its pixels. The rows are all 'm' — grass
+ * dark — and drawing them would put a green patch under every creature standing
+ * on paving, which is exactly the bug this pass exists to stop. Its author's
+ * comment anticipated that ("the caller may re-key it ... with contactShadow")
+ * and no caller ever did. Half the authored width is the authored intent, and
+ * it survives; the table could honestly be five numbers.
+ */
+function shadowRadius(o, e) {
+  const s = o.shadow;
+  if (typeof s === 'number') return s;
+  if (s && typeof s === 'object' && s.w) return s.w / 2;
+  return contactRadius(o.art || o.sprite, e.fw, e.fh);
 }
 
 // ---------------------------------------------------------------------------
@@ -1776,12 +1932,30 @@ class Renderer {
    * `ground` key wins if it gave one; otherwise the tile's grass supplies it,
    * so a tree standing on a fen casts a fen-coloured shadow.
    */
+  /**
+   * The palette key a contact shadow on this tile is derived FROM — the ground's
+   * own colour, which `contactShadow()` then darkens two steps (SPEC §3).
+   *
+   * THE THIRD ARM USED TO BE MISSING AND EVERY PAVED TILE WAS A LIE. Turf tiles
+   * answered through GRASS_SHADOW_KEY, an explicit `cell.ground` answered
+   * itself — and `main.js`'s `terrainCell` has never once set that field, so
+   * gravel, flagstone, terrace paving, tilled soil, scree and open water all
+   * fell through to `null`, then to `GROUND_DEFAULT` ('o'), and every object
+   * standing on stone cast a GRASS-GREEN shadow. The same fault the baked
+   * skirts have; it simply had not been looked for on this side.
+   *
+   * Fixed by asking the tile art rather than by adding a table. The renderer
+   * already holds the sprite it is about to draw, and a sprite's modal opaque
+   * key IS that ground's colour — so paving added later is right for free, and
+   * nothing can drift out of step with a map somebody forgot to extend.
+   */
   _groundKeyAt(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= this.mapW || ty >= this.mapH) return null;
     const i = ty * this.mapW + tx;
     if (this._ground && this._ground[i]) return this._ground[i];
     const g = this._gtShown ? this._gtShown[i] : 255;
-    return g === 255 ? null : GRASS_SHADOW_KEY[g];
+    if (g !== 255) return GRASS_SHADOW_KEY[g];
+    return modalKey(this._art ? this._art[i] : null);
   }
 
   _now() {
@@ -2644,14 +2818,9 @@ class Renderer {
       if (o.shadow === false) continue;
       const c = footprintCentreAt(e.tx, e.ty, e.fw, e.fh, e.level, cam);
       if (c.x < -80 || c.x > BACKING_W + 80 || c.y < -80 || c.y > BACKING_H + 80) continue;
-      // `shadow` may be false (no shadow — a bird, a floating thing) or a
-      // number that scales the skirt: a narrow cypress wants a smaller one
-      // than a broad plane tree on the same 1x1 footprint.
       const st = shadowStamp(
-        e.fw,
-        e.fh,
-        o.ground || this._groundKeyAt(Math.floor(e.tx), Math.floor(e.ty)) || sc.groundKey || GROUND_DEFAULT,
-        typeof o.shadow === 'number' ? o.shadow : 1
+        shadowRadius(o, e),
+        o.ground || this._groundKeyAt(Math.floor(e.tx), Math.floor(e.ty)) || sc.groundKey || GROUND_DEFAULT
       );
       ctx.drawImage(st.canvas, snap(c.x - st.ax + SHADOW_DX), snap(c.y - st.ay + SHADOW_DY));
     }
