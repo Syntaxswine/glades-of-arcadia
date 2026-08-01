@@ -12,11 +12,11 @@ Reconciled against `proposals/BACKLOG.md` in the same pass, per the standing rul
 Repo `Syntaxswine/glades-of-arcadia`. Deployed and verified at HEAD, not merely pushed.
 
 ```
-360 tests            node --test "test/*.test.mjs"
+365 tests            node --test "test/*.test.mjs"
 46 playtest checks   node tools/playtest.mjs        no structural faults
 anchor audit         node tools/anchor-audit.mjs --strict     exit 0
-iso audit            node tools/iso-audit.mjs   11 of 237 still flat at ground
-                                                (was 48; ratcheted in the tests)
+iso audit            node tools/iso-audit.mjs --strict        exit 0
+                     0 of 237 flat at ground (was 48). IN npm run check.
 npm run check        test + playtest + build, green end to end
 art debt             ZERO   (was 28 understudy sprites)
 map                  60 x 60, and a new game starts on plain meadow
@@ -201,7 +201,7 @@ The most visible is that **sward and fen read too similarly** at a glance.
 
 | § | what | state |
 |---|---|---|
-| **4j** | **The art faces the viewer.** ✅ mostly. The instrument shipped (`tools/isogeom.mjs`, the sprite lab's iso overlay, `test/iso-ground.test.mjs` as a ratchet); **48 flagged became 11**, and three of those thirty-seven came from *shared helpers*, not thirty-seven redraws. The three caves — the owner's own example — were rebuilt individually and now occupy 3D space | instrument done · 11 sprites left, each its own job |
+| **4j** | **The art faces the viewer.** ✅ **CLOSED. 48 → 0**, and `iso-audit --strict` is in `npm run check`. FOUR SHARED HELPERS AND FOUR SPRITES did all forty-eight — both `skirt()`s, the hand-typed contact band, and `pool()`, which was wrong in *all eight* of its call sites. The three caves — the owner's own example — were rebuilt and occupy 3D space | ✅ closed · fault (B), the arch family's missing FRONT, is a separate art wave |
 | **4k** | **The wheel turns what you are holding.** ✅ shipped. 17 placeables turn; four facings cost two drawings; `SAVE_VERSION` 3 with `facing` written only when non-zero, so a v2 garden round-trips byte for byte. **Only square footprints turn** — mirroring swaps the tile axes, and the catalogue self-check throws rather than half-work | shipped · multi-tile is the next step |
 | **4e** | **The save screen.** ✅ shipped. Continue, Gardens, Recover, named new gardens, and the music credit. `.previous` is reachable at last — a promise the player could not collect on was not a promise | shipped · no delete, no rename, no export |
 | **4i** | **Mobile mode.** Untouched, and still the owner's "kind of low on the priority list". Geometry, not controls — see the backlog body | **not started** |
@@ -213,6 +213,37 @@ been measured, walked by synthetic pointer events and screenshotted. Nobody has
 sat down with it for an hour. That is §4g's last line and no tool will close it.
 
 ---
+
+## Closing the last eleven — 2026-08-01, last
+
+**48 → 0.** The gate is on. What is worth carrying forward is not the number but
+what the last eleven turned out to be, because it was the same story a fourth
+time: **nine decor props had no contact shadow at all**, and **every pool in the
+game was flatter than the ground plane allows** — eight call sites, ratios from
+0.24 to 0.45, where a body of water lying on the ground is exactly 0.5.
+
+`willow-water` was the only one the audit could see, because the others were
+small enough or covered. The geometry was wrong in all of them.
+
+> **THE ALLOWANCE WAS WRONG, AND THAT IS THE LESSON.** `curveAllowance` solved
+> for the row where a ground circle holds within half a pixel of its lowest
+> point — `2*sqrt(2r)`. The binding case is that when the true bottom row rounds
+> away (whenever the centre sits on a half pixel, i.e. usually) the widest
+> surviving row is the chord at `dy = ry-1`, which is `4*sqrt(r-1)`. At r=26 the
+> real span is 20 and the old formula said 14.4.
+>
+> Three correctly-shadowed sprites failed by two or three pixels and looked
+> exactly like art faults. **They were arithmetic faults, mine.** The test now
+> DRAWS the ellipse and measures its own contour rather than restating the
+> algebra, because an algebra error cannot survive a test that does not consult
+> the algebra. If you write a threshold, measure the thing it is bounding.
+
+**And one deliberate refusal.** The nine missing shadows could have been fixed
+with an automatic pass — "any sprite without one gets one". That would have put
+a dark ring around every PAVING tile in decor.js, because paving lies IN the
+ground plane rather than standing on it, and no predicate separates the two.
+There is only knowing which is which. Nine explicit `contact: r` at nine call
+sites, and the reason written beside them.
 
 ## The world's coordinate system, the wheel, and a door — 2026-08-01, later
 
