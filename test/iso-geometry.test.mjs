@@ -29,9 +29,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TILE_W, TILE_H, CUBE_H, WANT, RUN_MIN, GROUND_ELLIPSE, curveAllowance,
+  TILE_W, TILE_H, CUBE_H, WANT, RUN_MIN, GROUND_ELLIPSE, SHADOW_KEY, curveAllowance,
   project, groundDiamond, boxHull, nearEdgeProfile,
-  baseProfile, baseLift, flatRuns, groundRuns, measure, measurable,
+  baseProfile, baseLift, flatRuns, groundRuns, groundCentre, measure, measurable,
 } from '../tools/isogeom.mjs';
 import { TILE_W as GAME_TILE_W, TILE_H as GAME_TILE_H, toScreen } from '../js/iso.js';
 import { defineSprite } from '../js/art/format.js';
@@ -365,4 +365,160 @@ test('the allowance is not so generous that a slab walks through it', () => {
   }
   // ...and the run length that matters most: half a tile.
   assert.ok(curveAllowance(16) < 32, 'a 32px edge on a 32px-wide contact must still be a fault');
+});
+
+// ---------------------------------------------------------------------------
+// groundCentre — WHERE THE OBJECT ACTUALLY MEETS THE GROUND.
+//
+// The four buildings that shipped floating were positioned by magic numbers
+// typed at the call site (`skirt(g, cx + 2, ay + 1, 60)`), and then FIXED by
+// hand-measuring their bases at 115, 118, 83 and 63 px. This is the function
+// that computes what was measured, so the next one does not need a person with
+// a ruler. See the 2026-07-31 handoff, step 1.
+// ---------------------------------------------------------------------------
+
+/** A solid ground ellipse of half-width `r`, centred in its own bitmap. */
+function ellipseSprite(name, r, key = 'v', pad = 4) {
+  const ry = r * GROUND_ELLIPSE;
+  const w = Math.round(r * 2) + pad * 2;
+  const h = Math.round(ry * 2) + pad * 2;
+  const cx = w / 2;
+  const cy = h / 2;
+  const rows = [];
+  for (let y = 0; y < h; y++) {
+    let row = '';
+    for (let x = 0; x < w; x++) {
+      const nx = (x + 0.5 - cx) / r;
+      const ny = (y + 0.5 - cy) / ry;
+      row += nx * nx + ny * ny <= 1 ? key : '.';
+    }
+    rows.push(row);
+  }
+  // The anchor at the ellipse's own centre — which is what `groundCentre` has
+  // to rediscover from the pixels alone.
+  return defineSprite({ name, rows, anchor: [Math.floor(cx), Math.floor(cy)], footprint: [1, 1] });
+}
+
+test('a correct ground ellipse reports its own centre and radius', () => {
+  for (const r of [10, 16, 24, 30]) {
+    const s = ellipseSprite(`ell-${r}`, r);
+    const gc = groundCentre(s);
+    assert.ok(gc, `r=${r}: no foot found at all`);
+    // Within a pixel on both axes, and the radius within one of what was drawn.
+    assert.ok(Math.abs(gc.dx) <= 1, `r=${r}: cx is ${gc.dx.toFixed(2)}px off the anchor`);
+    assert.ok(Math.abs(gc.dy) <= 1, `r=${r}: cy is ${gc.dy.toFixed(2)}px off the anchor`);
+    assert.ok(
+      Math.abs(gc.r - r) <= 1,
+      `r=${r}: measured half-width ${gc.r}, and a shadow sized from that would ` +
+        `be the wrong size for the object it belongs to`
+    );
+  }
+});
+
+test('groundCentre is BLIND to the shadow it is being asked to replace', () => {
+  // The circularity that let a detached skirt sit 27 rows under its building
+  // without any tool objecting: ask the shadow where the object stands and it
+  // answers "wherever I am". So the measure ignores 'm' — and this is the test
+  // that says it must, by moving ONLY the shadow and demanding no change.
+  const r = 24;
+  const object = ellipseSprite('obj', r);
+  const withDrift = defineSprite({
+    name: 'obj-with-drifted-shadow',
+    // 20 blank rows and then a wide smear of shadow, far below the foot.
+    rows: object.rows.concat(
+      new Array(20).fill('.'.repeat(object.w)),
+      new Array(10).fill(SHADOW_KEY.repeat(object.w))
+    ),
+    anchor: [...object.anchor],
+    footprint: [1, 1],
+  });
+  const a = groundCentre(object);
+  const b = groundCentre(withDrift);
+  assert.equal(b.cx, a.cx, 'a runaway shadow moved the reported centre sideways');
+  assert.equal(b.cy, a.cy, 'a runaway shadow dragged the reported centre downward');
+  assert.equal(b.r, a.r, 'a runaway shadow changed the reported radius');
+});
+
+test('the measured circle never leaves the bitmap — no clamp required', () => {
+  // A SECOND CLAMP WAS WRITTEN FOR THIS AND THEN DELETED, and the deletion is
+  // what this test defends. `r` is derived from a band that was itself measured
+  // out of the bitmap, so `cx - r` is the band's own left column and `cx + r`
+  // its right: the circle is inside by construction, and a `Math.min` against
+  // the sprite width could never once have fired. A guard that cannot fire
+  // reads as protection and provides none.
+  //
+  // (The five shadows currently cut off square by a sprite's side edge are a
+  // different fault with a different fix — see the note on `groundCentre`.)
+  const cases = [
+    ['flush-to-both-margins', 'v'.repeat(60), 30],
+    ['hard-against-the-left', 'v'.repeat(41) + '.'.repeat(19), 20],
+    ['hard-against-the-right', '.'.repeat(19) + 'v'.repeat(41), 40],
+  ];
+  for (const [name, row, ax] of cases) {
+    const s = defineSprite({ name, rows: new Array(12).fill(row), anchor: [ax, 11], footprint: [1, 1] });
+    const gc = groundCentre(s);
+    assert.ok(gc.cx - gc.r >= 0, `${name}: the circle runs off the left edge`);
+    assert.ok(gc.cx + gc.r <= s.w, `${name}: the circle runs off the right edge`);
+  }
+});
+
+test('the radius is clamped to the PLOT, so a shadow cannot leave its tile', () => {
+  // The other bound, and the one that killed a blanket `r * 1.5` when the four
+  // floats were fixed: a 2x1's ground diamond is only 48px from centre to its
+  // W/E vertex, so an ellipse wider than that is drawn outside the object's
+  // own ground however much room the bitmap has.
+  const s = defineSprite({
+    name: 'wider-than-its-plot',
+    rows: new Array(12).fill('.' + 'v'.repeat(158) + '.'),
+    anchor: [80, 11],
+    footprint: [2, 1],
+  });
+  const gc = groundCentre(s);
+  assert.equal(gc.rPlot, (2 + 1) * 16);
+  assert.equal(gc.r, 48);
+  assert.equal(gc.clamped, 'plot');
+});
+
+test('groundCentre refuses on a sprite that is nothing but shadow', () => {
+  const allShade = defineSprite({
+    name: 'pure-shade',
+    rows: new Array(8).fill(SHADOW_KEY.repeat(16)),
+    anchor: [8, 7],
+    footprint: [1, 1],
+  });
+  assert.equal(
+    groundCentre(allShade),
+    null,
+    'a sprite with no object in it has no ground contact, and reporting a ' +
+      'centre for it would be inventing one'
+  );
+});
+
+test('groundCentre reproduces the anchors the four fixed buildings were given', async () => {
+  // THE CHECK THAT IT IS RIGHT. These four were repaired by hand on 2026-07-31
+  // by measuring their bases with a ruler; if the function is a fair statement
+  // of "where does this thing meet the ground", it has to land on the same
+  // answers. Tolerance 4px on each axis — the hand fixes were rounded to whole
+  // pixels and nudged by eye, so agreement closer than that would be suspicious
+  // rather than reassuring.
+  const props = await import('../js/art/props.js');
+  for (const [name, maxDx, maxDy] of [
+    ['HEROON', 2, 2],
+    ['TUMULUS', 5, 3],
+    ['ARCADIAN_TOMB', 8, 4],
+    ['STILL_POOL', 2, 4],
+  ]) {
+    const s = props[name];
+    assert.ok(s, `${name} is gone from js/art/props.js`);
+    const gc = groundCentre(s);
+    assert.ok(gc, `${name}: no foot found`);
+    assert.ok(
+      Math.abs(gc.dx) <= maxDx,
+      `${name}: measured ground centre is ${gc.dx.toFixed(2)}px off its anchor in x`
+    );
+    assert.ok(
+      Math.abs(gc.dy) <= maxDy,
+      `${name}: measured ground centre is ${gc.dy.toFixed(2)}px off its anchor in y`
+    );
+  }
 });

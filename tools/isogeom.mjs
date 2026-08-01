@@ -225,6 +225,125 @@ export function baseProfile(s) {
 }
 
 /**
+ * THE SHADOW KEY. `m` is the darkest step of the GRASS ramp, and every baked
+ * contact shadow in the game is drawn in it (`contactShadow('o') === 'm'`).
+ *
+ * IT IS NOT A DEDICATED SHADOW COLOUR, and that is the whole difficulty. `m` is
+ * also `GRASS[0]`, an ordinary object colour: 457 of the tumulus's `m` pixels
+ * are its own barrow turf, nowhere near its skirt. So "ignore `m`" is a good
+ * enough rule for finding a FOOT (a shadow is always the lowest thing, and turf
+ * on a mound's flank is not) and a catastrophic rule for RECOLOURING (a blanket
+ * remap repaints the mound). Read `groundCentre` with that distinction in mind.
+ */
+export const SHADOW_KEY = 'm';
+
+/**
+ * WHERE THE OBJECT ACTUALLY MEETS THE GROUND — measured from the art, and
+ * blind to the shadow it already casts.
+ *
+ *     groundCentre(sprite) -> { cx, cy, r, ... }
+ *
+ * Every baked contact shadow in the game is positioned by a magic number typed
+ * at the call site — `skirt(g, cx + 2, ay + 1, 60)` — and in 2026-07 four of
+ * those numbers were wrong by 12 to 27 rows, which put four buildings in the
+ * air over their own shadows. They were then fixed by hand-measuring the bases
+ * at 115, 118, 83 and 63 px. THOSE NUMBERS SHOULD BE COMPUTED, NOT TYPED, and
+ * this computes them.
+ *
+ * How:
+ *
+ *   the base band  the lowest opaque NON-shadow pixel in each column, kept
+ *                  only where it lands within the footprint diamond's own
+ *                  half-height of the deepest one. That band is the foot. The
+ *                  same band `groundRuns` measures flatness on — deliberately,
+ *                  so "where the object meets the ground" means one thing here.
+ *   cx             the midpoint of the band's span, in CONTINUOUS pixel space
+ *                  (pixel `x` spans `[x, x+1)`, so its centre is `x + 0.5` —
+ *                  the same convention `groundContact` uses).
+ *   r              its half-width, clamped to the footprint diamond's own
+ *                  half-width `(fw+fh)*16` — an object may not cast contact
+ *                  wider than the ground it stands on.
+ *
+ *                  A SECOND CLAMP, TO THE BITMAP, WAS WRITTEN AND THEN DELETED,
+ *                  because it can never bind and a guard that cannot fire is a
+ *                  false reassurance: the band is measured FROM the bitmap, so
+ *                  `cx - rArt` is the band's own left column and `cx + rArt`
+ *                  its right, both inside by construction. The five shadows
+ *                  currently cut off square by a sprite's side edge are not
+ *                  fixed by clamping this radius — they are fixed by the skirt
+ *                  not being drawn into a fixed-width bitmap at all, which is
+ *                  step 3 of the handoff. Sizing is not the fault there;
+ *                  BAKING is.
+ *   cy             `deepest - r * GROUND_ELLIPSE`. The deepest row is the FRONT
+ *                  of the foot, and a 2:1 foot of half-width `r` is `r/2` tall,
+ *                  so its centre is that far back up the screen.
+ *
+ * `dx`/`dy` are the same point expressed as an offset from the sprite's own
+ * anchor, which is what makes this an AUDIT as well as a constructor: the
+ * anchor is by definition the pixel on the tile's centre point, so a sprite
+ * whose measured ground centre is far from its anchor is mis-anchored, or
+ * mis-drawn, or standing somewhere it does not claim to stand.
+ *
+ * Returns `null` when there is nothing to measure — a sprite that is ALL shadow
+ * has no foot, and reporting a centre for it would be inventing one.
+ */
+export function groundCentre(s, opts = {}) {
+  const shadowKey = opts.shadowKey === undefined ? SHADOW_KEY : opts.shadowKey;
+  const fp = s.footprint || [1, 1];
+
+  // The bottom contour, ignoring shadow pixels. Not `baseProfile` — that one
+  // sees the skirt, and a skirt asked where the object stands will answer
+  // "wherever I am", which is exactly the circular reasoning that let a
+  // detached shadow sit 27 rows below its building without any tool objecting.
+  const low = [];
+  for (let x = 0; x < s.w; x++) {
+    for (let y = s.h - 1; y >= 0; y--) {
+      const ch = (s.rows[y] || '')[x];
+      if (opaque(ch) && ch !== shadowKey) {
+        low.push({ x, y });
+        break;
+      }
+    }
+  }
+  if (low.length < 2) return null;
+
+  const deepest = Math.max(...low.map((p) => p.y));
+  const band = (fp[0] + fp[1]) * 8;
+  const inBand = low.filter((p) => p.y >= deepest - band);
+
+  const x0 = inBand[0].x;
+  const x1 = inBand[inBand.length - 1].x;
+  const cx = (x0 + x1 + 1) / 2;
+
+  const rArt = (x1 - x0 + 1) / 2;
+  const rPlot = (fp[0] + fp[1]) * 16;
+  const r = Math.min(rArt, rPlot);
+
+  const cy = deepest - r * GROUND_ELLIPSE;
+
+  const [ax, ay] = s.anchor || [Math.floor(s.w / 2), s.h - 1];
+  return {
+    cx,
+    cy,
+    r,
+    x0,
+    x1,
+    deepest,
+    span: inBand.length,
+    // What the art wanted and what the plot allows, so a report can say which
+    // one bound — "this shadow is small because the object is narrow" and "this
+    // shadow is small because the tile is" are different notes to an artist.
+    rArt,
+    rPlot,
+    clamped: r < rArt ? 'plot' : '',
+    // ...and the same point as an offset from the anchor. `ax + 0.5` because
+    // the anchor is a PIXEL and `cx` is a position between pixels.
+    dx: cx - (ax + 0.5),
+    dy: cy - ay,
+  };
+}
+
+/**
  * THE MEASURE. How far the bottom contour rises, over the sprite's width.
  *
  * A 2:1 ellipse or a diamond corner lifts by about a quarter of the width; a
