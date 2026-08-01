@@ -326,10 +326,20 @@ geometry problem, and no amount of control work touches it.
 
 **What a mobile mode would have to own, roughly in order of nastiness:**
 
-- `LAYOUT` in ui.js is three hard-coded rectangles and `LOGICAL_W/H` are module
-  constants that `render.js`, `input.js` and `index.html` all read independently.
-  **Making the logical screen a variable is the whole job**; everything else is
-  layout taste. Grep for `640` before estimating.
+- ~~`LAYOUT` in ui.js is three hard-coded rectangles and `LOGICAL_W/H` are
+  module constants that `render.js`, `input.js` and `index.html` all read
+  independently. **Making the logical screen a variable is the whole job.**~~
+  **✅ DONE, 2026-08-01.** "Grep for `640` before estimating" found **four
+  independent declarations** — `iso.VIEW_W/H`, `ui.LOGICAL_W/H`,
+  `input.LOGICAL_W/H` and a private pair in `main.js` — all agreeing on
+  640 × 400, which is the shape of the bug that put `MAP_W = 20` in two files.
+  **js/iso.js owns it now** and the other three re-export it; `ui.LAYOUT` is
+  DERIVED from `TOPBAR_H` / `PANEL_H` (every band full width, the three
+  stacking to exactly the height, the map rectangle being what is left over);
+  and `test/seams.test.mjs` asserts both that everybody agrees and that the
+  derivation still produces the exact four rectangles the art was drawn
+  against. **The remaining job is no longer "make it a variable" — it is
+  "pick a second size".**
 - The panel: 8 tabs × 130 placeables does not fit a phone width. A drawer that
   slides over the map, or one category at a time.
 - The topbar's six buttons at 20 px each.
@@ -340,9 +350,11 @@ geometry problem, and no amount of control work touches it.
   button and the mode needs to persist — probably `?mode=mobile` in the URL, to
   keep the "wipe is a navigation" property that made the front door work.
 
-**The honest sequencing note:** the title screen already has the New Game / save
-screen work queued in §4e. Mobile mode adds a third thing to that screen. Doing
-§4e first and mobile mode second means designing the menu once.
+**The honest sequencing note, now satisfied:** the title screen had the New Game
+/ save screen work queued in §4e, and mobile mode adds a third thing to that
+screen — so §4e went first and the menu was designed once. It shipped
+2026-08-01 (Continue / Gardens / Recover), and a mode switch is one more button
+on a panel that already knows how to swap what it offers.
 
 ## 4j · THINKING IN HEXAGONS — the art faces the viewer (2026-08-01)
 
