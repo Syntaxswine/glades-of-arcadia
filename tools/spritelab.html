@@ -900,7 +900,26 @@ addEventListener('keydown', (e) => {
 DISCOVERED = await discover();
 render();
 if (qs.get('autosnap') !== null) await snapAll();
-window.__lab = { S, render, snapAll, GROW, CLUMPS };
+/**
+ * `__lab.shot('cliff-cave-mouth')` — one named sprite, with the overlay, on
+ * disk. The iteration loop for a redraw is edit / measure / LOOK, and the
+ * looking is the step an agent skips unless it is one call away.
+ */
+async function shot(name, scale = 4, iso = { diamond: true, hex: true, guide: false, base: true, h: 1, only: false }) {
+  const hit = [...DISCOVERED, ...Object.values(CLUMPS).map((s) => ({ sprite: s }))]
+    .find((d) => d.sprite && d.sprite.name === name);
+  if (!hit) return `no sprite named ${name}`;
+  const was = S.iso;
+  S.iso = { ...was, ...iso };
+  const cv = drawSprite(hit.sprite, scale, { iso: true, ground: '#3b3830' });
+  S.iso = was;
+  const q = measure(hit.sprite);
+  return (await post(cv, `shot-${name}`))
+    ? `${name} ${hit.sprite.w}x${hit.sprite.h} — ${q.flat}px level (bar ${q.min})`
+    : 'snap.mjs not running';
+}
+
+window.__lab = { S, render, snapAll, shot, drawSprite, measure, GROW, CLUMPS, DISCOVERED };
 </script>
 </body>
 </html>

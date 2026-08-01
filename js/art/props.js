@@ -622,111 +622,6 @@ export const SPRING_HEAD = sprite(
 // as a detail rather than as a thing you commit ground with. See
 // "3 · VOTIVE SHELF" below.
 
-/**
- * A grotto mouth — a low arched opening in rock, dark inside, ivy over the lip.
- * The archaeological nymphaeum. The interior is 'v' with nothing in it: an
- * unresolved dark hole is more inviting than any painted interior at 40 px.
- */
-export const GROTTO_MOUTH = sprite(
-  'grotto-mouth',
-  [0, 1],
-  [
-    '............vvvvvvvvvvvvv...........',
-    '.........vvvwwwwwwwwwwwwvvv.........',
-    '.......vvwwwxxxxxxxxxxxxxwwwvv......',
-    '.....vvwwxxxyyyyyyyyyyyyxxxwwwvv....',
-    '....vwwxxxyyyyyyyyyyyyyyyyxxxwwwv...',
-    '...vwxxxyyyyyyyyyyyyyyyyyyyyxxxwwv..',
-    '..vwxxyyyyyyyyyyyyyyyyyyyyyyyyxxxwv.',
-    '..vwxyyyyyyyyyyyyyyyyyyyyyyyyyyxxwv.',
-    // Ivy over the lip. The first pass put two symmetric round clumps here and
-    // they read unmistakably as EYES — a frog looking at the player. Foliage on
-    // a built thing has to be asymmetric and has to hang OFF an edge; a clump
-    // floating in the middle of a face becomes a feature of that face.
-    '.vwxbcdcbcdbyyyyyyyyyyyyyyyyyyyyyxxwv',
-    '.vwbcdedcdedcbyyyyyyyyyyyyyyyyyyyyxwv',
-    '.vwabcdddcddcbayyyyyyyyyyyyyyyyyyyxwv',
-    '.vwxabccbabcbayyyyyyyyyyyyyyyyyyyyxwv',
-    '.vwxyabayyabayyyyyyyyyyyyyyyyyyyyyxwv',
-    '.vwxyyyyvvvvvvvvvvvvvvvvvvvvvyyyyxwv',
-    '.vwxyyyvvvvvvvvvvvvvvvvvvvvvvvyyyxwv',
-    '.vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvyyxwv',
-    '.vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvyxwv',
-    'vwxxyvvvvvvvvvvvvvvvvvvvvvvvvvvvyxxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxxyvvvvvvvvvvvvvvvvvvvvvvvvvvvyxxw',
-    'vwwxyyvvvvvvvvvvvvvvvvvvvvvvvvvyyxww',
-    'vvwxxyyvvvvvvvvvvvvvvvvvvvvvvvyyxxwv',
-    '.vwwxxyyyvvvvvvvvvvvvvvvvvvvyyyxxwv.',
-    '.vvwwxxxyyyyyvvvvvvvvvvvvyyyyyxxwwv.',
-    '..vvwwwxxxyyyyyyyyyyyyyyyyyyxxxwwv..',
-    '...vvwwwwxxxxxxxxxxxxxxxxxxxxwwwv...',
-    '....vvvwwwwwwwwwwwwwwwwwwwwwwwvv....',
-    '......vvvvvvvvvvvvvvvvvvvvvvvv......',
-    '....mmmmmmmmmmmmmmmmmmmmmmmmmmmm....',
-    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm...',
-    '......mmmmmmmmmmmmmmmmmmmmmmmm......',
-  ],
-  { tags: ['structure', 'rock', 'naiad', 'seclusion', 'moisture'] }
-);
-
-/**
- * A cave mouth in a hillside — bigger, rougher, unimproved. Where the silenoi
- * meet the nymphs (Hymn to Aphrodite 262-63) and where Chiron and Pholus live.
- * Deliberately NOT the grotto: no dressed lip, no basin, no votives.
- */
-export const CAVE_MOUTH = sprite(
-  'cave-mouth',
-  [0, 1],
-  [
-    '.............vvvvvvvvvvvvvvvv.........',
-    '..........vvvwwwwwwwwwwwwwwwwvvv......',
-    '.......vvvwwwxxxxxxxxxxxxxxxxxwwwvv...',
-    '.....vvwwwxxxyyyyyyyyyyyyyyyyyxxxwwvv.',
-    '...vvwwxxxyyyyyyyyyyyyyyyyyyyyyyxxxwwv',
-    '..vwwxxyyyyyyyyyyyyyyyyyyyyyyyyyyyxxww',
-    '.vwxxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxxw',
-    '.vwxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxw',
-    'vwxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxw',
-    'vwxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxw',
-    'vwxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxw',
-    'vwxyyyyyyyyyvvvvvvvvvvvvyyyyyyyyyyyyxw',
-    'vwxyyyyyyvvvvvvvvvvvvvvvvvvvyyyyyyyyxw',
-    'vwxyyyyvvvvvvvvvvvvvvvvvvvvvvvvyyyyyxw',
-    'vwxyyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxw',
-    'vwxxyyvvvvvvvvvvvvvvvvvvvvvvvvvvvyyxxw',
-    'vwwxyyyvvvvvvvvvvvvvvvvvvvvvvvvvyyyxww',
-    'vvwxxyyyvvvvvvvvvvvvvvvvvvvvvvvyyyxxwv',
-    '.vwwxxyyyyvvvvvvvvvvvvvvvvvvvyyyyxxwv.',
-    '.vvwwxxyyyyyyvvvvvvvvvvvvvyyyyyyxxwwv.',
-    '..vvwwwxxxyyyyyyyyyyyyyyyyyyyyxxxwwv..',
-    '...vvwwwwxxxxxxxxxxxxxxxxxxxxxxwwwv...',
-    '.....vvvwwwwwwwwwwwwwwwwwwwwwwwwvv....',
-    '.......vvvvvvvvvvvvvvvvvvvvvvvvv......',
-    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm...',
-    '..mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm..',
-    '.....mmmmmmmmmmmmmmmmmmmmmmmmmmm.....',
-  ],
-  { tags: ['structure', 'rock', 'satyr', 'centaur', 'seclusion', 'wildness'] }
-);
-
 // ===========================================================================
 // Structures
 // ===========================================================================
@@ -2129,80 +2024,347 @@ export const STILL_POOL = (() => {
   });
 })();
 
+// ===========================================================================
+// CAVES — the sprites the iso audit was built for
+//
+// The owner, looking at the sprite lab: "there are several objects, LIKE THE
+// CAVE, that are pointed straight at the viewer instead of in the direction of
+// the grid like they are occupying 3D space."
+//
+// Both caves used to be a screen-facing oval hole in a screen-facing blob,
+// bilaterally symmetric about the vertical, ending in a horizontal edge and
+// floating above the front half of their own tile. A front elevation, in a
+// world that has no front.
+//
+// A cave is a HOLE IN A MASS, and in this projection a mass sitting on a tile
+// has a known shape:
+//
+//   its foot is the ground ellipse — a circle on the ground, so twice as wide
+//   as it is tall (GROUND_ELLIPSE in js/iso.js);
+//   its top is a dome springing from that same ellipse;
+//   the two halves take light differently, because they face different ways;
+//   and the OPENING belongs to one of them. Its sill runs along the ground
+//   ellipse's own front edge, so the hole travels with the rock instead of
+//   being pasted onto it.
+//
+// The exception that keeps this honest: a knoll IS a rotational form, so it is
+// *supposed* to be roughly symmetric in outline. What must not be symmetric is
+// the mouth, because a mouth has a direction. See tools/isogeom.mjs.
+// ===========================================================================
+
+/**
+ * A rounded mass of rock standing on the ground: a dome springing from a 2:1
+ * ellipse. Returns the sill function — the front edge of its own footprint —
+ * because whatever is cut into it has to sit on that line and nothing else.
+ */
+function rockKnoll(g, cx, base, rx, rise, opt = {}) {
+  const ramp = opt.ramp || STONE;
+  const seed = opt.seed || 0;
+  const n = ramp.length - 1;
+  const ry = rx * 0.5; // the ground ellipse. Not negotiable — see js/iso.js.
+  const arc = (x) => {
+    const t = (x - cx) / rx;
+    return Math.sqrt(Math.max(0, 1 - t * t));
+  };
+  /**
+   * The foot: the near half of the footprint ellipse, roughened so that it is
+   * ROCK and not a machined dome.
+   *
+   * The roughening is not decoration. A correct ground ellipse is genuinely
+   * flat across its front — `curveAllowance` in tools/isogeom.mjs works out how
+   * flat, and for a 33-radius knoll it is sixteen pixels — so an exact ellipse
+   * lands right on the audit's bar and a real rock has no business being that
+   * exact anyway. Perturbing in THREE-PIXEL steps rather than per pixel: a
+   * per-pixel wobble frays the silhouette, and SPEC calls a frayed silhouette
+   * out as the thing that makes a sprite shimmer when the camera pans.
+   */
+  const footY = (x) => {
+    const step = Math.floor(x / 3);
+    const r = nz(step * 1.3, seed + 4);
+    return base + ry * arc(x) + (r > 0.66 ? 1 : r < 0.3 ? -1 : 0);
+  };
+  // The centre of the light, in the dome's own coordinates: up and to the
+  // front-left, which is where every other lit thing in this game is lit from.
+  const LX = -0.45;
+  const LY = -0.5;
+  for (let x = Math.round(cx - rx); x <= Math.round(cx + rx); x++) {
+    const a = arc(x);
+    if (a <= 0) continue;
+    // A rocky outline wants BLOCKY irregularity, not per-pixel fuzz: fuzz at
+    // this scale just frays the silhouette, which SPEC calls out as the thing
+    // that makes a sprite shimmer when the camera pans.
+    const step = Math.floor((x - cx) / 5);
+    const wob = 1 + (nz(step * 1.9, seed + 2) - 0.5) * 0.22;
+    const top = base - rise * Math.pow(a, 0.62) * wob;
+    const bot = footY(x);
+    for (let y = Math.round(top); y <= Math.round(bot); y++) {
+      // SHADE IT AS A DOME, in CONCENTRIC bands. The first version scored a
+      // linear left-to-right ramp and the knoll came out as a flat coin: a
+      // vertical terminator is what a disc has. What a round mass has is a
+      // highlight with the shading falling away from it in every direction,
+      // and here the bands are ellipses because everything on the ground is.
+      const nx = (x - cx) / rx;
+      const ny = (y - (base - rise * 0.5)) / (rise * 0.72);
+      const d = Math.hypot(nx - LX, ny - LY);
+      let i = Math.round((1.32 - d) * n);
+      if (nz(Math.floor(x / 2) * 1.7, Math.floor(y / 2) * 1.3 + seed) > 0.8) i += 1;
+      if (y > bot - 3) i -= 1; // it sits in its own shade where it meets grass
+      put(g, x, y, ramp[Math.max(1, Math.min(n, i))]);
+    }
+  }
+  return footY;
+}
+
+/**
+ * A grotto mouth — a low arched opening in rock, dark inside, ivy over the lip.
+ * The archaeological nymphaeum. The interior is 'v' with nothing in it: an
+ * unresolved dark hole is more inviting than any painted interior at 40 px.
+ */
+export const GROTTO_MOUTH = (() => {
+  const CX = 34;
+  const BASE = 34;
+  const g = G(69, 60);
+  const sill = rockKnoll(g, CX, BASE, 31, 30, { seed: 3.7 });
+
+  // The mouth, in the front-right face. Low and wide: a nymphaeum is a place
+  // you stoop into, not a doorway.
+  const M_CX = 45;
+  const M_HALF = 12;
+  const M_RISE = 21;
+  for (let x = M_CX - M_HALF; x <= M_CX + M_HALF; x++) {
+    const t = (x - M_CX) / M_HALF;
+    const rise = Math.round(M_RISE * Math.sqrt(Math.max(0, 1 - t * t)) ** 0.86);
+    // The sill sits a few pixels ABOVE the rock's own foot. A mouth cut right
+    // down to the grass leaves no rock under it, and the dark of the opening
+    // then runs into the dark the mass casts on itself — one flat black edge
+    // where there should be a threshold you step over.
+    const s = Math.round(sill(x)) - 5;
+    for (let y = s - rise; y <= s; y++) put(g, x, y, 'v');
+    if (rise > 3) {
+      // The dressed lip: this is the IMPROVED cave, so somebody cut the arch.
+      // One clean course of worked stone around the head, which is the whole
+      // difference between this and CAVE_MOUTH.
+      put(g, x, s - rise - 1, 'y');
+      put(g, x, s - rise - 2, 'x');
+    }
+  }
+
+  // Ivy over the lip. The first pass put two symmetric round clumps here and
+  // they read unmistakably as EYES — a frog looking at the player. Foliage on
+  // a built thing has to be asymmetric and has to hang OFF an edge; a clump
+  // floating in the middle of a face becomes a feature of that face.
+  clump(g, 20, 12, 12, 7, LEAF, { seed: 1.4, wobble: 0.3 });
+  clump(g, 31, 8, 8, 5, LEAF, { seed: 5.1, wobble: 0.34 });
+  for (let x = 10; x < 34; x++) {
+    if (nz(x, 17) < 0.45) continue;
+    const drop = 3 + Math.round(nz(x, 23) * 7);
+    for (let k = 0; k < drop; k++) put(g, x, 18 + k, nz(x, k) > 0.5 ? 'b' : 'a');
+  }
+  skirt(g, CX, BASE + 1, 30);
+  return composed('grotto-mouth', g, [CX, BASE], {
+    tags: ['structure', 'rock', 'naiad', 'seclusion', 'moisture'],
+  });
+})();
+
+/**
+ * A cave mouth in a hillside — bigger, rougher, unimproved. Where the silenoi
+ * meet the nymphs (Hymn to Aphrodite 262-63) and where Chiron and Pholus live.
+ * Deliberately NOT the grotto: no dressed lip, no basin, no votives.
+ */
+export const CAVE_MOUTH = (() => {
+  const CX = 34;
+  const BASE = 40;
+  const g = G(69, 66);
+  const sill = rockKnoll(g, CX, BASE, 33, 38, { seed: 8.2 });
+
+  // Bigger, rougher, unimproved: no dressed lip, no basin, no votives. The
+  // arch is lopsided and its edges are broken, and it is TALLER than the
+  // grotto's because a centaur has to get in.
+  const M_CX = 46;
+  const M_HALF = 13;
+  const M_RISE = 25;
+  for (let x = M_CX - M_HALF; x <= M_CX + M_HALF; x++) {
+    const t = (x - M_CX) / M_HALF;
+    // Lopsided by LEANING, not by rippling. The first pass modulated the arch
+    // with a sine of about a thirteen-pixel period, which put a notch in the
+    // crown and read as two openings side by side. An irregular arch is one
+    // arch drawn off-centre.
+    const rise = Math.round(M_RISE * Math.sqrt(Math.max(0, 1 - t * t)) * (1 + 0.14 * t));
+    // The sill sits a few pixels ABOVE the rock's own foot. A mouth cut right
+    // down to the grass leaves no rock under it, and the dark of the opening
+    // then runs into the dark the mass casts on itself — one flat black edge
+    // where there should be a threshold you step over.
+    const s = Math.round(sill(x)) - 5;
+    for (let y = s - rise; y <= s; y++) put(g, x, y, 'v');
+    // No cut course here — just a broken edge where the rock gave way, one
+    // step up from the dark so the opening has thickness.
+    if (rise > 3 && nz(x, 6) > 0.3) put(g, x, s - rise - 1, 'w');
+  }
+  // Loose blocks fallen out of the roof, lying on the ground in front.
+  for (const [bx, by, br] of [[28, 4, 5], [56, 2, 4], [40, 6, 3]]) {
+    boulder(g, bx, Math.round(sill(bx)) - by, br, Math.max(2, Math.round(br * 0.5)), STONE, {
+      seed: bx * 0.3,
+    });
+  }
+  skirt(g, CX, BASE + 1, 31);
+  return composed('cave-mouth', g, [CX, BASE], {
+    tags: ['structure', 'rock', 'satyr', 'centaur', 'seclusion', 'wildness'],
+  });
+})();
+
 /**
  * 1,3 · CAVE MOUTH IN A CLIFF FACE.
  *
  * [Homeric] Hymn to Aphrodite 262-63 puts silenoi and nymphs together "in the
  * depths of pleasant caves", and ELEVATION.md moved caves where they belong:
- * a cave is a hole in a CLIFF, not a lump standing on a lawn. So this is
- * authored as a face — a flat vertical wall of rock with the mouth cut into
- * it, a soil-and-turf cap along the top where the grass above breaks off, and
- * scree where the face meets the ground. It is meant to be set against a
- * terrace edge and to continue the cliff faces either side of it.
+ * a cave is a hole in a CLIFF, not a lump standing on a lawn.
+ *
+ * ---------------------------------------------------------------------------
+ * REDRAWN, and it is the sprite the whole iso audit was built for.
+ *
+ * The owner, looking at the sprite lab: "there are several objects, LIKE THE
+ * CAVE, that are pointed straight at the viewer instead of in the direction of
+ * the grid like they are occupying 3D space."
+ *
+ * They were exactly right and this was the worst offender in the game: a 70x66
+ * RECTANGLE of masonry with an oval hole in the middle of it, sitting entirely
+ * above its own ground diamond, ending in a 64-pixel horizontal edge. A front
+ * elevation, in a world that has no front. `iso-audit` scored it 1.00 — a level
+ * run as wide as the whole tile it stands on.
+ *
+ * It is now a BLOCK, in the only shape this projection allows one:
+ *
+ *        N'          the top face is a 2:1 DIAMOND of turf, not a horizon
+ *     W'    E'
+ *     |      |       two vertical walls, meeting at the front arris
+ *     W      E
+ *        S            the foot follows the ground diamond: W -> S -> E
+ *
+ * — which is to say its silhouette is a hexagon. The mouth is cut into the
+ * RIGHT-HAND wall, so it belongs TO a plane: its floor runs along that wall's
+ * own foot, rising 1 in 2 to the east, and its springing line runs parallel.
+ * A symmetric arch on a level floor is the thing that cannot be there.
+ *
+ * The right wall is the shaded one (light comes from the front-left in this
+ * game), which is also where you want a dark hole.
  */
 export const CLIFF_CAVE_MOUTH = (() => {
-  const g = G(70, 66);
+  // The block, in tile geometry. CX is the anchor column; the ground diamond is
+  // centred on (CX, BASE) and is 64 x 32, so its front vertex is BASE + 16 and
+  // its side corners are BASE. RISE is how tall the cliff stands above it.
+  const CX = 34;
+  const BASE = 59;
+  const RISE = 40;
+  const g = G(70, BASE + 20);
+
+  // Every boundary in this sprite is one of the three lines the projection
+  // allows. `u` is the distance from the front arris; a 2:1 edge closes half a
+  // pixel of height for every pixel of it.
+  const u = (x) => Math.abs(x - CX);
+  const capHi = (x) => BASE - RISE - 16 + u(x) / 2; // top diamond, back edges
+  const capLo = (x) => BASE - RISE + 16 - u(x) / 2; // top diamond, near edges
+  const foot = (x) => BASE + 16 - u(x) / 2; // ground diamond, near edges
+
+  // --- the two walls -------------------------------------------------------
   // Take one drew the face as a rectangle in even courses and it came out a
   // railway tunnel portal — masonry, not geology. Take two fixed the courses
   // and blacked the whole face out, because the joint test compared a block
   // index against a DIFFERENT block index and therefore fired on nearly every
-  // pixel. Lesson kept in the code below: the joint is a property of the
-  // block grid, so it must be computed from the same numbers the block is.
-  const lip = (x) => 10 + Math.round(nz(x * 0.14, 9) * 5 + Math.sin(x * 0.21) * 2);
-  const flankL = (y) => 1 + Math.round(nz(y * 0.3, 2) * 4 + Math.sin(y * 0.17) * 2);
-  const flankR = (y) => 68 - Math.round(nz(y * 0.3, 5) * 4 + Math.cos(y * 0.19) * 2);
-  for (let y = 8; y < 56; y++) {
-    const bh = 5 + Math.floor(nz(Math.floor(y / 6), 1) * 3);
-    const band = Math.floor(y / bh);
-    const bw = 7 + Math.floor(nz(band, 3) * 6);
-    for (let x = flankL(y); x <= flankR(y); x++) {
-      if (y < lip(x)) continue;
+  // pixel. Lesson kept below: the joint is a property of the block grid, so it
+  // must be computed from the same numbers the block is.
+  for (let x = 2; x <= 66; x++) {
+    const west = x < CX; // the lit wall
+    const y0 = Math.round(capLo(x));
+    const y1 = Math.round(foot(x));
+    for (let y = y0; y <= y1; y++) {
+      const bh = 5 + Math.floor(nz(Math.floor(y / 6), 1) * 3);
+      const band = Math.floor(y / bh);
+      const bw = 7 + Math.floor(nz(band, 3) * 6);
       const cell = Math.floor((x + band * 3) / bw);
       let i = 2 + Math.round((nz(cell * 3.1, band * 5.3) - 0.5) * 1.8);
       if (((x + y) & 1) === 0 && nz(x * 2, y) > 0.7) i += 1;
       if ((x + band * 3) % bw === 0 || y % bh === 0) i -= 1; // joint
-      if (y > 47) i -= 1; // a face sits in its own shadow at the foot
-      put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
+      if (y > y1 - 8) i -= 1; // a face sits in its own shadow at the foot
+      if (west) i += 1; // the west wall takes the light; the east turns away
+      // FLOOR AT 1, never 0. `v` is the darkest stone in the ramp and it is
+      // reserved for the inside of the cave — the first version let the east
+      // wall reach it, and the mouth vanished into the plane it was cut in.
+      // A hole is only a hole if it is darker than everything around it.
+      put(g, x, y, STONE[Math.max(1, Math.min(3, i))]);
     }
-    put(g, flankL(y), y, 'y');
-    put(g, flankR(y), y, 'v');
+    // The top edge of each wall, so the cap reads as an overhang at 1x.
+    put(g, x, y0, west ? 'y' : 'x');
   }
-  // Turf cap: soil horizon, then grass overhanging the lip. Without this strip
-  // a cliff face reads as a wall somebody built.
-  for (let x = 0; x < 70; x++) {
-    const l = lip(x);
-    if (x < flankL(l) || x > flankR(l)) continue;
-    put(g, x, l, 'q');
-    put(g, x, l + 1, 'r');
-    for (let k = 1; k <= 4; k++) put(g, x, l - k, k === 1 ? 'm' : nz(x, k) > 0.4 ? 'n' : 'o');
-    if (nz(x, 21) > 0.55) put(g, x, l - 5, 'o');
-    if (nz(x, 33) > 0.78) { put(g, x, l + 2, 'n'); put(g, x, l + 3, 'm'); }
+  // The front arris. Drawn one step up from the wall it lights, NOT in the top
+  // tone: a full-height run of the lightest stone reads as a pole standing in
+  // front of the cliff, which is the same mistake as the cave in miniature —
+  // an edge is a change of plane, not an object.
+  for (let y = Math.round(capLo(CX)); y <= Math.round(foot(CX)); y++) {
+    put(g, CX, y, nz(y, 4) > 0.7 ? 'y' : 'x');
   }
-  // The mouth: wide, low, unimproved. No dressed lip, no basin, no votives —
-  // GROTTO_MOUTH is the improved one, this is the wild one, so the arch is
-  // lopsided and its edges are broken. It stops well short of the flanks so
-  // the face still reads as a face rather than as a frame.
-  for (let y = 26; y < 56; y++) {
-    const t = (y - 26) / 30;
-    const half = Math.round((13 * Math.sqrt(Math.max(0, 1 - Math.pow(1 - t * 1.2, 2))) + 2) * (1 + 0.09 * Math.sin(y * 0.55)));
-    const cx = 31 + Math.round(Math.sin(y * 0.09) * 2);
-    for (let x = cx - half; x <= cx + half; x++) put(g, x, y, 'v');
-    put(g, cx - half - 1, y, 'y');
-    put(g, cx - half - 2, y, 'x');
-    put(g, cx + half + 1, y, 'w');
+
+  // --- the turf cap --------------------------------------------------------
+  // A DIAMOND of grass, which is what the top of a one-tile block is. Without
+  // it a cliff reads as a wall somebody built; drawn as a horizontal band, it
+  // reads as a wall somebody built and photographed from the front.
+  for (let x = 2; x <= 66; x++) {
+    const hi = Math.round(capHi(x));
+    const lo = Math.round(capLo(x));
+    for (let y = hi; y <= lo; y++) {
+      const n = nz(x * 0.7, y * 1.3);
+      put(g, x, y, y > lo - 2 ? 'q' : n > 0.62 ? 'o' : n > 0.24 ? 'n' : 'm');
+    }
+    // Grass breaking off the lip and hanging a little way down the face.
+    if (nz(x, 33) > 0.55) put(g, x, lo + 1, 'n');
+    if (nz(x, 47) > 0.78) put(g, x, lo + 2, 'm');
   }
-  // Rubble at the foot, spilling forward onto the ground.
-  for (let x = 2; x < 68; x++) {
-    const h = 3 + Math.round(nz(x * 0.7, 31) * 6);
+
+  // --- the mouth, cut into the EAST wall -----------------------------------
+  // Wide, low, unimproved: no dressed lip, no basin, no votives — GROTTO_MOUTH
+  // is the improved one, this is the wild one, so the arch is lopsided and its
+  // edges are broken. It stops short of the arris and of the corner so the
+  // wall still reads as a wall rather than as a frame.
+  const M_CX = 50;
+  const M_HALF = 9;
+  const M_RISE = 24;
+  for (let x = M_CX - M_HALF; x <= M_CX + M_HALF; x++) {
+    const t = (x - M_CX) / M_HALF;
+    // A round-headed arch, its edge chewed. `rise` is measured UP from the
+    // sill, and the sill runs along the wall's own foot, so the whole opening
+    // travels with the plane it is cut into.
+    const rise = Math.round(M_RISE * Math.sqrt(Math.max(0, 1 - t * t)) * (1 + 0.08 * Math.sin(x * 0.6)));
+    const sill = Math.round(foot(x)) - 1;
+    for (let y = sill - rise; y <= sill; y++) put(g, x, y, 'v');
+    // The lip. A hole in a wall is a hole in something THICK: one lit pixel on
+    // the near jamb and a soffit a step up from the dark, or the opening reads
+    // as a sticker of black rather than as a way in.
+    if (rise > 3) {
+      put(g, x, sill - rise - 1, nz(x, 12) > 0.5 ? 'x' : 'w');
+      if (x <= M_CX - M_HALF + 2) put(g, x, sill - rise + 1, 'w');
+    }
+  }
+
+  // --- scree at the foot ---------------------------------------------------
+  // Spilling forward ALONG the chevron, not across a straight line: rubble
+  // falls off a face and lands on the ground in front of that face, so its
+  // spread is the ground diamond's edge too.
+  for (let x = 3; x <= 65; x++) {
+    const h = 2 + Math.round(nz(x * 0.7, 31) * 5);
+    const y0 = Math.round(foot(x));
     for (let k = 0; k < h; k++) {
-      const y = 55 + k;
+      const y = y0 + k;
       const n = nz(x, y);
       if (k > h - 3 && n < 0.45) continue;
-      put(g, x, y, n > 0.72 ? 'x' : n > 0.34 ? 'w' : 'v');
+      if (peek(g, x, y) === '.') put(g, x, y, n > 0.72 ? 'x' : n > 0.34 ? 'w' : 'v');
     }
   }
-  for (let x = 3; x < 67; x++) for (let k = 0; k < 3; k++) if (peek(g, x, 61 + k) === '.') put(g, x, 61 + k, 'm');
-  return composed('cliff-cave-mouth', g, [34, 59], { tags: ['cliff', 'cave', 'satyr', 'naiad', 'seclusion', 'wildness'] });
+  // The shade this thing casts is the tile it stands on: r = 30 against the
+  // diamond's 32, centred so the ellipse's front lands on the front vertex.
+  skirt(g, CX, BASE + 1, 30);
+
+  return composed('cliff-cave-mouth', g, [CX, BASE], {
+    tags: ['cliff', 'cave', 'satyr', 'naiad', 'seclusion', 'wildness'],
+  });
 })();
 
 /** 1,3 · UNBASINED SPRING — a plunge in bare rock. The same water as

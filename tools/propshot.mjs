@@ -18,6 +18,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { PROPS } from '../js/art/props.js';
+import DECOR from '../js/art/decor.js';
 import * as TILES from '../js/art/tiles.js';
 import { resolve as pal, PALETTE } from '../js/palette.js';
 import { lintSprite } from '../js/art/format.js';
@@ -158,15 +159,23 @@ function text(s, str, x, y, [r, g, b]) {
 }
 
 // --------------------------------------------------------------------- run
-const ids = (arg('--ids', '') || Object.keys(PROPS).join(',')).split(',').filter(Boolean);
+//
+// props.js AND decor.js. This tool only ever knew about the first, so the 45
+// sprites in the second — every column, fountain, urn, hedge and paving in the
+// game — could not be looked at through it at all, and asking for one printed
+// "MISSING" as though the art did not exist. The sprite lab had the identical
+// blind spot for the identical reason: a list of modules written before the
+// module was.
+const ART = { ...PROPS, ...DECOR };
+const ids = (arg('--ids', '') || Object.keys(ART).join(',')).split(',').filter(Boolean);
 const cols = Number(arg('--cols', 5));
 const zoom = Number(arg('--zoom', 3));
 const sil = has('--sil');
 const ground = arg('--ground', 'grass');
 const out = resolve(arg('--out', 'docs/shots/props.png'));
 
-const list = ids.map((n) => PROPS[n]).filter(Boolean);
-const missing = ids.filter((n) => !PROPS[n]);
+const list = ids.map((n) => ART[n]).filter(Boolean);
+const missing = ids.filter((n) => !ART[n]);
 if (missing.length) console.error('MISSING:', missing.join(', '));
 if (!list.length) {
   console.error('nothing to draw');
@@ -207,6 +216,6 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, png(big.px, big.w, big.h));
 
 const problems = [];
-for (const sp of Object.values(PROPS)) problems.push(...lintSprite(sp, PALETTE));
+for (const sp of Object.values(ART)) problems.push(...lintSprite(sp, PALETTE));
 if (problems.length) console.error('LINT:\n  ' + problems.join('\n  '));
 console.log(`${out}  ${big.w}x${big.h}  ${list.length} sprites`);
