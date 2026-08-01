@@ -12,16 +12,22 @@ Reconciled against `proposals/BACKLOG.md` in the same pass, per the standing rul
 Repo `Syntaxswine/glades-of-arcadia`. Deployed and verified at HEAD, not merely pushed.
 
 ```
-302 tests            node --test "test/*.test.mjs"
+360 tests            node --test "test/*.test.mjs"
 46 playtest checks   node tools/playtest.mjs        no structural faults
 anchor audit         node tools/anchor-audit.mjs --strict     exit 0
+iso audit            node tools/iso-audit.mjs   11 of 237 still flat at ground
+                                                (was 48; ratcheted in the tests)
+npm run check        test + playtest + build, green end to end
 art debt             ZERO   (was 28 understudy sprites)
 map                  60 x 60, and a new game starts on plain meadow
-placeables           130
-dependencies         0        external assets   2 (the score, the title art)
+placeables           130, of which 17 can be turned round
+save format          v3   (facing; a v2 garden loads and re-saves identical)
+front door           Continue / Gardens / Recover — every garden reachable
 getting about        minimap (upper right), the move tool (X), WASD/arrows
-asking               ? picks up a help cursor
+turning              the scroll wheel, when what you hold has a direction
+asking               ? picks up a help cursor, and it answers about RUNGS
 cheat                ?play=1&new=1&garden=all  — all four species welcome
+dependencies         0        external assets   2 (the score, the title art)
 ```
 
 It is a **complete, playable game**. Terrain raises and lowers, five grasses
@@ -163,8 +169,10 @@ Build the tool that proves the thing; the tool is part of the deliverable.
 | `tools/anchor-audit.mjs --strict` | a sprite floating above its own footprint. Multi-tile only, on purpose — a herm correctly stands at its tile centre |
 | `tools/snap.mjs` + `serve.mjs` | art authored without ever looking at it |
 | `tools/poseshot.mjs` | an animation judged one frame at a time. Lays a whole cycle out on real ground with each frame's hold printed. `--sil` first, always; `--only 0,3` to magnify past the ~2000px ceiling where a full strip stops getting bigger |
-| `tools/spritelab.html` | every sprite and composer at 1×/4×/8× with anchors marked. **But see `iso-audit` below — the lab draws a SQUARE grid, which is the file's coordinate system and not the world's, and that blind spot hid a fault across a third of the art** |
-| `tools/iso-audit.mjs` | a sprite whose base ends in a horizontal edge — i.e. drawn on the screen plane instead of the ground plane. **NOT in `npm run check`: 32 of 103 sprites currently fail it.** Wire `--strict` in when the list is short, exactly as anchor-audit was |
+| `tools/spritelab.html` | every sprite and composer at 1×/4×/8× with anchors marked, **and now the world's coordinate system too**: `?iso=diamond,hex,guide,base,only` draws the ground diamond, the cube hexagon, a 2:1 lattice and the measured base contour painted onto the sprite. It used to draw only the FILE's square grid, and that blind spot hid a fault across a third of the art |
+| `tools/iso-audit.mjs` | a horizontal edge where an object meets the ground — i.e. art drawn on the screen plane instead of the ground plane. `--runs` prints the exact columns. **11 of 237 still fail**, down from 48, and `test/iso-ground.test.mjs` ratchets that list: it fails if one regresses AND if one is fixed without being struck off |
+| `tools/isogeom.mjs` | the geometry itself, stated ONCE and imported by the audit, the sprite lab and the tests. Two of them disagreeing about what a legal edge is would be invisible — the lab would draw a guide the audit does not measure against |
+| `__lab.shot('name')` | in the sprite lab: one named sprite, with the iso overlay, on disk through `snap.mjs`. The redraw loop is edit / measure / **LOOK**, and the looking is the step that gets skipped unless it is one call away |
 
 `npm run check` runs the lot.
 
@@ -189,18 +197,133 @@ See **`proposals/BACKLOG.md`**. The largest item is that the catalogue drifted t
 130 placeables against a designed ~93 and wants an audit for near-duplicates.
 The most visible is that **sward and fen read too similarly** at a glance.
 
-**The owner-set queue, as of 2026-08-01, in their own priority order:**
+**The owner-set queue, as of 2026-08-01. Four of six closed in one session.**
 
 | § | what | state |
 |---|---|---|
-| **4j** | **The art faces the viewer.** Think in hexagons: three planes, three line families, and the cube silhouette IS a hexagon. `iso-audit` census done, **nothing redrawn**. The smallest next step is a hexagon / 2:1-guide / ground-diamond overlay in the sprite lab — that is what stops it recurring, and it is far cheaper than the redraw | instrument + census only |
-| **4k** | **Middle wheel should turn an object's facing**, not pan. Sequel to 4j — build it after things have a front, or it is a control that visibly does nothing. Four facings cost **two** drawings (a horizontal flip is an exact NE↔NW turn). The hard part is `facing` in the save + a `SAVE_VERSION` bump that leaves every existing garden identical | not started |
-| **4e** | The **save screen**, Continue, named slots. Owner deferred it explicitly | not started |
-| **4i** | **Mobile mode** on the title screen. Owner: "kind of low on the priority list." Geometry, not controls — see the body | not started, low |
-| 4h | Edges left on the minimap / move tool / `?` / proving ground | shipped with known gaps |
-| 4g | What was never verified by hand — the keys, and nobody has *played* 60×60 | unverified |
+| **4j** | **The art faces the viewer.** ✅ mostly. The instrument shipped (`tools/isogeom.mjs`, the sprite lab's iso overlay, `test/iso-ground.test.mjs` as a ratchet); **48 flagged became 11**, and three of those thirty-seven came from *shared helpers*, not thirty-seven redraws. The three caves — the owner's own example — were rebuilt individually and now occupy 3D space | instrument done · 11 sprites left, each its own job |
+| **4k** | **The wheel turns what you are holding.** ✅ shipped. 17 placeables turn; four facings cost two drawings; `SAVE_VERSION` 3 with `facing` written only when non-zero, so a v2 garden round-trips byte for byte. **Only square footprints turn** — mirroring swaps the tile axes, and the catalogue self-check throws rather than half-work | shipped · multi-tile is the next step |
+| **4e** | **The save screen.** ✅ shipped. Continue, Gardens, Recover, named new gardens, and the music credit. `.previous` is reachable at last — a promise the player could not collect on was not a promise | shipped · no delete, no rename, no export |
+| **4i** | **Mobile mode.** Untouched, and still the owner's "kind of low on the priority list". Geometry, not controls — see the backlog body | **not started** |
+| 4g | What was never verified by hand | ✅ **CLOSED** — every key pressed live, the suspected focus bug disproved, and one real bug found by doing it |
+| 4h | Edges on the minimap / move tool / `?` / proving ground | partly closed — the `?` now answers about rungs, and had never identified a creature at all |
+
+**The one thing on this list nobody has done is PLAY it.** The 60×60 map has
+been measured, walked by synthetic pointer events and screenshotted. Nobody has
+sat down with it for an hour. That is §4g's last line and no tool will close it.
 
 ---
+
+## The world's coordinate system, the wheel, and a door — 2026-08-01, later
+
+Four queue items in one run. The through-line is worth stating because it is
+the same lesson four times: **an instrument that cannot see a fault will report
+a green that means "not asked".**
+
+### The art faces the viewer — §4j
+
+The owner: *"there are several objects, like the cave, that are pointed straight
+at the viewer instead of in the direction of the grid"* and *"would you benefit
+from thinking in hexagons instead of squares?"*
+
+`tools/isogeom.mjs` states the geometry once and is imported by the headless
+census, the sprite lab's overlay AND the tests, because a lab drawing a guide
+the audit does not measure against lets an artist align to the wrong line in
+perfectly good faith. The lab can now draw the **ground diamond**, the **cube
+hexagon**, a **2:1 lattice** and the **measured base contour painted onto the
+sprite**, green where it steps and red where it runs level.
+
+**THE MEASURE WAS WRONG TWICE AND THE THRESHOLD ONCE**, and all three are the
+same error wearing different clothes:
+
+| version | what it asked | why it was noise |
+|---|---|---|
+| `lift` | how far the contour's ends rise | depends on the sprite's SHAPE, and a chest corner-on and a single cliff face answer oppositely. 47 perfect terrain tiles convicted — `foot-rock-se-a` scored `diag 1.00` and `lift 0.02` at once |
+| flat-runs-anywhere | level runs in the bottom silhouette | convicts the underside of a tree canopy, which is not a base. Leaves hang in the air |
+| fixed 12px bar | any level edge at ground | a correct ground circle IS flat across `2*sqrt(2r)` px at its front. It convicted every large contact **for being round** |
+
+The shipped rule: level runs where the object MEETS THE GROUND, against a bar
+that scales with the size of that contact. **A checker whose threshold does not
+scale with its subject is measuring its subject's size.**
+
+Then the redraws — and **three shared helpers did thirty-seven of the
+forty-eight**, which is exactly why the census was worth having first. Both
+`skirt()` functions and the hand-typed `mmmm` contact band in `sprite()` were
+drawing the patch of shade under an object as a rectangle or a 3.7:1 ellipse. A
+circle on the ground is an ellipse **twice as wide as it is tall**;
+`GROUND_ELLIPSE` in js/iso.js is that constant and the reason it lives there.
+
+> **I shipped a regression doing it.** `groundContact` detects a hand-typed band
+> as "a trailing row of nothing but `m`" — which is also true of the bottom rows
+> of the correct ellipse `skirt()` had just drawn. On composed sprites it
+> stripped the lower half of a right answer and rebuilt it flat: the heroon went
+> from 12 px of level edge to 106, the worst reading in the catalogue, by way of
+> a change that made eighteen other sprites right.
+>
+> **A REWRITE THAT DETECTS ITS OWN INPUT WILL EVENTUALLY DETECT ITS OWN OUTPUT.**
+> The honest signal was not in the pixels at all — it was which constructor the
+> author used. `test/iso-ground.test.mjs` is the ratchet that would have caught
+> it, and it fails in BOTH directions so the known-offender list cannot quietly
+> become a lie about how much is left.
+
+**Two blind spots found on the way, both from a module list written before the
+module.** The sprite lab's `CANDIDATES` never included `decor.js` or
+`extras.js` — **47 sprites had never once appeared in it** — and
+`tools/propshot.mjs` printed `MISSING` for any decor sprite as though the art
+did not exist.
+
+### The wheel turns what you are holding — §4k
+
+Seventeen things turn and the rest do not, and the test for membership is not
+"could it be flipped" but *would flipping it visibly change which way the thing
+is turned*. A column is a cylinder; an urn is a solid of revolution. **A
+rotation control over a rotational form is a control that visibly does
+nothing** — the iso audit's own lesson, arriving from the other side.
+
+The part that mattered was never the wheel. It was that `facing` is written
+**only when non-zero**, so every existing garden serialises byte for byte as it
+did under v2. `test/facing.test.mjs` opens with three tests about that one `if`.
+
+### A front door you can come back through — §4e
+
+Continue (focused, because a returning player came back for their garden and
+New Game is the destructive one), Gardens, Recover, named new gardens, and the
+music credit where someone who never reads a repo can see it. **Recover swaps
+rather than overwrites**, so it is itself undoable: the player reaching for that
+button already lost something once.
+
+`js/saves.js` imports nothing so the title screen stays cheap, which costs one
+duplicated constant — and `test/saves.test.mjs` OPENS by asserting it equals
+`world.SAVE_KEY`. That assertion is the entire reason the duplication is allowed.
+
+### And then somebody pressed the keys — §4g
+
+Every binding verified live. The suspected focus-swallow bug does not exist.
+But the `?` on a creature **had never worked once**: `creatureAt` read
+`a.x`/`a.y`/`a.id` from a scene list built with `tx`/`ty` and carrying no
+identity, so it matched nothing and every question about a satyr was answered
+about the grass under him — **in a perfectly good sentence about a meadow**,
+which is why it survived a whole session of review.
+
+That is the strongest argument in this document for §4g existing at all. "Not
+checked" and "checked and fine" are different states, and the gap between them
+is where a well-written wrong answer lives.
+
+### Two traps for whoever tests next
+
+- **The camera is EASED.** A synthetic keypress or wheel event needs ~500 ms
+  before the camera reading means anything, and a key left held keeps panning.
+  Half an hour was lost to readings taken mid-flight.
+- **`J` opens the journal, which is modal and swallows everything after it.** A
+  keyboard sweep that presses `j` in the middle reports the rest of the
+  keyboard as dead. It is not.
+- **Test in a NAMED save slot** — `?play=1&seed=probe` writes to
+  `arcadia.garden:probe`. I opened `?new=1` on the default slot, which archived
+  the owner's garden to `.previous`, then restored it *from the page still
+  running the game loop* — whose autosave wrote my test world back over it
+  seconds later. The archive-then-restore was sound; doing it while the writer
+  was live was not. **A 35-object garden in the dev browser was lost.**
+
 
 ## Maker's mark
 

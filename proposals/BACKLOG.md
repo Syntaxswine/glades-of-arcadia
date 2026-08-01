@@ -209,26 +209,29 @@ That assertion is the entire reason the duplication is allowed to exist.
   **Until then a hard reload after deploy is the workaround**, which is exactly
   the workaround a player should never need.
 
-## 4g · Left unverified by hand
+## 4g · Left unverified by hand — CLOSED (2026-08-01)
 
-Recorded because "not checked" and "checked and fine" are different states.
+Recorded because "not checked" and "checked and fine" are different states. All
+three have now been checked, and one of them was hiding a real bug.
 
-- **The new key bindings were never pressed in a live browser.** Both halves are
-  verified directly (`ui.selectGroupByKey` over all eight letters plus two that
-  must be ignored; `ui.selectItemIndex` at 1/2/3/9 and out of range) and the
-  event code was reviewed — but the preview pane runs hidden, so rAF is
-  suspended and synthetic key events get eaten by the tab strip's own arrow
-  handler. Somebody should press the keys.
-- **SUSPECTED, from that same session: selecting a category by letter may move
-  focus into the toolbar and swallow the next keypress.** `selectGroup` focuses
-  the tab, and `input.js` ignores keys while focus is in the chrome. It looked
-  exactly like that while testing, but the hidden pane makes it unsafe to call
-  it confirmed. If pressing `T` then `3` does nothing, this is why, and the fix
-  is to return focus to the canvas after a keyboard-driven category change.
-- **Nothing has been played on a 60×60 map for any length of time.** The scan
-  cost is measured; the *feel* of a map nine times the size — how long it takes
-  to cross, whether the camera speed still suits it, whether creatures now feel
-  sparse — is not.
+- **The key bindings have been pressed in a live browser.** All eight category
+  letters (`G L Q P T C H F`) select the right drawer, `1`–`9` pick within it,
+  `R B J X ? Esc Tab` all do what the doc says, and every one of the eight pan
+  keys (arrows and `WASD`) moves the camera in the right direction. Two traps
+  for whoever tests this next: the camera is EASED, so a synthetic keypress
+  needs ~500 ms before the reading means anything; and `J` opens the journal,
+  which is modal and swallows everything after it — a sweep that presses `j`
+  in the middle reports the rest of the keyboard as dead.
+- **The suspected focus-swallow bug DOES NOT EXIST.** Focus returns to the
+  canvas after a category-tab click and after an item click; `T` then `3`
+  selects a plane tree. Struck off.
+- **But the `?` on a creature had never worked once** — see §4h. That is what
+  "never verified by hand" was protecting against, and it is why the note
+  earned its place.
+- **Nothing has still been PLAYED on a 60×60 map for any length of time.** The
+  scan cost is measured; the *feel* — how long it takes to cross, whether the
+  camera speed suits it, whether creatures now feel sparse — is not, and no
+  amount of synthetic input will answer it. This one wants a person.
 
 ## 4h · Getting about, and the ? — what was NOT built (2026-08-01)
 
@@ -263,10 +266,24 @@ are the edges left showing.
 
 **The `?`**
 
-- **It only answers about the tile.** It says nothing about a *rung* — "this is
-  what the satyr is still waiting for" is the answer a player most wants and it
-  lives in the journal instead. Wiring the `?` to a creature's unmet requirement
-  is the highest-value follow-on in this section.
+- **It ANSWERS ABOUT A RUNG now** — ✅ the item this section called its
+  highest-value follow-on. Asking a creature gives its name, then *"Wants to
+  thrive: No open sward here yet."*, then its blurb. The FIRST unmet
+  requirement only: the `?` is a glance, the journal is the ledger, and
+  `requirements[].text` is used verbatim from creatures.js so the two can never
+  word the same fact differently.
+- **It had never identified a creature at all**, from the day it shipped.
+  `creatureAt` read `a.x`/`a.y`/`a.id` from a scene list built with `tx`/`ty`
+  and carrying no identity, so it matched nothing and every `?` aimed at a
+  satyr was answered about the grass under him — in a perfectly good sentence
+  about a meadow, which is why nobody caught it. `ui.creatureAtIn` is now pure
+  and exported, and `test/seams.test.mjs` guards the reader half including a
+  negative control. The WRITER half (main.js putting `creature` on the entry)
+  is not reachable from node without a DOM; that test is a written-down
+  contract, not a real guard, and says so.
+- **`?` now keeps your selection.** It and `move` are the two tools that only
+  ANSWER; neither can plant anything, so the "what does a click do must have
+  one answer" rule that empties your hand for every other tool does not apply.
 - No hover preview: you must click. Deliberate, but unverified against a real
   player.
 - The tool has no chip in the grid, only the topbar button and the `?` key.
