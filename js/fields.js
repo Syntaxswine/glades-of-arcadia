@@ -1593,8 +1593,101 @@ export class Fields {
     return { size: tiles.length, tiles };
   }
 
-  /** How many tiles on the whole map each grass type holds. */
+  /**
+   * Every tile's patch size for one affinity, in ONE pass over the map.
+   *
+   * THE POINT: patch size is a property of the connected COMPONENT, not of the
+   * tile. Every tile in a patch has the same answer, so flooding from each tile
+   * in turn recomputes the same number once per member.
+   *
+   * `patch()` above does exactly that, and it allocates a fresh
+   * `Uint8Array(w*h)` plus an object per visited tile every time it is called.
+   * The settling scan asks for a patch size at every tile of the map, for every
+   * creature, every 1.5 garden-seconds. Measured at 60x60: 227 ms out of a
+   * 246 ms scan — 92% of the whole thing, and ~13 MB of garbage per creature.
+   * At 20x20 it was small enough that nobody noticed.
+   *
+   * This is one flood over the map with one scratch buffer, memoised on
+   * `version`, and it answers every tile at once. Same rule as `patch()`:
+   * matching type, uncontested (`other === 0`), four-connected — a patch is
+   * ground you can walk.
+   *
+   * @returns {Int32Array} w*h, each cell the size of the patch it belongs to
+   *                       (0 if the tile is not this affinity, or contested)
+   */
+  patchSizes(affinity) {
+    const want = GRASS_CODE[affinity];
+    const n = this.w * this.h;
+    if (!want) return new Int32Array(n);
+
+    if (this._patchSizeVersion !== this.version) {
+      this._patchSizeVersion = this.version;
+      this._patchSizes = new Map();
+    }
+    const hit = this._patchSizes.get(affinity);
+    if (hit) return hit;
+
+    const grid = this.grassGrid();
+    const out = new Int32Array(n);
+    const member = new Int32Array(n); // scratch: this component's tiles
+    const seen = new Uint8Array(n);
+
+    for (let start = 0; start < n; start++) {
+      if (seen[start]) continue;
+      seen[start] = 1;
+      if (grid.type[start] !== want || grid.other[start] !== 0) continue;
+
+      // Flood this component once, remembering who is in it, then write the
+      // total back to every member. No cap: the cap is the CALLER's question
+      // ("is it at least this big"), applied with a min at the read.
+      let head = 0;
+      let tail = 0;
+      member[tail++] = start;
+      while (head < tail) {
+        const i = member[head++];
+        const x = i % this.w;
+        const y = (i / this.w) | 0;
+        for (let d = 0; d < 8; d += 2) {
+          const [dx, dy] = DIRS[d];
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= this.w || ny >= this.h) continue;
+          const j = ny * this.w + nx;
+          if (seen[j]) continue;
+          seen[j] = 1;
+          if (grid.type[j] !== want || grid.other[j] !== 0) continue;
+          member[tail++] = j;
+        }
+      }
+      for (let k = 0; k < tail; k++) out[member[k]] = tail;
+    }
+
+    this._patchSizes.set(affinity, out);
+    return out;
+  }
+
+  /**
+   * How many tiles on the whole map each grass type holds.
+   *
+   * MEMOISED ON `version`, and that is not an optimisation — it is a
+   * correctness-of-cost fix for an O(n^2) scan.
+   *
+   * `Zoning.claimed` is a getter that calls this to answer "has anything taken
+   * sides yet?", and its comment said it was cheap "because grassGrid is
+   * cached". grassGrid IS cached. This was not: it walked every tile and built
+   * a fresh object every call. `claimed` is read once per tile by the `patch`
+   * requirement, and the settling scan visits every tile for every creature —
+   * so a whole-map pass ran once per tile. 3600 x 3600 = 13 million iterations
+   * per creature per scan, every 1.5 garden-seconds.
+   *
+   * Measured at 60x60: 224 ms of a 226 ms scan. At 20x20 it was 26 ms and
+   * nobody noticed, which is exactly why it survived to be found by trying to
+   * make the map bigger.
+   */
   grassCounts() {
+    if (this._grassCountsVersion === this.version && this._grassCounts) {
+      return this._grassCounts;
+    }
     const grid = this.grassGrid();
     const out = {};
     for (const t of GRASS_TYPES) out[t] = 0;
@@ -1603,6 +1696,8 @@ export class Fields {
       out[GRASS_TYPES[grid.type[i]]]++;
       if (grid.other[i]) out.contested++;
     }
+    this._grassCountsVersion = this.version;
+    this._grassCounts = out;
     return out;
   }
 

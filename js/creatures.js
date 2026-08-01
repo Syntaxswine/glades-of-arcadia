@@ -1013,20 +1013,22 @@ export class Zoning {
    */
   patchAt(tx, ty, type, cap = 64) {
     if (!type) return 0;
-    const key = `${tx},${ty},${type},${cap}`;
     this._fresh();
+    if (this.supports.grass) {
+      // ONE component pass for the whole map, memoised on the field version,
+      // instead of a flood fill per tile. `patchSizes` explains why: this was
+      // 92% of the settling scan at 60x60, and the cap belongs at the READ —
+      // the caller is asking "is the patch at least this big", and every tile
+      // of a component shares one answer.
+      const species = SPECIES_FOR_GRASS[type];
+      if (!species) return 0;
+      const sizes = this.fields.patchSizes(species);
+      if (!sizes) return 0;
+      return Math.min(sizes[ty * this.w + tx] | 0, cap);
+    }
+    const key = `${tx},${ty},${type},${cap}`;
     const hit = this._patchCache.get(key);
     if (hit !== undefined) return hit;
-    if (this.supports.grass) {
-      // fields.patch() is keyed by AFFINITY (the species), not by grass name,
-      // and already refuses contested tiles and 8-connectivity for the same
-      // reason we would: a patch is ground you can walk.
-      const species = SPECIES_FOR_GRASS[type];
-      const r = species ? this.fields.patch(species, tx, ty, cap) : null;
-      const size = r ? r.size : 0;
-      this._patchCache.set(key, size);
-      return size;
-    }
     const here = this.grassAt(tx, ty);
     if (here.type !== type || here.contested) {
       this._patchCache.set(key, 0);
@@ -2841,24 +2843,44 @@ export class Bestiary {
     return g;
   }
 
-  /** The evaluation context for one creature at one tile. */
-  _ctx(creature, tx, ty) {
+  /**
+   * A MOVABLE evaluation context — one object whose `tx`/`ty` are written as a
+   * scan walks the map, rather than a fresh object per tile.
+   *
+   * This is the difference between a 20x20 garden and a 60x60 one.
+   *
+   * `_ctx` used to close over `tx` and `ty` directly, so every tile allocated an
+   * object carrying eleven closures. `bestSpotFor` visits every tile, `_rescan`
+   * calls it once per creature, and the scan runs every 1.5 garden-seconds — so
+   * at 60x60 that was 3600 x 11 x 5 ~ 200,000 closures built and thrown away
+   * twice a second. Measured: `_rescan` cost 27 ms at 20x20 and **1205 ms** at
+   * 60x60, against a 16 ms frame. Nine times the tiles cost forty-eight times
+   * the time, and only 4% of it was the zoning queries everyone would suspect —
+   * the rest was allocation and the garbage collector.
+   *
+   * The closures now read `c.tx` / `c.ty` off the cursor they live on, so a scan
+   * allocates ONE of these however big the map is.
+   *
+   * Callers that keep a context beyond the current tile must take a copy.
+   * Nothing does; `evaluateRung` reads it and discards it.
+   */
+  _cursor(creature) {
     const st = this.state.get(creature.id);
     const self = this;
     const own = creature.grass || GRASS_FOR[creature.id] || null;
-    return {
-      tx,
-      ty,
+    const c = {
+      tx: 0,
+      ty: 0,
       ownGrass: own,
-      field: (axis) => self.fields.at(axis, tx, ty),
+      field: (axis) => self.fields.at(axis, c.tx, c.ty),
       count: (tag, radius, opts) =>
-        self._grid(tag, radius, !!(opts && opts.occluded))[ty * self.fields.w + tx] | 0,
-      grass: () => self.zoning.grassAt(tx, ty),
-      patchSize: (cap) => self.zoning.patchAt(tx, ty, own, cap),
-      seam: () => self.zoning.seamAt(tx, ty),
+        self._grid(tag, radius, !!(opts && opts.occluded))[c.ty * self.fields.w + c.tx] | 0,
+      grass: () => self.zoning.grassAt(c.tx, c.ty),
+      patchSize: (cap) => self.zoning.patchAt(c.tx, c.ty, own, cap),
+      seam: () => self.zoning.seamAt(c.tx, c.ty),
       zoningClaimed: () => self.zoning.claimed,
       hasElevation: () => self.zoning.supports.elevation,
-      feature: (name, radius) => self.zoning.featureCount(name, tx, ty, radius),
+      feature: (name, radius) => self.zoning.featureCount(name, c.tx, c.ty, radius),
       other: (id) => {
         const o = self.state.get(id);
         return o ? { rungIndex: o.rungIndex, home: o.home } : null;
@@ -2867,9 +2889,38 @@ export class Bestiary {
       beatSiteReady: (id) => {
         const b = BEATS[id];
         if (!b) return false;
-        return !!self.fields.nearest(b.site, tx, ty, b.radius);
+        return !!self.fields.nearest(b.site, c.tx, c.ty, b.radius);
       },
     };
+    return c;
+  }
+
+  /** The evaluation context for one creature at one tile. */
+  _ctx(creature, tx, ty) {
+    const c = this._cursor(creature);
+    c.tx = tx;
+    c.ty = ty;
+    return c;
+  }
+
+  /**
+   * Score one rung at one tile WITHOUT building the per-requirement report.
+   *
+   * `bestSpotFor` wants two numbers from every tile on the map and throws the
+   * rest away; at 60x60 the discarded `results` array was 3600 arrays of six
+   * objects per creature per scan. The journal path still gets the full report
+   * from `evaluateRung` — this is the scan's door, not a replacement.
+   */
+  _scoreAt(creature, rungName, c) {
+    const reqs = creature.rungs[rungName] || [];
+    let sum = 0;
+    let met = true;
+    for (const r of reqs) {
+      const out = r.evaluate(c);
+      sum += out.score;
+      if (!out.met) met = false;
+    }
+    return { score: reqs.length ? sum / reqs.length : 1, met };
   }
 
   /** Score one rung at one tile. Returns { score, met, results }. */
@@ -2902,10 +2953,15 @@ export class Bestiary {
     // which is the water table doing its work at the point where a home is
     // chosen rather than only at the point where a foot is put down.
     const pass = this.passableFor(creatureId);
+    // ONE cursor for the whole sweep. See `_cursor`: building a fresh context
+    // per tile is what made a 60x60 map cost 1.2 s a scan.
+    const c = this._cursor(creature);
     for (let ty = 0; ty < this.fields.h; ty++) {
       for (let tx = 0; tx < this.fields.w; tx++) {
         if (pass && !pass(tx, ty)) continue;
-        const r = this.evaluateRung(creature, rungName, tx, ty);
+        c.tx = tx;
+        c.ty = ty;
+        const r = this._scoreAt(creature, rungName, c);
         // A tie-break, not a requirement, and it never appears in the journal:
         // it only decides WHICH of two equally good tiles a creature walks to.
         const score = r.score + this._siting(creature, tx, ty);

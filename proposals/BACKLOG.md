@@ -127,6 +127,24 @@ These are the survivors — real, but not worth stopping for:
   cooldown resets on every load. Harmless in a game with no economy; noted so
   nobody is surprised.
 
+## 4d · Reported from outside
+
+- **Canvas2D `willReadFrequently` warnings from `render.js`** (spotted by rock
+  bot in the live browser console). Repeated, non-fatal. A 2D context that gets
+  `getImageData` called on it should be created with
+  `getContext('2d', { willReadFrequently: true })` or the browser keeps it on
+  the GPU and pays a readback stall each time. Worth finding which context is
+  being read — the raster/stipple caches are the likely ones — and either
+  flagging it at creation or hoisting the read out. Polish, but it is free
+  performance and it is noisy in the console.
+
+- **The settling scan still hitches at 60×60.** Fixed from 1205 ms to 58 ms (see
+  `grassCounts` memoisation), which unblocked the bigger map, but 58 ms is still
+  ~3½ dropped frames every 1.5 garden-seconds. The obvious next step is to
+  stagger `_rescan` round-robin — one creature per tick rather than all five —
+  which would put it comfortably inside a frame. Not done yet; the map was the
+  goal and the freeze was the blocker.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
