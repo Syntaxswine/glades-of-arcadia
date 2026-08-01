@@ -464,6 +464,95 @@ sprites, generalised to all of them and derived rather than tolerated.
 **Do not skip step 2.** Deleting before enlarging trades a green mat for no
 shadow at all, which will read as everything floating -- the bug we started from.
 
+### VERIFIED -- a five-lens investigation, each lens adversarially checked
+
+Numbers below survived a second agent trying to refute them.
+
+**The landed fix is right and needs no rework.** At HEAD: heroon +1/5, tumulus
+-1/1, arcadian-tomb -1/0, still-pool 0/3 (past/gap), 365 tests, `iso-audit`
+0/237, `anchor-audit` 0 floating, and all four shadows still VISIBLE
+(1397 / 1359 / 696 / 123 px).
+
+**THE TRAP IN THE OBVIOUS FIX.** Do NOT solve the green mat by remapping `m`
+per ground. **`m` is also `GRASS[0]` and is used as OBJECT colour** -- 457 of
+the tumulus's `m` pixels are its own barrow turf, nowhere near the skirt. A
+blanket remap repaints the mound. The fix needs a **reserved shadow key** the
+palette maps per ground, or the skirt lifted out of the sprite. Step 3 gets
+this for free, which is another argument for doing it rather than patching.
+
+**THE OTHER TRAP: do not re-centre without growing `r`.** Moving `cy` to the
+anchor at the OLD radius measures out at: tumulus **0 px** of shadow (entirely
+inside its own silhouette), heroon ~340 (95% of its contact gone), tomb 226,
+still-pool 51. And the growth must be **per sprite** -- a blanket `r * 1.5`
+pushes the arcadian-tomb back outside its own 2x1 vertex, whose window is
+`r <= 46`. The old objection to a full-width tumulus skirt ("a black bar two
+tiles wide", props.js) no longer applies: at 2:1 depth that is a crescent.
+
+**Four more faults, ranked by confidence:**
+
+1. **Catalog footprint != sprite footprint, and nothing measures it.**
+   `anchor-audit` audits `sprite.footprint`; the renderer places at the
+   **catalog** footprint's centre. **12 placeable entries declare multi-tile
+   with a 1x1 sprite** -- `exedra`, `tiered-fountain`, `ancient-oak`,
+   `sleeping-satyr`, `ruined-arch`, `level-bridge`, `fern-grotto`,
+   `mosaic-panel`, `arbour-seat`, `cypress-screen`, `grotto-basin`,
+   `cave-mouth`. **The same CLASS of float the owner reported**, and it
+   predates everything here.
+2. **`pool()` took the identical `ry` doubling and its collateral went
+   unchecked.** `willow-water`'s curtain now stops **32 rows short of the
+   waterline**; `spring-basin`'s marble apron slid 3 rows forward and its
+   unguarded `B` arc runs through the rim; `unbasined-spring`'s outflow starts
+   inside the pool. Only `unbasined-spring` is reachable in-world.
+3. **`tools/anchor-audit.mjs` HAS NO SINK ARM AT ALL** -- a human running the
+   tool sees `(none)` at any depth of burial. Only `test/sprite-anchors.test.mjs`
+   has it, and it caught the heroon by a margin of **exactly zero**
+   (`short = -16`, fires on `< -16`); it would not have caught the tumulus or
+   the tomb. Separately its `lowestOpaqueRow` **counts `m`**, so a runaway
+   shadow can testify that its own object reaches the ground. The float arm
+   must measure the lowest NON-`m` row, the overshoot arm the `m`.
+4. **The runtime stamp is dead work on wide objects and wrong on non-square
+   plots.** On heroon/tumulus/arcadian-tomb/exedra-marble/tholos/rock-outcrop
+   **0 of 1224** stamp pixels survive occlusion. On the 3x1 colonnade the
+   rhombus falls **outside the parallelogram plot by 104 px**, 838 visible.
+   `(fw+fh)/2` also collapses a 3x1 and a 2x2 to the same stamp.
+
+**THE INVARIANT, with its tolerance argued.** A second arm on `anchor-audit`,
+measured on RENDERED PIXELS rather than at the call site, and extend the tool to
+1x1 sprites -- it `continue`s on them today, which is exactly why `still-pool`
+was invisible to it:
+
+```
+lowest 'm' row - anchor[1]  <=  (fw + fh) * 8 + 8
+```
+
+**Tolerance 8**, three ways: the data has an empty band there (worst legitimate
+overshoot at HEAD is +4; the four bugs were +10..+16, so 8 is the middle of a
+gap rather than a guess); `LEVEL_H = 16`, so 16 px of downward displacement is
+exactly one terrace and is what makes a building read as levitating, and half of
+that is the outer bound of "still reads as contact"; and it sits inside the
+derived corner-circle allowance for a 2x2 (13.25 px).
+
+A tile-space clause enforced at the CALL SITE was proposed and **rejected**: its
+tolerance uses `min(fw,fh)`, which is picked rather than derived (a 2x1's true
+corner spill is 19.78 px, not 7); it convicts deliberately off-plot sub-objects
+that the same proposal exempts in prose; and it needs anchor + footprint
+threaded through **43** call sites, not the ~25 claimed.
+
+**Residue, low urgency:** the heroon's ash altar,
+`skirt(g, ALT_X - 2, ALT_Y + 19, 13)`, still carries the same authoring error
+(~8 px overhang). It is currently MASKED by the podium's new r=60 skirt. When it
+is fixed the rule is **not** "centre on the sprite anchor": the altar is a
+sub-object standing on grass 46 px left of the building, and its centre is its
+own base diamond, about `ALT_Y + 10`.
+
+**And two of my own claims did not survive.** The comment I wrote on `pergola`
+("no contact shadow at all") is FALSE -- rows 35-37 were already the post feet
+in `m`, and an explicit radius forces `cut = rows.length`, so it now draws
+**two** shadows. And "48 hand-typed contact bands" is 48 ROWS; **68 sprites**
+carry hand-typed `m`. Also worth knowing before facing grows: `groundContact`
+centres on `ax + 0.5` in index space, giving a **1 px swing between mirrored
+facings**.
+
 ## Maker's mark
 
 Built 2026-07-30 → 07-31, in one long session, from a photograph of a Hellenistic
