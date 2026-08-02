@@ -717,11 +717,17 @@ chose, a connected one obeys the run — **and the wheel then lets go**, because
 the sixteen states are absolute.
 
 **The straight is byte-identical** (54x40, anchor 26,28, 855 opaque px), so
-only corners are new art. `linearJoins()` in decor.js takes any piece built by
-`slab()` along +tx for one line: **`balustrade` and `drystone-wall` are next**,
-and `balustrade` is also the last name in `KNOWN_FLAT_FEET`, blocked on §4l's
-scalloping — which is now the same question wearing a third hat, and one the
-art can finally answer, since a piece knows its own mask.
+only corners are new art. **`drystone-wall` joined too**, for four lines of
+call site — `linearJoins()` now lives in `js/art/format.js`, where props.js and
+decor.js share it.
+
+**`balustrade` is the one left out, and not by oversight.** Its anchor is at
+x = 10 on a 46-wide sprite — the slab's far corner, not the run's midpoint —
+so the arm cut would give a stub and a spar. Moving it to 22 fixes that AND the
+staggering in its runs AND, almost certainly, its place in `KNOWN_FLAT_FEET`.
+**One decision with three faces**, and it belongs with §4l's shadow stamp,
+which is now easier: a piece knows its own mask, so the stamp can come from
+`joinAxis(mask)` rather than be measured off a base contour.
 
 ### ▸ THE ELEVATION LIST — `iso-audit --elev --catalog`
 

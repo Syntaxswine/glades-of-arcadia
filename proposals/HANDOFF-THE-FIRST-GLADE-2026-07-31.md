@@ -1647,14 +1647,29 @@ before and after. Only a corner is new art, and a test asserts it.
    still 1 flagged**: every generated corner meets the ground correctly, because
    an arm inherits its parent's foot.
 
-### Still to carry
+### Carried, and the one that was not
 
-`balustrade` and `drystone-wall` want `linearJoins`. **`balustrade` is also the
-one name in `KNOWN_FLAT_FEET`**, blocked on the scalloping decision from the
-last arc — which is now visibly the same decision wearing a third hat: the
-runtime shadow needs to know a piece is part of a run, and the piece now does.
+`drystone-wall` took it for four lines of call site and no new art, which is
+the only real test of "any piece built by `slab()` along +tx can have it for
+one line" — a helper that turns out to need its subject reshaped was never the
+helper it claimed to be. The wall qualified without knowing it: already a
+full-tile bar running down-right from an anchor at its exact midpoint. Three
+families join now, and `linearJoins` lives in **format.js**, because props.js
+and decor.js share the helpers that state a fact about the world and nothing
+else.
+
+**`balustrade` is still out, and not by oversight.** Its anchor is at x = 10 on
+a 46-wide sprite — X0, the slab's far corner, not the run's midpoint — so
+`armsOf` would cut it into a stub and a spar. Moving it to 22 would fix that
+AND the visible staggering in its runs AND, almost certainly, its place in
+`KNOWN_FLAT_FEET`, all at once.
+
+That is the shape of the thing: **one decision with three faces.** It belongs
+with the shadow-stamp work it has been blocked on since the last arc, and that
+work is now easier than it was, because a piece knows its own mask — the stamp
+can be chosen from `joinAxis(mask)` instead of measured off a base contour.
 `groundCentre` on a corner would give an even worse circle than on a straight,
-so the shadow work and this one should land together.
+so the two should land together and neither alone.
 
 ## 6 · STILL OPEN, and where
 
