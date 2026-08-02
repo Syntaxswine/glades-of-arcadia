@@ -60,9 +60,9 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP } from './format.js';
+import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP, linearJoins } from './format.js';
 import { variant } from '../palette.js';
-import { LEVEL_H, GROUND_ELLIPSE, JOIN_DIRS, JOIN_MASKS } from '../iso.js';
+import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
 // ===========================================================================
 // Authoring plumbing
@@ -1790,83 +1790,6 @@ function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
 // Drawn back to front — the two arms that go away from the camera first — so a
 // solid mass reads as one solid rather than as two slabs meeting.
 // ---------------------------------------------------------------------------
-
-/** Everything on one side of the hub column, as a grid the same size. */
-function halfGrid(g, ax, side) {
-  return g.map((row) => row.map((k, x) => ((side > 0 ? x >= ax : x <= ax) ? k : '.')));
-}
-
-/** A grid reversed about its vertical centre. The hub moves with it. */
-function mirrorGrid(g) {
-  return g.map((row) => row.slice().reverse());
-}
-
-/**
- * The four arms of a linear piece, each as `{ g, ax }` with its own hub column.
- * Order matches JOIN_DIRS: +tx, +ty, -tx, -ty.
- */
-function armsOf(g, ax) {
-  const W = g[0].length;
-  const back = halfGrid(g, ax, -1); // -tx: up-left, behind
-  const fore = halfGrid(g, ax, 1); //  +tx: down-right, in front
-  return [
-    { g: fore, ax }, // +tx
-    { g: mirrorGrid(fore), ax: W - 1 - ax }, // +ty — the same arm, turned
-    { g: back, ax }, // -tx
-    { g: mirrorGrid(back), ax: W - 1 - ax }, // -ty
-  ];
-}
-
-/**
- * Compose the arms a mask names into one sprite, registered on the hub.
- *
- * The canvas is sized from the arms actually used rather than from the widest
- * possible piece, so a corner is not padded out with the transparent columns
- * of the arm it does not have — and the anchor is stated outright rather than
- * derived from the width, which is the mistake that put the palisade's first
- * corner half a tile off its plot.
- */
-function joinedPiece(name, arms, mask, ay, opts) {
-  // Back arms first: -tx and -ty go away from the camera, so a front arm
-  // drawn over them is what makes the bend one solid rather than two.
-  const order = [2, 3, 0, 1].filter((i) => mask & JOIN_DIRS[i][2]);
-  const use = order.length ? order : [2, 0]; // no neighbours: the straight run
-  let L = 0;
-  let R = 0;
-  let H = 0;
-  for (const i of use) {
-    const a = arms[i];
-    L = Math.max(L, a.ax);
-    R = Math.max(R, a.g[0].length - 1 - a.ax);
-    H = Math.max(H, a.g.length);
-  }
-  const out = Array.from({ length: H }, () => new Array(L + R + 1).fill('.'));
-  for (const i of use) {
-    const a = arms[i];
-    for (let y = 0; y < a.g.length; y++) {
-      for (let x = 0; x < a.g[0].length; x++) {
-        const k = a.g[y][x];
-        if (k !== '.') out[y][L + x - a.ax] = k;
-      }
-    }
-  }
-  return defineSprite({
-    name: `${name}@${mask}`,
-    anchor: [L, ay],
-    rows: padToAnchor(out.map((r) => r.join('')), ay),
-    footprint: [1, 1],
-    tags: opts.tags || [],
-  });
-}
-
-/** A linear piece and all sixteen of its connection states. */
-function linearJoins(name, built, opts) {
-  const arms = armsOf(built.g, built.ax);
-  const joins = Object.freeze(
-    Array.from({ length: JOIN_MASKS }, (_, m) => joinedPiece(name, arms, m, built.ay, opts))
-  );
-  return defineSprite({ ...joins[0], name, joins });
-}
 
 {
   const lo = hedgeGrid(8, BOX, 41);

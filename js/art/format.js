@@ -29,7 +29,7 @@
 // the cheap period trick: the same rows drawn through a shifted ramp gives you
 // an autumn tree, a moonlit statue, or a dead shrub for free.
 
-import { GROUND_ELLIPSE } from '../iso.js';
+import { GROUND_ELLIPSE, JOIN_DIRS, JOIN_MASKS } from '../iso.js';
 
 const TRANSPARENT = '.';
 
@@ -414,6 +414,107 @@ export const LINE_W = 33;
  * matches what a 2:1 line drawn as pixel PAIRS actually does.
  */
 export const LINE_DROP = (x) => x >> 1;
+
+
+// ---------------------------------------------------------------------------
+// JOINING — the sixteen ways a linear piece can meet its neighbours.
+//
+// js/iso.js §JOINING has the argument for why a corner cannot be a facing.
+// This is the machinery, and it lives HERE for the same reason `foot` and
+// `LINE_W` do: props.js and decor.js keep separate copies of nearly every grid
+// helper on purpose, and NOT of the ones that state a fact about the world. A
+// hedge and a drystone wall that bent at different pitches would be the exact
+// seam this whole arc is about.
+//
+// IT NEEDS NO NEW ART, which is the good part and falls out of two facts about
+// the projection rather than out of cleverness:
+//
+//   a bar drawn along +tx runs down-right from its anchor, so A VERTICAL CUT
+//   AT THE ANCHOR COLUMN SEPARATES ITS TWO ARMS EXACTLY — everything left of
+//   it reaches -tx and everything right of it reaches +tx;
+//   a horizontal mirror swaps the two tile axes, so those same two halves,
+//   REVERSED, are the -ty and +ty arms.
+//
+// So one bar gives all four arms, and any piece already built by `slab()`
+// along +tx can have all sixteen states for one line.
+// ---------------------------------------------------------------------------
+
+/** Everything on one side of the hub column, as a grid the same size. */
+function halfGrid(g, ax, side) {
+  return g.map((row) => row.map((k, x) => ((side > 0 ? x >= ax : x <= ax) ? k : '.')));
+}
+
+/** A grid reversed about its vertical centre. The hub moves with it. */
+function mirrorGrid(g) {
+  return g.map((row) => row.slice().reverse());
+}
+
+/**
+ * The four arms of a linear piece, each as `{ g, ax }` with its own hub column.
+ * Order matches JOIN_DIRS: +tx, +ty, -tx, -ty.
+ */
+function armsOf(g, ax) {
+  const W = g[0].length;
+  const back = halfGrid(g, ax, -1); // -tx: up-left, behind
+  const fore = halfGrid(g, ax, 1); //  +tx: down-right, in front
+  return [
+    { g: fore, ax }, // +tx
+    { g: mirrorGrid(fore), ax: W - 1 - ax }, // +ty — the same arm, turned
+    { g: back, ax }, // -tx
+    { g: mirrorGrid(back), ax: W - 1 - ax }, // -ty
+  ];
+}
+
+/**
+ * Compose the arms a mask names into one sprite, registered on the hub.
+ *
+ * The canvas is sized from the arms actually used rather than from the widest
+ * possible piece, so a corner is not padded out with the transparent columns
+ * of the arm it does not have — and the anchor is stated outright rather than
+ * derived from the width, which is the mistake that put the palisade's first
+ * corner half a tile off its plot.
+ */
+function joinedPiece(name, arms, mask, ay, opts) {
+  // Back arms first: -tx and -ty go away from the camera, so a front arm
+  // drawn over them is what makes the bend one solid rather than two.
+  const order = [2, 3, 0, 1].filter((i) => mask & JOIN_DIRS[i][2]);
+  const use = order.length ? order : [2, 0]; // no neighbours: the straight run
+  let L = 0;
+  let R = 0;
+  let H = 0;
+  for (const i of use) {
+    const a = arms[i];
+    L = Math.max(L, a.ax);
+    R = Math.max(R, a.g[0].length - 1 - a.ax);
+    H = Math.max(H, a.g.length);
+  }
+  const out = Array.from({ length: H }, () => new Array(L + R + 1).fill('.'));
+  for (const i of use) {
+    const a = arms[i];
+    for (let y = 0; y < a.g.length; y++) {
+      for (let x = 0; x < a.g[0].length; x++) {
+        const k = a.g[y][x];
+        if (k !== '.') out[y][L + x - a.ax] = k;
+      }
+    }
+  }
+  return defineSprite({
+    name: `${name}@${mask}`,
+    anchor: [L, ay],
+    rows: padToAnchor(out.map((r) => r.join('')), ay),
+    footprint: [1, 1],
+    tags: opts.tags || [],
+  });
+}
+
+/** A linear piece and all sixteen of its connection states. */
+export function linearJoins(name, built, opts) {
+  const arms = armsOf(built.g, built.ax);
+  const joins = Object.freeze(
+    Array.from({ length: JOIN_MASKS }, (_, m) => joinedPiece(name, arms, m, built.ay, opts))
+  );
+  return defineSprite({ ...joins[0], name, joins });
+}
 
 /**
  * Give a generated grid the foot its own base implies, and stamp it in place.

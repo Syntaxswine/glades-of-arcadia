@@ -51,7 +51,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, groundFoot } from './format.js';
+import { defineSprite, padToAnchor, groundFoot, linearJoins } from './format.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -3101,9 +3101,23 @@ export const DRYSTONE_WALL = (() => {
       put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
     }
   }
-  return composed('drystone-wall', g, [32, Math.round(y0 + 16 + deep + high)], {
-    tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'],
-  });
+  // ALL SIXTEEN CONNECTION STATES, for one line — js/art/format.js §JOINING.
+  // The wall was already drawn as a full-tile bar running down-right from an
+  // anchor at its exact midpoint (x = 32 of 65), which is the only thing
+  // `linearJoins` needs: it cuts the bar at the hub to get the -tx and +tx
+  // arms and mirrors those two to get -ty and +ty. A run of walls is
+  // byte-identical to what it was; only a corner is new art.
+  //
+  // Note what this fixes that no audit was looking at. A nullifier that leaves
+  // a gap "is not a barrier, and the player will not believe a line they can
+  // see through" — the note above, written about a run. The same argument
+  // applies at a BEND, and until now two walls meeting at right angles crossed
+  // each other and stuck a spur out past the turn.
+  return linearJoins(
+    'drystone-wall',
+    { g, ax: 32, ay: Math.round(y0 + 16 + deep + high) },
+    { tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'] }
+  );
 })();
 
 /** Nullifier · a cypress screen. The most Mediterranean way to divide ground,
