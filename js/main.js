@@ -38,7 +38,7 @@
 // defensively so a broken sibling costs you its own feature and nothing else;
 // iso.js is exempt because it is pure arithmetic with no dependencies, and a
 // game that cannot project a tile has no feature left to lose.
-import { MAP_W, MAP_H, VIEW_W, VIEW_H } from './iso.js';
+import { MAP_W, MAP_H, VIEW_W, VIEW_H, JOIN_DIRS } from './iso.js';
 import { createMinimap } from './minimap.js';
 
 // SPEC §2 — the backing store, exactly. IMPORTED, not restated: this file used
@@ -1231,14 +1231,77 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
     return { art, water: wet, level, grass, grass2 };
   };
 
+  /**
+   * JOINING — a linear piece picks its drawing from its NEIGHBOURS.
+   *
+   * The owner: *"things like hedges and fences can go around corners."* A
+   * corner cannot be a facing: an L comes in four kinds and the mirror maps two
+   * of them to themselves, so corners need three drawings plus the straight and
+   * `FACINGS` is 4. js/iso.js §JOINING has the whole argument.
+   *
+   * THIS IS THE RIGHT PLACE FOR IT AND IT COSTS NOTHING, which is worth saying
+   * because neighbour-dependent art usually means a cache-invalidation problem.
+   * It does not here:
+   *
+   *   `buildObjects` is rebuilt only when the world changes — so placing a
+   *   hedge re-asks every hedge, and panning and dusk re-ask nobody;
+   *   js/render.js keys its raster cache on the ART OBJECT, so choosing a
+   *   different member of `art.joins` simply hits a different entry rather
+   *   than dirtying one.
+   *
+   * Two pieces connect when their `joins` group matches, which is the
+   * catalogue id unless an entry says otherwise. A low hedge cornering into a
+   * tall one is a design question, and same-id is the answer that cannot
+   * surprise anybody.
+   */
+  const joinGroupOf = (def) => (def && (def.joins || def.id)) || null;
+  const joinsAt = new Map(); // "tx,ty" -> group, rebuilt with the object list
+  const maskFor = (o, def) => {
+    const art0 = artist.artFor(def, o.seed, o.stage);
+    if (!art0 || !art0.joins) return 0;
+    const group = joinGroupOf(def);
+    let mask = 0;
+    for (const [dtx, dty, bit] of JOIN_DIRS) {
+      if (joinsAt.get(`${o.tx + dtx},${o.ty + dty}`) === group) mask |= bit;
+    }
+    return mask;
+  };
+
   /** Rebuilt only when the world changes — panning and dusk cost nothing. */
   const buildObjects = () => {
     const out = [];
+    // Pass one: who is where, so pass two can ask about neighbours. Only
+    // pieces that actually join are indexed, so a garden with no fences in it
+    // pays for one empty Map.
+    joinsAt.clear();
     for (const o of world.objects) {
       const def = cat.byId(o.id);
       if (!def) continue;
-      const art = artist.artFor(def, o.seed, o.stage);
+      const a = artist.artFor(def, o.seed, o.stage);
+      if (a && a.joins) joinsAt.set(`${o.tx},${o.ty}`, joinGroupOf(def));
+    }
+    for (const o of world.objects) {
+      const def = cat.byId(o.id);
+      if (!def) continue;
+      let art = artist.artFor(def, o.seed, o.stage);
       if (!art) continue;
+      // A connected piece obeys the run; an isolated one keeps the wheel, so
+      // the first hedge a player puts down still has a direction they chose
+      // and the second one decides what the first meant.
+      //
+      // AND THE WHEEL MUST THEN LET GO. The sixteen states are absolute — mask
+      // 6 IS the piece that reaches -tx and +ty — so mirroring one because the
+      // player had turned it before it had neighbours would point a corner at
+      // the wrong two tiles. The stored facing is untouched: pull the piece
+      // out of the run and it turns again exactly as it did.
+      let facing = o.facing || 0;
+      if (art.joins) {
+        const mask = maskFor(o, def);
+        if (mask) {
+          art = art.joins[mask] || art;
+          facing = 0;
+        }
+      }
       out.push({
         tx: o.tx,
         ty: o.ty,
@@ -1255,8 +1318,9 @@ function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
         shadow: def.shadow,
         // Which way round. 0 (as drawn) for everything in every garden made
         // before the wheel could turn things, and for everything that does not
-        // turn — render.js only builds a mirrored raster when it is odd.
-        facing: o.facing || 0,
+        // turn — render.js only builds a mirrored raster when it is odd. Zero
+        // too for a piece that joined a run: see above.
+        facing,
         uid: o.uid,
       });
     }

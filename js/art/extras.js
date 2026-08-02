@@ -21,6 +21,7 @@
 // DOM-free. Imports cleanly in Node.
 
 import { defineSprite, foot, LINE_W, LINE_DROP } from './format.js';
+import { JOIN_DIRS, JOIN_MASKS, joinAxis } from '../iso.js';
 
 /** The marble ramp's keys, darkest first — the same letters props.js uses. */
 const MARBLE = 'ABCDE';
@@ -76,74 +77,156 @@ function sprite(name, [dx, up], rows, opts = {}) {
 // steps in from the left as it narrows.
 // ===========================================================================
 
-const STAKES = 6; // per tile
-/** Stake feet along the run, spaced so the rhythm continues across the joint. */
-const STAKE_X = Array.from({ length: STAKES }, (_, i) => Math.round((i * (LINE_W - 1)) / STAKES));
-const STAKE_H = 13; // tip to ground
-const RUN = LINE_W - 1; // 32 px of run; the 33rd column is the overlap
-const FENCE_W = LINE_W;
-const baseAt = (x) => STAKE_H + LINE_DROP(x); // stake 0's tip lands on row 0
-// Exactly as tall as the last stake's planted row, so there are no dead rows
-// under it. `up` in the anchor is measured from the bottom, so a sprite with
-// slack at the bottom is a sprite whose anchor arithmetic has a fudge in it.
-const FENCE_H = baseAt(STAKE_X[STAKES - 1]) + 2;
+// ---------------------------------------------------------------------------
+// ...AND THEN IT LEARNED TO TURN A CORNER.
+//
+// The straight piece above joined perfectly in both directions and still made
+// an X where two runs met: each tile drew a finished bar, so the bar on the
+// corner tile carried on past the turn and its end stuck out as a spike.
+//
+// So the fence is no longer a BAR. It is a HUB AND UP TO FOUR ARMS, each arm a
+// half-tile reach from the tile's own centre toward one neighbour, and the
+// sixteen connection states are generated from one function rather than drawn
+// sixteen times. A straight run is the {E,W} mask and comes out byte for byte
+// the same rhythm it had before; a corner is {W,S}; a T is three arms; the
+// cross is four. None of them can disagree with each other about the pitch of
+// a rail or the spacing of a stake, because there is only one arm.
+//
+// THE ARM VECTORS, which are just the projection: half a tile step is 16 px
+// across and 8 down, and the four tile directions put those together four ways.
+//
+//     +tx  (+16, +8)      -tx  (-16, -8)
+//     +ty  (-16, +8)      -ty  (+16, -8)
+//
+// Stakes at 3, 8 and 13 px along each arm — never AT the centre, so the hub can
+// carry its own corner post the way a real fence does, and so a straight run
+// keeps a 5-6 px rhythm that crosses the tile joint without a doubled post.
+// ---------------------------------------------------------------------------
 
-function palisadeRows() {
+const HALF = (LINE_W - 1) / 2; // 16 px: half a tile step across
+const STAKE_H = 13; // tip to ground
+/** How far along an arm each stake stands. Not 0 — the hub owns the centre. */
+const STAKE_AT = [3, 8, 13];
+const CX = HALF + 1; // the tile centre, with room for a stake's 3px body
+const CY = STAKE_H + Math.round(HALF / 2); // ...on the ground line the run sits in
+const FENCE_W = CX + HALF + 3;
+const FENCE_H = CY + Math.round(HALF / 2) + 2;
+
+/** Screen offset `i` px along an arm, from the tile centre. */
+function armStep(dtx, dty, i) {
+  // +tx is (+32, +16) per tile and +ty is (-32, +16), so the x sign is the
+  // difference of the two and the y sign is their sum — which for a single
+  // orthogonal step is just dtx - dty and dtx + dty.
+  const sx = dtx - dty;
+  const sy = dtx + dty;
+  return { x: CX + sx * i, y: CY + sy * LINE_DROP(i) };
+}
+
+function stake(put, x0, base) {
+  const tip = base - STAKE_H;
+  // The point: two rows narrowing to a single lit pixel.
+  put(x0 + 1, tip, 't');
+  put(x0, tip + 1, 't');
+  put(x0 + 1, tip + 1, 's');
+  for (let y = tip + 2; y <= base; y++) {
+    put(x0, y, 't');
+    put(x0 + 1, y, 's');
+    put(x0 + 2, y, 'r');
+  }
+  // Where it enters the ground: one row of the darkest earth, so the stake is
+  // planted rather than resting on the grass.
+  put(x0, base + 1, 'q');
+  put(x0 + 1, base + 1, 'q');
+}
+
+/**
+ * One palisade piece for a connection mask. `mask` is js/iso.js's — bit 1 is
+ * the +tx neighbour, 2 is +ty, 4 is -tx, 8 is -ty.
+ */
+function palisadeRows(mask) {
   const g = Array.from({ length: FENCE_H }, () => new Array(FENCE_W).fill('.'));
   const put = (x, y, k) => {
     if (x >= 0 && x < FENCE_W && y >= 0 && y < FENCE_H) g[y][x] = k;
   };
+  const arms = JOIN_DIRS.filter(([, , bit]) => mask & bit);
+  // A piece with no neighbours at all is still a fence, not a lone post: it
+  // draws the straight run, and js/main.js lets the facing wheel decide which
+  // diagonal that is. Anything else would make the first piece a player places
+  // look like a mistake until they placed the second.
+  const use = arms.length ? arms : [JOIN_DIRS[0], JOIN_DIRS[2]];
 
-
-  // Then the two rails, so the stakes draw over them and read as in front.
-  // Each rail follows the tile edge's own slope and is 2px deep — a rail seen
-  // very nearly edge-on, which is all a rail is at this size. It runs the FULL
-  // width including the overlap column, so two pieces meet rail to rail.
+  // Rails first, so the stakes draw over them and read as in front. Each is
+  // 2px deep — a rail seen very nearly edge-on, which is all a rail is here.
+  // They run one pixel PAST the half-tile so two pieces meet rail to rail.
   for (const drop of [4, 9]) {
-    for (let x = 0; x < FENCE_W; x++) {
-      const y = baseAt(x) - drop;
-      put(x, y, 't');
-      put(x, y + 1, 'r');
+    for (const [dtx, dty] of use) {
+      for (let i = 0; i <= HALF + 1; i++) {
+        const { x, y } = armStep(dtx, dty, i);
+        put(x, y - drop, 't');
+        put(x, y - drop + 1, 'r');
+      }
     }
   }
 
-  // Stakes last, over the rails.
-  STAKE_X.forEach((x0) => {
-    const base = baseAt(x0);
-    const tip = base - STAKE_H;
-    // The point: two rows narrowing to a single lit pixel.
-    put(x0 + 1, tip, 't');
-    put(x0, tip + 1, 't');
-    put(x0 + 1, tip + 1, 's');
-    for (let y = tip + 2; y <= base; y++) {
-      put(x0, y, 't');
-      put(x0 + 1, y, 's');
-      put(x0 + 2, y, 'r');
-    }
-    // Where it enters the ground: one row of the darkest earth, so the stake
-    // is planted rather than resting on the grass.
-    put(x0, base + 1, 'q');
-    put(x0 + 1, base + 1, 'q');
-  });
+  // The corner post, on the hub, whenever the run actually bends or branches.
+  // A straight piece must NOT have one: it would land in the middle of an
+  // otherwise even rhythm and read as a repair.
+  if (!joinAxis(mask) && arms.length) stake(put, CX - 1, CY);
 
-  return g.map((r) => r.join('').replace(/\.+$/, '') || '.');
+  for (const [dtx, dty] of use) {
+    for (const at of STAKE_AT) {
+      const { x, y } = armStep(dtx, dty, at);
+      stake(put, x - 1, y);
+    }
+  }
+
+  // NOT trimmed. `sprite()` above derives its width from the longest row and
+  // then places the anchor at that width's midpoint, which is right for a
+  // hand-typed sprite and WRONG here: a corner reaches only one way, so its
+  // rows are short on one side and the derived centre lands off the hub. Every
+  // one of the sixteen keeps the full grid and states its anchor outright.
+  return g.map((r) => r.join(''));
 }
 
 /**
- * The anchor sits at the MIDPOINT OF THE RUN — column 16, on the ground line
- * the stakes are planted in — because that is the pixel a linear piece puts on
- * its tile's centre. With it there, a fence at tile (t+1, u) draws its first
- * stake exactly where this one's 33rd column falls, at exactly the row this
- * one's rail has reached. That is not a tuning: it is `LINE_W` and `LINE_DROP`
- * doing what they say, and it is checkable — `node tools/joinshot.mjs --ids
- * palisade-fence`.
+ * The anchor sits on the TILE CENTRE — the hub, on the ground line the run is
+ * planted in. With it there, a fence at tile (t+1, u) draws its -tx arm exactly
+ * over the +tx arm of the one before it, at exactly the row that arm reached.
+ * That is not a tuning: it is `LINE_W` and `LINE_DROP` doing what they say, and
+ * it is checkable — `node tools/joinshot.mjs --ids palisade-fence --all`.
  */
-export const PALISADE_FENCE = sprite(
-  'palisade-fence',
-  [0, FENCE_H - 1 - (STAKE_H + LINE_DROP(RUN / 2))],
-  palisadeRows(),
-  { tags: ['structure', 'enclosure', 'timber'] }
+const fenceAt = (mask) =>
+  defineSprite({
+    // Named by its mask, so a census that walks the module — iso-audit,
+    // anchor-audit, the sprite lab — reports sixteen distinguishable rows
+    // rather than sixteen lines all saying `palisade-fence`. The one the
+    // catalogue asks for keeps the plain name; these are its states.
+    name: `palisade-fence@${mask}`,
+    anchor: [CX, CY],
+    rows: palisadeRows(mask),
+    footprint: [1, 1],
+    tags: ['structure', 'enclosure', 'timber'],
+  });
+
+/** Every connection state, indexed by mask. `joins[0]` is the straight run. */
+const PALISADE_JOINS = Object.freeze(
+  Array.from({ length: JOIN_MASKS }, (_, mask) => fenceAt(mask))
 );
+
+export const PALISADE_FENCE = defineSprite({
+  ...PALISADE_JOINS[0],
+  // The spread carries `palisade-fence@0` with it, and the registries in
+  // js/main.js and tools/playtest.mjs key on `sprite.name` — so without this
+  // line the catalogue asks for `palisade-fence` and nothing answers. Caught
+  // by test/catalog.test.mjs the moment the states were given their own names.
+  name: 'palisade-fence',
+  // The sixteen states ride ON THE ART, the same way `back` does and for the
+  // same reason: which piece answers which neighbourhood is a fact about the
+  // pictures, and a catalogue key naming them by string is a join that can go
+  // stale. js/main.js follows it; nothing else needs to know.
+  joins: PALISADE_JOINS,
+});
+export { PALISADE_JOINS };
 
 // ===========================================================================
 // SEATED MAIDEN

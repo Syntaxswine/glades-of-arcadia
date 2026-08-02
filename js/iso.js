@@ -173,6 +173,78 @@ export function clampFacing(facing, n = 1) {
 }
 
 // ---------------------------------------------------------------------------
+// JOINING — a piece that knows it is part of a run.
+//
+// The owner: *"things like hedges and fences can go around corners."*
+//
+// WHY THIS IS NOT A FACING. An L-corner comes in four kinds — arms toward
+// {+tx,+ty}, {-tx,-ty}, {-tx,+ty}, {+tx,-ty} — and the mirror swaps the two
+// tile axes, so it maps the first two to THEMSELVES and the last two to each
+// other. Corners therefore need THREE drawings, plus the straight, plus caps
+// and T-junctions. `FACINGS` is 4 and it does not fit.
+//
+// It should not fit. A corner is not something a player should have to aim:
+// they drag a hedge round three sides of a lawn and it should turn. So the
+// piece reads its NEIGHBOURS, not the wheel.
+//
+//     bit  dir   tile step   on screen
+//     1    E     +tx         down-right
+//     2    S     +ty         down-left
+//     4    W     -tx         up-left
+//     8    N     -ty         up-right
+//
+// Sixteen masks, and the art is GENERATED from the mask rather than drawn
+// sixteen times: an arm from the tile centre outward for each connected
+// direction, plus a hub. Every mask then falls out of one generator and they
+// are consistent with each other by construction.
+//
+// MASK 0 KEEPS THE WHEEL. An isolated piece has no neighbours to read, so it
+// obeys the facing the player chose; a connected one obeys the run. That is
+// the right behaviour and not a compromise — the first hedge you put down
+// still has a direction, and the second one decides what the first meant.
+// ---------------------------------------------------------------------------
+
+/** Which neighbour each bit means, as `[dtx, dty, bit]`, screen-clockwise. */
+export const JOIN_DIRS = Object.freeze([
+  Object.freeze([1, 0, 1]), // E — +tx, down-right
+  Object.freeze([0, 1, 2]), // S — +ty, down-left
+  Object.freeze([-1, 0, 4]), // W — -tx, up-left
+  Object.freeze([0, -1, 8]), // N — -ty, up-right
+]);
+
+/** How many distinct connection states a joining piece has. */
+export const JOIN_MASKS = 16;
+
+/**
+ * The mask a horizontal mirror turns this one into.
+ *
+ * Mirroring the screen's x axis swaps the two tile axes, so E trades with S
+ * and W with N. Stated here rather than derived at each call site because it
+ * is the same fact `facingMirrored` rests on, and because it is the reason
+ * only three corner drawings exist rather than four.
+ */
+export function mirrorJoinMask(mask) {
+  const m = mask & 15;
+  return ((m & 1) << 1) | ((m & 2) >> 1) | ((m & 4) << 1) | ((m & 8) >> 1);
+}
+
+/**
+ * Is this mask a straight run, and along which axis?
+ *
+ * Returns `'tx'`, `'ty'` or `null`. A single arm counts as its axis: an end
+ * piece drawn as a straight is right at this scale, and a run of two would
+ * otherwise be two caps facing each other with nothing between them.
+ */
+export function joinAxis(mask) {
+  const m = mask & 15;
+  const tx = m & (1 | 4);
+  const ty = m & (2 | 8);
+  if (tx && !ty) return 'tx';
+  if (ty && !tx) return 'ty';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Elevation constants — docs/ELEVATION.md. THE SINGLE SOURCE OF THE RISE.
 
 /**

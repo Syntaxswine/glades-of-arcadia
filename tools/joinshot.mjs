@@ -48,7 +48,7 @@ import DECOR from '../js/art/decor.js';
 import * as TILES from '../js/art/tiles.js';
 import * as EXTRAS from '../js/art/extras.js';
 import { resolve as pal } from '../js/palette.js';
-import { TILE_W, TILE_H } from '../js/iso.js';
+import { TILE_W, TILE_H, JOIN_DIRS } from '../js/iso.js';
 
 const argv = process.argv.slice(2);
 const arg = (f, d) => {
@@ -130,6 +130,24 @@ function layout(kind, n) {
 }
 
 /**
+ * THE PIECE FOR A NEIGHBOURHOOD. A joining piece carries all sixteen states on
+ * its art (js/iso.js §JOINING), and js/main.js picks between them from the
+ * neighbours it finds. This probe has to do the same or it would draw a
+ * straight bar at every corner and report the fault it was built to catch as
+ * fixed. `--flat` keeps every piece at its base drawing, which is the picture
+ * the game drew before joining existed.
+ */
+function pieceFor(sp, tiles, tx, ty) {
+  if (!sp.joins || FLAT) return null;
+  const here = new Set(tiles.map(([a, b]) => `${a},${b}`));
+  let mask = 0;
+  for (const [dtx, dty, bit] of JOIN_DIRS) {
+    if (here.has(`${tx + dtx},${ty + dty}`)) mask |= bit;
+  }
+  return mask ? sp.joins[mask] || null : null;
+}
+
+/**
  * The mirror, as js/render.js does it: every row reversed, and the anchor's
  * pixel lands at `w - 1 - ax`. Getting that second half wrong shifts the piece
  * sideways by twice its anchor offset — invisible on a centred sprite and very
@@ -194,7 +212,8 @@ for (const id of IDS) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const mir = mirrored(sp);
     for (const [tx, ty, f] of tiles) {
-      const a = f ? mir : sp;
+      const j = pieceFor(sp, tiles, tx, ty);
+      const a = j || (f ? mir : sp);
       const px = sx(tx, ty) - a.anchor[0];
       const py = sy(tx, ty) - a.anchor[1];
       x0 = Math.min(x0, px); y0 = Math.min(y0, py);
@@ -254,7 +273,8 @@ panels.forEach((p, i) => {
   // Then the pieces, back to front: painter's order in iso is tx+ty ascending.
   const order = p.tiles.slice().sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
   for (const [tx, ty, f] of order) {
-    const a = f ? p.mir : p.sp;
+    const j = pieceFor(p.sp, p.tiles, tx, ty);
+    const a = j || (f ? p.mir : p.sp);
     blit(c, a, ox + sx(tx, ty) - a.anchor[0], oy + sy(tx, ty) - a.anchor[1]);
   }
 });

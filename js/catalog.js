@@ -2378,6 +2378,14 @@ function normalise(raw) {
     requires: raw.requires ?? (raw.ground === 'water' || raw.ground === 'marsh' ? 'any' : 'land'),
     growth: raw.growth ?? null,
     connector: raw.connector === true,
+    // WHICH RUN THIS PIECE BELONGS TO. Two pieces join when their groups
+    // match, and the group is the id unless an entry overrides it — a low
+    // hedge cornering into a tall one is a design question, and same-id is
+    // the answer that cannot surprise anybody. Named here explicitly because
+    // this normaliser is a whitelist and a key it does not list is silently
+    // dropped; see the note on `shadow` immediately below, which is the third
+    // consumer in this codebase caught exactly that way.
+    joins: raw.joins ?? raw.id,
     // ------------------------------------------------------------------
     // DOES THIS OBJECT CAST A CONTACT SHADOW ON THE GROUND?
     //
