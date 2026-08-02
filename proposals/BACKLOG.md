@@ -701,26 +701,27 @@ covered all four orientations; it covers the two that climb *away*. The two that
 come downhill at the camera are a 180-degree rotation, which needs a vertical
 flip, which this game may never do because the light is always upper-left.
 
-### ▸ THE CORNERS — specified in the handoff, not built
+### ▸ THE CORNERS — BUILT for the fence and both hedges
 
-`node tools/joinshot.mjs --ids hedge-low,balustrade,palisade-fence,drystone-wall
---corner`: all four fail. Straight runs are fine. **A corner is two finished
-bars crossing**, and the piece on the corner tile carries past the turn.
+`node tools/joinshot.mjs --ids hedge-low --all` — corner, cross and both runs.
+An L of seven fences now draws cap, straight, straight, **corner**, straight,
+straight, cap, with the wheel never touched.
 
-The facing wheel cannot fix it — corners need three drawings plus the straight,
-and `FACINGS` is 4. It has to be **neighbour-driven**, and the plumbing is
-already event-driven: `js/main.js` `buildObjects` is rebuilt only on a world
-change, and the raster cache is keyed by the art object, so there is no
-cache-invalidation problem at all.
+Neighbour-driven, because the facing wheel cannot express it: corners need
+three drawings plus the straight and `FACINGS` is 4. `js/iso.js` §JOINING has
+the argument; `js/main.js` `buildObjects` is already rebuilt only on a world
+change and the raster cache is keyed by the art object, so it costs nothing.
 
-The design (five steps, with the arm vectors) is in the handoff. **Generate the
-sixteen masks from a hub-and-arms generator; do not hand-draw them.** Start with
-`palisade-fence`. Mask 0 keeps the wheel, so an isolated piece still has a
-direction the player chose.
+**Mask 0 keeps the wheel** — an isolated piece obeys the facing the player
+chose, a connected one obeys the run — **and the wheel then lets go**, because
+the sixteen states are absolute.
 
-**`balustrade` — the one name in `KNOWN_FLAT_FEET` — is the same question in a
-different hat**, as is §4l's scalloping: all three are a linear piece needing to
-know it is part of a run.
+**The straight is byte-identical** (54x40, anchor 26,28, 855 opaque px), so
+only corners are new art. `linearJoins()` in decor.js takes any piece built by
+`slab()` along +tx for one line: **`balustrade` and `drystone-wall` are next**,
+and `balustrade` is also the last name in `KNOWN_FLAT_FEET`, blocked on §4l's
+scalloping — which is now the same question wearing a third hat, and one the
+art can finally answer, since a piece knows its own mask.
 
 ### ▸ THE ELEVATION LIST — `iso-audit --elev --catalog`
 

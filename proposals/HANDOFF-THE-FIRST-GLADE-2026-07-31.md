@@ -1571,60 +1571,99 @@ A plateau with a way up on all four sides, each ramp on the low ground with the
 step it climbs beside it — the only configuration that can tell a ramp from a
 wedge. On flat grass in a contact sheet the near drawing reads as a box.
 
-## 5 · THE CORNERS — SPECIFIED, NOT BUILT
+## 5 · THE CORNERS — BUILT, for two families
 
 `node tools/joinshot.mjs --ids hedge-low,balustrade,palisade-fence,drystone-wall
---corner` and all four fail, in three different ways. The straight runs are
-fine; **a corner is two finished bars crossing.** The piece on the corner tile
-carries on past the turn and its end cap sticks out as a spike.
+--corner` failed on all four. The straight runs were fine; **a corner was two
+finished bars crossing**, with the bar on the corner tile carrying on past the
+turn and its end sticking out as a spike.
 
 ### Why the facing wheel cannot solve it
 
 An L-corner has four kinds — `{+tx,+ty}`, `{-tx,-ty}`, `{-tx,+ty}`, `{+tx,-ty}`
 — and the mirror (which swaps tx and ty) maps the first two to *themselves* and
 the last two to each other. So corners need **three drawings**, plus the
-straight, plus caps and T-junctions. `FACINGS` is 4. It does not fit, and it
-should not: a corner is not something the player should have to aim.
+straight, plus caps and tees. `FACINGS` is 4. It does not fit, and it should
+not: a corner is not something a player should have to aim.
 
-### The shape of the answer
+### What was built
 
-**Neighbour-driven, and the plumbing is already event-driven.**
-`js/main.js` `buildObjects` is *"rebuilt only when the world changes — panning
-and dusk cost nothing"*, so a piece can choose its art from its neighbours there
-with **no cache-invalidation problem at all**: the raster cache is keyed by the
-art object, so picking a different art object simply hits a different entry.
+**Neighbour-driven, and it costs nothing.** `js/main.js` `buildObjects` is
+*"rebuilt only when the world changes"*, and `js/render.js` keys its raster
+cache on the ART OBJECT — so choosing a different member of `art.joins` hits a
+different cache entry rather than dirtying one. There is no invalidation
+problem at all.
 
-1. **`joins`** on the catalogue entry — a group name, defaulting to the id. Two
-   pieces connect when their groups match. (Whether a low hedge should corner
-   into a tall one is a design question; same-id is the safe default.)
-2. **A 4-bit mask** per object: `E=+tx, S=+ty, W=-tx, N=-ty`.
-3. **Generate the art from the mask, do not hand-draw sixteen variants.** Draw
-   an ARM from the tile centre outward for each connected direction, plus a hub.
-   Every one of the 16 masks then falls out of one generator and they are
-   consistent by construction. The four half-tile arms from the centre are
-   `+tx → (+16,+8)`, `-tx → (-16,-8)`, `+ty → (-16,+8)`, `-ty → (+16,-8)`.
-4. **Mask 0 keeps the wheel.** An isolated piece obeys the facing the player
-   chose; a connected one obeys its neighbours. That is the right behaviour and
-   not a compromise — the first hedge you put down still has a direction.
-5. Carry the set on the art as `joins: {mask -> sprite}`, the same pattern as
-   `back`, for the same reason: the pairing is a fact about the pictures.
+| | |
+|---|---|
+| `js/iso.js` §JOINING | the four bits, `mirrorJoinMask`, `joinAxis` |
+| `js/catalog.js` | `joins`, a group defaulting to the id |
+| `js/art/extras.js` | the fence: a hub and four arms, `armStep` |
+| `js/art/decor.js` | `linearJoins`: cut an existing bar at its hub |
+| `js/main.js` | two passes — who is where, then who touches whom |
 
-**Start with `palisade-fence`.** It is already hub-and-arms in nature (stakes
-along a line), it is the smallest, and it was just rebuilt so its geometry is
-known-good. `hedge-low`/`hedge-tall`, `balustrade` and `drystone-wall` follow
-the same generator change.
+**MASK 0 KEEPS THE WHEEL**, and this is the part worth preserving. An isolated
+piece has no neighbours to read, so it obeys the facing the player chose; a
+connected one obeys the run. The first hedge you put down still has a direction,
+and the second decides what the first meant. **And the wheel then lets go** —
+the sixteen states are absolute, so mirroring a corner because the player had
+turned it before it had neighbours would point it at the wrong two tiles. The
+stored facing is untouched; pull the piece out of the run and it turns again.
 
-**And `balustrade` is still the one name in `KNOWN_FLAT_FEET`**, blocked on the
-scalloping decision from the last arc, which is the same decision as this one
-wearing a different hat: both are about a linear piece knowing it is part of a
-run rather than an object standing alone.
+### The hedge needed no new art code
+
+Two facts about the projection, not cleverness:
+
+- the bar runs down-right from the hub, so **a vertical cut at the anchor
+  column separates its two arms exactly**;
+- a horizontal mirror swaps the tile axes, so those same two halves, reversed,
+  **are** the -ty and +ty arms.
+
+One bar gives all four arms and the sixteen states are overlays, drawn back to
+front so a bend reads as one mass. `linearJoins(name, built, opts)` is the whole
+thing, and **any piece built by `slab()` along +tx can have it for one line** —
+`balustrade` and `drystone-wall` are next and are the same shape of work.
+
+**The straight is byte-identical**: 54x40, anchor 26,28, 855 opaque pixels
+before and after. Only a corner is new art, and a test asserts it.
+
+### Three things that only showed up when built
+
+1. **A corner's anchor cannot be derived from its width.** extras.js's
+   `sprite()` helper takes the longest row and centres on it, which is right for
+   a hand-typed sprite. A corner reaches only ONE way, so its rows are short on
+   the other side and the derived centre landed half a tile off the plot.
+2. **The E arm and the N arm run to the same screen column.** +tx is (+32,+16)
+   and -ty is (+32,-16), so `dtx - dty` is +1 for both, and a 13 px stake on the
+   E arm rises straight through the row where the N arm's foot would be. Two
+   drafts of the test reported an arm that was not there. It now looks for
+   `'q'`, the planting key, used in exactly one place. **A tall subject needs a
+   short window.**
+3. **The census could not see any of it.** `spritesIn` walks a module's
+   exports; the palisade's states happen to be exported as an array and were
+   audited, the hedges' hang only on `.joins` and were invisible. Two families,
+   one mechanism, one measured — worse than auditing neither, because the green
+   result reads as coverage. It now follows `joins` and `back`. **286 sprites,
+   still 1 flagged**: every generated corner meets the ground correctly, because
+   an arm inherits its parent's foot.
+
+### Still to carry
+
+`balustrade` and `drystone-wall` want `linearJoins`. **`balustrade` is also the
+one name in `KNOWN_FLAT_FEET`**, blocked on the scalloping decision from the
+last arc — which is now visibly the same decision wearing a third hat: the
+runtime shadow needs to know a piece is part of a run, and the piece now does.
+`groundCentre` on a corner would give an even worse circle than on a straight,
+so the shadow work and this one should land together.
 
 ## 6 · STILL OPEN, and where
 
 - **The sleeping satyr is drawn in ELEVATION.** Unchanged. Owner's commission —
   re-seating the figure along +tx is a redraw of the signature image.
 - **The scalloping.** Unchanged, and now visibly the same question as the
-  corners.
+  corners — with the difference that the art can now answer it: a piece knows
+  its mask, so the stamp could be chosen from `joinAxis(mask)` instead of
+  measured off the base contour.
 - **`bridge`, `naiskos`, `grave-stele`, `votive-shelf`, `altar`** — the top of
   `iso-audit --elev --catalog` after the bench dropped off it. All fronted
   objects drawn as front elevations. `bridge` is the sorest: its own comment
@@ -1659,7 +1698,8 @@ anything, run `iso-audit --catalog` and see whether the picture you are about to
 make already exists.
 
 **The forward dream:** that a player drags a hedge round three sides of a lawn
-and it turns both corners without being asked, and that the ramp they put
-against the terrace already knows which way is up.
+and it turns both corners without being asked — which, as of this evening, it
+does — and that the ramp they put against the terrace already knows which way
+is up, which it still does not.
 
 *— Claude Opus 5, 2026-08-02*
