@@ -286,15 +286,43 @@ test('the census is looking at something', () => {
 });
 
 test('ROTATIONAL forms are not convicted of being symmetric', () => {
-  // COLUMN is a cylinder. It is *supposed* to be a perfect mirror about the
-  // vertical and *supposed* to have a wide flat waist; the first draft of this
-  // instrument scored those two things and ranked it fourth-worst in the game.
-  // Only `lift` votes now, and this test is what stops that regressing.
+  // A cylinder is *supposed* to be a perfect mirror about the vertical and
+  // *supposed* to have a wide waist; the first draft of this instrument scored
+  // those two things and ranked COLUMN the fourth-worst sprite in the game.
+  // Only the flat run at ground level votes now, and this is what stops that
+  // regressing.
+  //
+  // THE CONTROL IS SYNTHETIC, and it used to be the live COLUMN sprite. That
+  // conflated two claims: "symmetry does not vote" (about the tool) and "this
+  // one sprite's foot is round today" (about the art). When step 3 uncovered
+  // COLUMN's square plinth the test went red, and it went red for a reason it
+  // does not name — which would have read as the instrument regressing. A test
+  // about a measure should be able to survive the art being wrong.
+  const R = 9;
+  const rows = [];
+  for (let y = 0; y < 30; y++) rows.push('.'.repeat(8) + 'o'.repeat(6) + '.'.repeat(8)); // shaft
+  for (let y = -Math.round(R * 0.5); y <= Math.round(R * 0.5); y++) {
+    let r = '';
+    for (let x = 0; x < 22; x++) {
+      const nx = (x - 10.5) / R;
+      const ny = y / (R * 0.5);
+      r += nx * nx + ny * ny <= 1 ? 'o' : '.';
+    }
+    rows.push(r);
+  }
+  const cylinder = defineSprite({ name: 'control-cylinder', anchor: [10, rows.length - 5], rows });
+  const q = measure(cylinder);
+  assert.ok(q.mirror > 0.9, `a cylinder must measure as symmetric, got ${q.mirror}`);
+  assert.equal(q.ok, true, `a round foot on a symmetric form must pass, got ${q.flat}px flat`);
+
+  // ...and the live sprite is still a cylinder, which is the part of the old
+  // assertion that was always about the art and is still true.
   const col = sprites.find((r) => r.name === 'COLUMN');
   if (!col) return; // renamed art is not this test's business to fail on
-  const q = measure(col.s);
-  assert.ok(q.mirror > 0.8, 'COLUMN stopped being symmetric — check the sprite, not the tool');
-  assert.equal(q.ok, true, `COLUMN measured lift ${q.lift}: a cylinder foot must pass`);
+  assert.ok(
+    measure(col.s).mirror > 0.8,
+    'COLUMN stopped being symmetric — check the sprite, not the tool'
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -25,12 +25,23 @@
 // than the scene allows.
 //
 // ---------------------------------------------------------------------------
-// CONTACT SHADOWS. SPEC 3 again: the ground ramp darkened two steps, hugging
-// the base diamond, plus a small skirt offset away from the light. Never
-// translucent black. contactShadow('o') === 'm', so 'm' is baked into every
-// prop as its skirt. On non-grass ground the renderer recolours it for free
-// with palette.variant({ grass: 'earth' }) — the skirt is authored in the
-// GRASS ramp precisely so that swap lands it correctly on sand and soil.
+// CONTACT SHADOWS ARE NOT DRAWN HERE. SPEC 3 still wants them — the ground ramp
+// darkened two steps, hugging the base, never translucent black — but they are
+// the RENDERER's, laid down in their own pass under everything, sized from
+// `groundCentre(art)` and coloured from the tile they land on.
+//
+// Until 2026-08-01 every prop also baked its own, in 'm', on the claim that the
+// renderer recoloured it on soil "for free" via palette.variant({grass:'earth'}).
+// THERE IS NO SUCH VARIANT AND THERE NEVER WAS. What the baked skirt actually
+// did was put a grass-green mat under every object standing on stone: 16 710
+// green pixels across the catalogue on flagstone, which is what a whole square
+// of them looks like from across the room. Deleting them took that to 4 868 —
+// the rest is real foliage — and changed the picture on GRASS by 0.36%, because
+// the runtime ellipse was already covering the same ground in the same colour.
+//
+// So: an object's own shade is not its art. `skirt()` survives for shade on a
+// surface belonging to the OBJECT (the altar standing on the heroon's podium),
+// which the ground pass cannot know about. See its note.
 //
 // ---------------------------------------------------------------------------
 // ANCHORS. Every anchor is the pixel at the CENTRE of the object's base
@@ -40,7 +51,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite } from './format.js';
+import { defineSprite, padToAnchor } from './format.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -53,26 +64,32 @@ import { GROUND_ELLIPSE } from '../iso.js';
  * and `dx` is an offset from the horizontal centre. Absolute anchors were the
  * other half of the counting problem — every row added to a statue silently
  * moved its feet — and an anchor expressed relative to the base cannot drift.
+ *
+ * HAND-AUTHORED ROWS GET THEIR CONTACT BAND STRIPPED; composed grids do not.
+ * That distinction used to be an `opts.contact` flag, which is why it once also
+ * held a NUMBER meaning "and draw me one instead". An option bag that accepts
+ * false and 12 for the same key will eventually accept a third thing, so it is
+ * now a parameter of the constructor rather than an entry in the bag: this is
+ * the hand-authored door and `composed()` is the other one.
  */
 function sprite(name, [dx, up], rows, opts = {}) {
   const w = Math.max(...rows.map((r) => r.length));
   const padded = rows.map((r) => r.padEnd(w, '.'));
   // THE ANCHOR IS FIXED BEFORE THE CONTACT BAND IS TOUCHED. It is measured
-  // from the top once the row count is known, and `groundContact` may both
-  // remove and add rows at the bottom — so taking it first is what stops the
-  // shadow rewrite from silently moving forty sprites off their tiles.
+  // from the top once the row count is known, and the strip removes rows at the
+  // bottom — so taking it first is what stops the change from silently moving
+  // forty sprites off their tiles. `padToAnchor` then repairs the one case that
+  // creates: an anchor that was inside the band it just deleted.
   const anchor = [((w - 1) >> 1) + dx, padded.length - 1 - up];
+  return build(name, anchor, stripContactBand(padded), opts);
+}
+
+/** The shared tail of both constructors — everything after the rows are fixed. */
+function build(name, anchor, rows, opts) {
   return defineSprite({
     name,
     anchor,
-    // `contact: false` for anything COMPOSED — see groundContact's warning.
-    // `contact: <number>` for a hand-authored sprite that never had a contact
-    // band to convert: the radius is stated at the call site and the ellipse
-    // is laid down at the anchor, exactly as decor.js `spriteAt` does it.
-    rows:
-      opts.contact === false
-        ? padded
-        : groundContact(padded, anchor, typeof opts.contact === 'number' ? opts.contact : 0),
+    rows: padToAnchor(rows, anchor[1]),
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
@@ -80,78 +97,66 @@ function sprite(name, [dx, up], rows, opts = {}) {
 }
 
 /**
- * Replace a hand-typed contact band with a contact SHADOW that lies in the
- * ground plane.
+ * DELETE a hand-typed contact band. It is the renderer's job now.
  *
- * Forty-eight rows in this file looked like this at the foot of a sprite:
+ * Fifty-three rows in this file looked like this at the foot of a sprite:
  *
  *     '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm...',
  *     '..mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm..',
  *     '.....mmmmmmmmmmmmmmmmmmmmmmmmmmm.....',
  *
- * — a rectangular band of the darkest grass key, meant as the patch of shade
- * an object casts where it meets the ground. But the ground is a plane seen at
- * 2:1, so that patch is a CIRCLE, and a circle in this projection is an ellipse
- * exactly twice as wide as it is tall (GROUND_ELLIPSE, js/iso.js). Drawn as a
- * band it is a horizontal edge, and an isometric world has none at ground
- * level: `node tools/iso-audit.mjs`.
+ * — a rectangular band of the darkest grass key, meant as the patch of shade an
+ * object casts where it meets the ground. Two things are wrong with it and only
+ * one of them is about shape.
+ *
+ * THE SHAPE. The ground is a plane seen at 2:1, so that patch is a CIRCLE, and
+ * a circle in this projection is an ellipse exactly twice as wide as it is tall
+ * (GROUND_ELLIPSE, js/iso.js). Drawn as a band it is a horizontal edge, and an
+ * isometric world has none at ground level: `node tools/iso-audit.mjs`. This
+ * function used to fix that in place, rewriting each band as an ellipse.
+ *
+ * THE COLOUR, which no amount of reshaping could fix. 'm' is GRASS[0]. A baked
+ * skirt is grass-coloured wherever the object stands, and objects stand on
+ * flagstone, gravel and terrace paving too. Measured across the catalogue on
+ * flagstone: 16 710 grass-green pixels, one green mat per object, visible from
+ * across the room. The file header claimed the renderer recoloured them via
+ * `variant({grass:'earth'})`; no such variant has ever existed.
+ *
+ * So the band is not reshaped, it is REMOVED, and `render.js` draws the contact
+ * shadow in its own pass — sized from `groundCentre(art)`, which reads the same
+ * base contour this used to read, and coloured from the tile it actually lands
+ * on. Deleting it changed the rendered picture on GRASS by 0.36% (9 of 85
+ * objects, 716 px of 199 969) because the runtime ellipse was already covering
+ * that ground in that colour; on flagstone it removed 11 842 green pixels.
  *
  * The band is detected rather than declared because it is unambiguous — a
  * TRAILING row containing nothing but 'm' and transparency is a contact band
- * and can be nothing else; object art has other colours in it. Its width sets
- * the shadow's radius, so a big prop keeps a big shadow and a herm keeps a
- * small one, and the ellipse is centred on the ANCHOR: the anchor is the tile's
- * centre point, which is exactly where the circle under an object is centred.
+ * and can be nothing else; object art has other colours in it.
  *
  * ---------------------------------------------------------------------------
- * IT MUST NOT RUN ON COMPOSED SPRITES, and this was shipped broken once.
+ * IT MUST NOT RUN ON COMPOSED SPRITES, and that was true of the old version for
+ * a subtler reason worth keeping.
  *
- * "A trailing row of nothing but 'm'" is true of a hand-typed band. It is ALSO
- * true of the bottom few rows of a correct ellipse that `skirt()` has just
- * drawn — those rows are pure shadow, because the object above has ended. So
- * on a composed sprite this strips the LOWER HALF of a correct shadow, then
- * rebuilds an ellipse from what is left and lands it flat: the heroon went
- * from a 12px level edge to a 106px one, the worst reading in the catalogue,
- * by way of a change that made eighteen other sprites right.
+ * "A trailing row of nothing but 'm'" was ALSO true of the bottom few rows of a
+ * correct ellipse that `skirt()` had just drawn, so on a composed sprite the old
+ * code stripped the lower half of a correct shadow and rebuilt a truncated one:
+ * the heroon went from a 12px level edge to a 106px one, the worst reading in
+ * the catalogue, by way of a change that made eighteen other sprites right.
+ * A REWRITE THAT DETECTS ITS OWN INPUT WILL EVENTUALLY DETECT ITS OWN OUTPUT.
  *
- * `composed()` therefore passes `contact: false`. The rule underneath is worth
- * keeping: A REWRITE THAT DETECTS ITS OWN INPUT WILL EVENTUALLY DETECT ITS OWN
- * OUTPUT. It has to be able to tell "not yet done" from "already done", and
- * here the honest signal is not in the pixels at all — it is which constructor
- * the author used.
+ * The reason survives the fix. A composed grid may legitimately END in pure 'm'
+ * — a mound of shadowed turf, a pool of shade under a rock — and there is no
+ * pixel that says which. The honest signal is not in the art at all; it is which
+ * constructor the author used, so `composed()` simply does not call this.
  */
-function groundContact(rows, [ax, ay], explicitR = 0) {
-  const w = rows[0].length;
+function stripContactBand(rows) {
   const isBand = (r) => /^[.m]*$/.test(r) && r.includes('m');
-
   let cut = rows.length;
-  let x0 = w;
-  let x1 = -1;
-  while (cut > 0 && isBand(rows[cut - 1])) {
-    cut--;
-    x0 = Math.min(x0, rows[cut].indexOf('m'));
-    x1 = Math.max(x1, rows[cut].lastIndexOf('m'));
-  }
-  // An explicit radius means "this sprite never had a band to convert, give it
-  // the shadow it has been missing" — so there is nothing to strip and the
-  // whole sprite is kept.
-  if (explicitR > 0) cut = rows.length;
-  else if (cut === rows.length || cut === 0) return rows; // no band, or all band
-
-  const r = explicitR > 0 ? explicitR : Math.max(6, (x1 - x0 + 1) / 2);
-  const ry = r * GROUND_ELLIPSE;
-  const g = rows.slice(0, cut).map((s) => s.split(''));
-  while (g.length <= Math.round(ay + ry)) g.push(new Array(w).fill('.'));
-
-  const cx = ax + 0.5; // the anchor PIXEL's middle, not its left edge
-  for (let y = Math.max(0, Math.round(ay - ry)); y <= Math.round(ay + ry); y++) {
-    for (let x = Math.max(0, Math.round(cx - r)); x <= Math.min(w - 1, Math.round(cx + r)); x++) {
-      const nx = (x - cx) / r;
-      const ny = (y - ay) / ry;
-      if (nx * nx + ny * ny <= 1 && g[y][x] === '.') g[y][x] = 'm';
-    }
-  }
-  return g.map((a) => a.join(''));
+  while (cut > 0 && isBand(rows[cut - 1])) cut--;
+  // No band, or nothing BUT band — in the second case the sprite is a shadow,
+  // and a sprite is not improved by deleting all of it.
+  if (cut === rows.length || cut === 0) return rows;
+  return rows.slice(0, cut);
 }
 
 /** A run of identical rows — a column shaft is 28 copies of one profile. */
@@ -799,10 +804,6 @@ export const PERGOLA = sprite(
   ],
   {
     tags: ['structure', 'timber', 'satyr', 'shade', 'seclusion'],
-    // Four posts standing on the turf, and nothing under them: it was the last
-    // hand-authored sprite in the file with no contact shadow at all, which is
-    // why its square-cut feet were the lowest thing in every column.
-    contact: 12,
   }
 );
 
@@ -1305,20 +1306,34 @@ function barkFleck(g, cx, yTop, yBot, spread, ramp = BARK) {
 }
 
 /**
- * The contact shadow, SPEC 3: the ground ramp darkened two steps ('o' -> 'm'),
- * hugging the base. Only ever fills empty pixels, so it can be laid down last
- * without eating the object.
+ * Shade on a surface OF THE OBJECT — a podium top, a step, a plinth. One call
+ * site left in the game: the altar standing inside the heroon.
  *
- * IT IS A CIRCLE ON THE GROUND, so it is drawn as a 2:1 ellipse and its depth
- * is not the caller's to choose — see GROUND_ELLIPSE in js/iso.js.
+ * IT IS NOT THE CONTACT SHADOW. render.js draws that, in its own pass, on the
+ * world ground. The distinction is the whole of step 3 and it is worth stating
+ * as a test the next author can apply in one look:
  *
- * This used to take a `ry` and every call site passed 3, 4 or 5, giving
- * ellipses at 3.7:1 and flatter. That is a circle seen from a shallower angle
- * than this game's camera: it reads as a decal on the screen rather than a
- * patch of shade on the grass, and — because the lowest rows of so flat an
- * ellipse are nearly level — it put a sixteen-pixel horizontal edge under two
- * dozen otherwise-correct props. An isometric world has no horizontal edges at
- * ground level. `node tools/iso-audit.mjs` is what found it.
+ *     WHICH PLANE DOES THIS SHADE LIE ON?
+ *       the world ground  ->  the renderer's. Do not bake it.
+ *       a surface of this object  ->  yours. Bake it here.
+ *
+ * Forty-three call sites failed that test and were deleted; each was an object's
+ * own contact with the ground, drawn in 'm' = GRASS[0], which is why the whole
+ * catalogue stood on little green mats when it stood on flagstone. This one
+ * passes: the altar sits on marble the heroon brought with it, the ground pass
+ * has no idea that surface exists, and 'm' is right there whatever the heroon
+ * itself is standing on.
+ *
+ * Only ever fills empty pixels, so it can be laid down last without eating the
+ * thing it is bedding in.
+ *
+ * IT IS STILL A CIRCLE ON A PLANE seen at 2:1, so its depth is not the caller's
+ * to choose — see GROUND_ELLIPSE in js/iso.js. It used to take a `ry` and every
+ * call site passed 3, 4 or 5, giving ellipses at 3.7:1 and flatter: a circle
+ * seen from a shallower angle than this game's camera, reading as a decal on
+ * the screen rather than a patch of shade, and level enough along the bottom to
+ * put a sixteen-pixel horizontal edge under two dozen props. The podium is
+ * foreshortened exactly like the ground, so the rule survives its own purge.
  */
 function skirt(g, cx, cy, r) {
   const ry = r * GROUND_ELLIPSE;
@@ -1403,13 +1418,12 @@ function pool(g, cx, cy, r, opt = {}) {
  */
 function composed(name, g, [ax, ay], opts = {}) {
   const r = gridRows(g);
-  const w = r[0].length;
-  const h = r.length;
-  // NEVER rewrite a composed sprite's contact. `skirt()` already drew it as a
-  // correct 2:1 ellipse, and groundContact would strip the pure-'m' rows off
-  // the BOTTOM of that ellipse and rebuild a truncated one — turning the right
-  // answer into a 106px horizontal edge under the heroon. See groundContact.
-  return sprite(name, [ax - ((w - 1) >> 1), h - 1 - ay], r, { ...opts, contact: false });
+  // NEVER strip a composed sprite's bottom rows. A generated grid may end in
+  // pure 'm' as ART — shadowed turf on a barrow, shade pooled under a rock —
+  // and no pixel distinguishes that from a hand-typed contact band. The signal
+  // is which constructor the author reached for; this is that constructor, so
+  // it goes straight to `build`. See `stripContactBand`.
+  return build(name, [ax, ay], r, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -1446,7 +1460,6 @@ export const ASH_TREE = (() => {
   clump(g, 22, 11, 12, 9, LEAF, { seed: 7.8 });
   clump(g, 33, 9, 11, 8, LEAF, { seed: 8.5 });
   shadeCanopy(g);
-  skirt(g, 29, 94, 11);
   return composed('ash-tree', g, [27, 93], { tags: ['tree', 'centaur', 'timber', 'maturity'] });
 })();
 
@@ -1471,7 +1484,6 @@ export const UMBRELLA_PINE = (() => {
   clump(g, 25, 8, 10, 4, NEEDLE, { seed: 5.2 });
   clump(g, 47, 8, 10, 4, NEEDLE, { seed: 6.7 });
   shadeCanopy(g, NEEDLE);
-  skirt(g, 31, 94, 11);
   return composed('umbrella-pine', g, [29, 93], { tags: ['tree', 'satyr', 'centaur', 'shade'] });
 })();
 
@@ -1505,7 +1517,6 @@ export const PLANE_TREE = (() => {
   clump(g, 61, 15, 16, 11, LEAF, { seed: 5.5 });
   clump(g, 41, 11, 20, 11, LEAF, { seed: 6.1 });
   shadeCanopy(g);
-  skirt(g, 44, 78, 15);
   return composed('plane-tree', g, [42, 77], { tags: ['tree', 'centaur', 'naiad', 'shade', 'water-loving'] });
 })();
 
@@ -1535,7 +1546,6 @@ export const APPLE_TREE = (() => {
     put(g, fx + 1, fy + 1, '1');
     put(g, fx + 1, fy, '3');
   }
-  skirt(g, 30, 58, 11);
   return composed('apple-tree', g, [28, 57], { tags: ['tree', 'centaur', 'unicorn', 'fruit', 'order'] });
 })();
 
@@ -1623,7 +1633,6 @@ export const ANCIENT_OAK = (() => {
   clump(g, 33, 11, 16, 10, LEAF, { seed: 7.3 });
   clump(g, 56, 12, 15, 10, LEAF, { seed: 8.8 });
   shadeCanopy(g);
-  skirt(g, 46, 97, 24);
   return composed('ancient-oak', g, [44, 96], { tags: ['tree', 'satyr', 'centaur', 'unicorn', 'maturity', 'shade'] });
 })();
 
@@ -1670,7 +1679,6 @@ export const BLACKTHORN_THICKET = (() => {
       if (sky && nz(x * 1.7, y * 2.3) > 0.42) put(g, x, y, '7');
     }
   }
-  skirt(g, 36, 50, 28);
   return composed('blackthorn-thicket', g, [34, 49], { tags: ['shrub', 'satyr', 'unicorn', 'thorn', 'wildness'] });
 })();
 
@@ -1694,7 +1702,6 @@ export const WHITE_THORN = (() => {
   const pre = g.map((r) => r.slice());
   shadeCanopy(g);
   blossomOver(g, pre, { density: 1.15 });
-  skirt(g, 32, 68, 11);
   return composed('white-thorn', g, [30, 67], { tags: ['tree', 'unicorn', 'thorn', 'blossom', 'order'] });
 })();
 
@@ -1772,7 +1779,6 @@ export const HALF_BURIED_PITHOS = (() => {
     if (!'qrstu'.includes(peek(g, sx, sy))) continue;
     put(g, sx, sy, nz(i, 7) > 0.6 ? '1' : '6');
   }
-  skirt(g, 32, 42, 27);
   return composed('half-buried-pithos', g, [30, 41], {
     tags: ['prop', 'terracotta', 'satyr', 'centaur', 'wine', 'wildness'],
   });
@@ -1820,7 +1826,6 @@ export const WILD_VINE = (() => {
       }
     }
   }
-  skirt(g, 32, 48, 24);
   return composed('wild-vine', g, [30, 47], { tags: ['vine', 'satyr', 'wildness', 'fruit'] });
 })();
 
@@ -1847,7 +1852,6 @@ export const IVY_BOULDER = (() => {
     clump(g, tx, ty + len, 3, 2, LEAF, { seed: tx, wobble: 0.4, lift: -1 });
   }
   shadeCanopy(g);
-  skirt(g, 30, 47, 23);
   return composed('ivy-boulder', g, [28, 46], { tags: ['rock', 'satyr', 'ivy', 'wildness', 'maturity'] });
 })();
 
@@ -1907,7 +1911,6 @@ export const FALLEN_LOG = (() => {
   for (const [bx, by] of [[14, 26], [33, 30], [49, 33]]) {
     for (let k = 0; k < 4; k++) put(g, bx + k, by - (k % 2), k < 2 ? 'r' : 'q');
   }
-  skirt(g, 32, 32, 30);
   return composed('fallen-log', g, [30, 31], { tags: ['timber', 'centaur', 'wildness', 'maturity'] });
 })();
 
@@ -1944,7 +1947,6 @@ export const SPRING_BASIN = (() => {
       if (peek(g, x, y) === '.') put(g, x, y, k === 0 ? 'C' : k === 1 ? 'B' : 'A');
     }
   }
-  skirt(g, 30, 56, 20);
   return composed('spring-basin', g, [28, 55], {
     tags: ['water', 'naiad', 'moisture', 'order', 'spring'],
     cycle: { ramp: 'water', rate: 4 },
@@ -2026,7 +2028,6 @@ export const VOTIVE_SHELF = (() => {
     if (peek(g, mx, my) !== '.') continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i * 1.7, wobble: 0.42 });
   }
-  skirt(g, 31, 51, 26);
   return composed('votive-shelf', g, [29, 50], {
     tags: ['prop', 'rock', 'naiad', 'votive', 'order', 'maturity'],
   });
@@ -2113,7 +2114,6 @@ export const LILY_BED = (() => {
     }
     put(g, hx, hy - 3, 'W');
   }
-  skirt(g, 32, 48, 22);
   return composed('lily-bed', g, [30, 47], { tags: ['flower', 'unicorn', 'white', 'order', 'millefleurs'] });
 })();
 
@@ -2133,7 +2133,6 @@ export const STILL_POOL = (() => {
   }
   // AT THE ANCHOR (34, 22), not twelve rows under it. r 30 against a 63px
   // basin, inscribed in the 1x1 diamond (max 32).
-  skirt(g, 36, 23, 30);
   return composed('still-pool', g, [34, 22], {
     tags: ['water', 'unicorn', 'moisture', 'order', 'seclusion'],
     cycle: { ramp: 'water', rate: 11 },
@@ -2276,7 +2275,6 @@ export const GROTTO_MOUTH = (() => {
     const drop = 3 + Math.round(nz(x, 23) * 7);
     for (let k = 0; k < drop; k++) put(g, x, 18 + k, nz(x, k) > 0.5 ? 'b' : 'a');
   }
-  skirt(g, CX, BASE + 1, 30);
   return composed('grotto-mouth', g, [CX, BASE], {
     tags: ['structure', 'rock', 'naiad', 'seclusion', 'moisture'],
   });
@@ -2322,7 +2320,6 @@ export const CAVE_MOUTH = (() => {
       seed: bx * 0.3,
     });
   }
-  skirt(g, CX, BASE + 1, 31);
   return composed('cave-mouth', g, [CX, BASE], {
     tags: ['structure', 'rock', 'satyr', 'centaur', 'seclusion', 'wildness'],
   });
@@ -2476,7 +2473,6 @@ export const CLIFF_CAVE_MOUTH = (() => {
   }
   // The shade this thing casts is the tile it stands on: r = 30 against the
   // diamond's 32, centred so the ellipse's front lands on the front vertex.
-  skirt(g, CX, BASE + 1, 30);
 
   return composed('cliff-cave-mouth', g, [CX, BASE], {
     tags: ['cliff', 'cave', 'satyr', 'naiad', 'seclusion', 'wildness'],
@@ -2520,7 +2516,6 @@ export const UNBASINED_SPRING = (() => {
     if (!'vwxy'.includes(peek(g, mx, my))) continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i, wobble: 0.42 });
   }
-  skirt(g, 33, 45, 26);
   return composed('unbasined-spring', g, [31, 44], {
     tags: ['water', 'rock', 'satyr', 'naiad', 'moisture', 'wildness'],
     cycle: { ramp: 'water', rate: 5 },
@@ -2552,7 +2547,6 @@ export const MOSSY_TRUNK = (() => {
       for (let j = 0; j <= h; j++) put(g, fx + k, fy - j, j === h ? 'D' : j > 0 ? 'C' : 'A');
     }
   }
-  skirt(g, 32, 32, 30);
   return composed('mossy-trunk', g, [30, 31], { tags: ['timber', 'satyr', 'unicorn', 'moss', 'maturity', 'seclusion'] });
 })();
 
@@ -2809,7 +2803,6 @@ export const ALTAR_PAN_NYMPHS = (() => {
   for (const iv of [[7, 40], [21, 48], [43, 47], [52, 41]]) {
     clump(g, iv[0], iv[1], 5, 3.5, LEAF, { seed: iv[0], wobble: 0.42, lift: -1 });
   }
-  skirt(g, 32, 51, 25);
   return composed('altar-pan-nymphs', g, [30, 50], { tags: ['altar', 'satyr', 'centaur', 'naiad', 'cult', 'maturity'] });
 })();
 
@@ -2856,7 +2849,6 @@ export const FERN_GROTTO = (() => {
     if (!'vwxy'.includes(peek(g, mx, my))) continue;
     clump(g, mx, my, 3, 2, 'jkl', { seed: i * 1.3, wobble: 0.45 });
   }
-  skirt(g, 37, 52, 32);
   return composed('fern-grotto', g, [35, 51], {
     tags: ['rock', 'satyr', 'naiad', 'unicorn', 'moisture', 'seclusion', 'shade'],
     cycle: { ramp: 'water', rate: 13 },
@@ -3124,7 +3116,6 @@ export const CYPRESS_SCREEN = (() => {
         put(g, x, y, CONIFER[Math.max(0, Math.min(3, i))]);
       }
     }
-    skirt(g, cx + 2, base + 2, 8);
   }
   return composed('cypress-screen', g, [32, 74], { tags: ['nullifier', 'tree', 'cypress', 'order', 'enclosure', 'seclusion'] });
 })();
@@ -3539,7 +3530,6 @@ export const TUMULUS = (() => {
   // depth is r/2: a tight r AND a low centre put the shade fifteen pixels
   // past the tile's own front vertex, and the barrow read as floating over a
   // puddle. r 60 against a 118px mound, inscribed in the 2x2 diamond (max 64).
-  skirt(g, cx + 2, cy + 1, 60);
   return composed('tumulus', g, [cx, cy], {
     footprint: [2, 2],
     tags: ['tomb', 'nullifier', 'grass', 'archaic', 'maturity'],
@@ -3951,16 +3941,15 @@ export const HEROON = (() => {
     }
   }
 
-  // The building's own shade, AT THE ANCHOR. r 60 against a 115px podium,
-  // inscribed in the 2x2 diamond (max 64). It used to sit 27 rows below the
-  // anchor, which was harmless when the ellipse was 3px deep and is not now
-  // that it is r/2: the shade landed 16px past the front vertex and 20px
-  // below the podium, and the heroon read as standing over a puddle.
-  skirt(g, cx + 2, ay + 1, 60);
-  // ...and the SECONDARY shade, under the altar inside the peristyle. This
-  // one is correctly NOT at the anchor — it belongs to a sub-object, not to
-  // the building — which is why the fix above is four call sites and not a
-  // blanket rule.
+  // The SHADE UNDER THE ALTAR, inside the peristyle — the last baked skirt in
+  // the game, and the one that proves the rule the other forty-two broke.
+  //
+  // The building's own shade is gone: it lay on the WORLD GROUND, which is the
+  // plane render.js draws its contact pass on, so baking it was doing the
+  // renderer's job in grass-green paint. This one lies on the PODIUM, a surface
+  // that belongs to the heroon and that the ground pass knows nothing about. No
+  // runtime shadow can ever replace it, and its 'm' is correct wherever the
+  // building stands, because what it darkens is the building.
   skirt(g, ALT_X - 2, ALT_Y + 19, 13);
   return composed('heroon', g, [cx, ay], {
     footprint: [2, 2],
@@ -4065,7 +4054,6 @@ export const ARCADIAN_TOMB = (() => {
 
   // AT THE ANCHOR. r 44 against an 83px chest, inscribed in the 2x1 diamond
   // (max 48).
-  skirt(g, cx + 2, ay + 1, 44);
   return composed('arcadian-tomb', g, [cx, ay], {
     footprint: [2, 1],
     tags: ['tomb', 'nullifier', 'marble', 'neoclassical', 'maturity'],

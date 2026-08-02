@@ -1,8 +1,10 @@
 // iso-ground.test.mjs — no sprite may have a horizontal edge at ground level.
 //
 // `tools/iso-audit.mjs --strict` promoted to an assertion, the same way
-// `tools/anchor-audit.mjs` was — and, since 2026-08-01, a CLEAN GATE: the
-// offender list below is empty and the audit is in `npm run check`.
+// `tools/anchor-audit.mjs` was. It reached a CLEAN GATE on 2026-08-01 and is
+// a RATCHET again the same day, at 29: step 3 deleted the baked contact
+// skirts, which were also the only thing covering 29 square-cut feet. See
+// KNOWN_FLAT_FEET in tools/isogeom.mjs — the list is shared with the tool.
 //
 // ---------------------------------------------------------------------------
 // IT WAS BUILT AS A RATCHET, and the ratchet is what got the list to zero.
@@ -25,16 +27,18 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AUDITED_MODULES, spritesIn, measure, importArt } from '../tools/isogeom.mjs';
+import {
+  AUDITED_MODULES, spritesIn, measure, importArt, KNOWN_FLAT_FEET,
+} from '../tools/isogeom.mjs';
 
 /**
- * THE LIST IS EMPTY. Every sprite in the game meets the ground in the ground
- * plane, and `node tools/iso-audit.mjs --strict` exits 0 — it is in
- * `npm run check`, so this is now a gate and not a ratchet.
+ * THE LIST LIVES IN `tools/isogeom.mjs`, beside the population it is counted
+ * against, so this test and `node tools/iso-audit.mjs --strict` — which is in
+ * `npm run check` — cannot excuse different sprites. Its own doc comment holds
+ * the name/reason/plan this file has always demanded of it.
  *
- * It was FORTY-EIGHT. What closed it was four shared helpers and four sprites,
- * not forty-eight redraws, which is the whole argument for building the census
- * before starting the art:
+ * IT WAS EMPTY, AND EARNED. It had been FORTY-EIGHT, and what closed it was
+ * four shared helpers and four sprites rather than forty-eight redraws:
  *
  *   props.js  skirt()          an ellipse at 3.7:1, clipped by a short grid
  *   decor.js  skirt()          a rectangular band, three rows of solid 'm'
@@ -46,11 +50,16 @@ import { AUDITED_MODULES, spritesIn, measure, importArt } from '../tools/isogeom
  *   clipped to its own tile diamond, and nine decor props given the contact
  *   shadow they never had.
  *
- * KEEP IT EMPTY. If something has to go in here, it is a name and a reason and
- * a plan — not a shrug. The second test below will not let a name sit here
- * after it has been fixed.
+ * It is 29 again, and the reason is worth reading before assuming a regression:
+ * those same skirts were also COVERING each object's square-cut foot. Deleting
+ * them (step 3 — they were grass-green on stone) did not break 29 sprites, it
+ * uncovered 29 that had been wrong since they were drawn. Step 4 redraws them.
+ *
+ * GET IT BACK TO EMPTY. Adding to it needs a name and a reason and a plan —
+ * not a shrug — and the second test below will not let a name sit there after
+ * it has been fixed.
  */
-const KNOWN = new Set([]);
+const KNOWN = KNOWN_FLAT_FEET;
 
 const sprites = [];
 for (const name of AUDITED_MODULES) {
@@ -94,7 +103,8 @@ test('the known-offender list has not gone stale', () => {
   assert.deepEqual(
     fixed,
     [],
-    'These now pass. Strike them off KNOWN in this file — a list that still ' +
+    'These now pass. Strike them off KNOWN_FLAT_FEET in tools/isogeom.mjs — ' +
+      'a list that still ' +
       'names fixed sprites overstates the work left and, worse, would let one ' +
       'of them regress unnoticed.'
   );

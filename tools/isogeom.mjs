@@ -560,6 +560,49 @@ export function measurable(s) {
 export const AUDITED_MODULES = ['props', 'decor', 'tiles', 'extras', 'clumps'];
 
 /**
+ * THE ONE RATCHET, read by the terminal gate AND the test, so they cannot
+ * disagree about what is excused.
+ *
+ * ---------------------------------------------------------------------------
+ * ONE NAME, ONE REASON, ONE PLAN — which is the bar `test/iso-ground.test.mjs`
+ * sets for putting anything here at all ("not a shrug").
+ *
+ * REASON. Step 3 deleted forty-three baked contact skirts and fifty-three
+ * hand-typed contact bands, because 'm' is GRASS[0] and a baked shadow is
+ * grass-green wherever the object stands — 16 710 green pixels across the
+ * catalogue on flagstone. What those skirts were also doing, incidentally, was
+ * COVERING each object's own base. Underneath every one of them is a foot that
+ * was drawn square: a plinth is a rectangle, and a rectangle's bottom edge is a
+ * horizontal line, which an isometric world has none of at ground level.
+ *
+ * So these 29 are not new damage. They are 29 sprites whose feet have been
+ * wrong since they were drawn, hidden for months under a shadow that was itself
+ * wrong, and now visible to the instrument. NONE OF THEM IS VISIBLE TO A
+ * PLAYER: every one sits inside the runtime contact ellipse, measured at 0.36%
+ * of rendered pixels changing on grass across the whole catalogue.
+ *
+ * PLAN. Step 4: redraw each base in the ground plane — an ELLIPSE for a round
+ * foot, a DIAMOND for a square plinth. Both satisfy "no horizontal edges at
+ * ground level"; drawing a column plinth round is a different lie. Most of
+ * these come from a handful of shared generators in decor.js (`plinth`, the
+ * urn/column/basin grids), so the previous forty-eight closed with four helpers
+ * and four sprites rather than forty-eight redraws — expect the same here.
+ *
+ * IT MAY ONLY EVER SHRINK, and a name that has been fixed must be removed: the
+ * tests fail in both directions.
+ */
+export const KNOWN_FLAT_FEET = new Set([
+  // decor.js — generated grids standing on a rectangular `plinth()`
+  'column', 'doric-column', 'ionic-column', 'corinthian-column', 'broken-column',
+  'obelisk', 'herm', 'grave-stele', 'altar', 'naiskos', 'balustrade',
+  'amphora', 'amphora-plinth', 'krater-wide', 'fluted-urn', 'cache-pot',
+  'birdbath', 'sundial', 'sundial-pedestal', 'marble-torso',
+  'jet-basin', 'wall-fountain', 'fountain-tiered', 'arbour-seat', 'axe-marker',
+  // props.js — hand-authored bases that were sitting on their own typed band
+  'sleeping-satyr', 'half-buried-pithos', 'ancient-oak', 'plane-tree',
+]);
+
+/**
  * Import an art module, telling "not written yet" apart from "threw".
  *
  * THE CENSUS MUST NOT BE ABLE TO SHRINK QUIETLY. Five separate loaders — two

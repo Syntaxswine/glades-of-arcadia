@@ -29,7 +29,9 @@
 //            on it and ranked COLUMN the fourth-worst sprite in the game.
 //   diag     how much of the outline runs on a 2:1 slope — the positive signal.
 
-import { measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt } from './isogeom.mjs';
+import {
+  measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt, KNOWN_FLAT_FEET,
+} from './isogeom.mjs';
 
 const ALL = process.argv.includes('--all');
 const STRICT = process.argv.includes('--strict');
@@ -98,7 +100,34 @@ console.log(
     `ground level longer than a curve of that size would give`
 );
 
-if (STRICT && flagged.length) {
+// --- the ratchet ----------------------------------------------------------
+//
+// The LIST is not the gate; the list is what the gate already knows about. The
+// table above still prints every offender, excused or not, because a passive
+// instrument that hides what it found is no longer an instrument. Only
+// `--strict` consults KNOWN_FLAT_FEET, and it fails in BOTH directions: a new
+// offender fails, and so does a name still listed after it has been fixed.
+const fresh = flagged.filter((r) => !KNOWN_FLAT_FEET.has(r.name));
+const stale = [...KNOWN_FLAT_FEET].filter((n) => !flagged.some((r) => r.name === n));
+
+if (KNOWN_FLAT_FEET.size) {
+  console.log(
+    `  ${flagged.length - fresh.length} of them are the known step-4 worklist ` +
+      `(KNOWN_FLAT_FEET in tools/isogeom.mjs)`
+  );
+}
+
+if (STRICT && fresh.length) {
   console.error('\niso audit FAILED (--strict): those bases lie in the screen plane.');
+  for (const r of fresh) console.error(`  ${r.name}  ${r.flat}px level, allowed ${r.min}`);
+  process.exit(1);
+}
+if (STRICT && stale.length) {
+  console.error(
+    '\niso audit FAILED (--strict): these are listed as known-flat but now meet\n' +
+      'the ground correctly. Delete them from KNOWN_FLAT_FEET — a ratchet that\n' +
+      'only ever grows is a list of excuses.\n  ' +
+      stale.join('\n  ')
+  );
   process.exit(1);
 }

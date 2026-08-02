@@ -87,6 +87,31 @@ export function defineSprite(def) {
 export const SHADOW_KEY = 'm';
 
 /**
+ * A SPRITE'S ROWS ALWAYS REACH ITS ANCHOR. Pads with transparent rows if not.
+ *
+ * The anchor is the pixel that sits on the tile's centre point, and it is fixed
+ * BEFORE the bottom of a sprite is edited — that is what stops a change to the
+ * base from silently moving forty objects off their tiles. The cost of taking
+ * it first is that it can end up BELOW the last row, and `defineSprite` refuses
+ * a sprite in that state, correctly.
+ *
+ * Two edits in step 3 hit this, in the same shape from opposite directions: a
+ * baked contact band being STRIPPED (the anchor was inside the band), and
+ * `skirt()` no longer GROWING a generated grid (the anchor was in the rows the
+ * skirt used to add). Both are "the art shrank past the anchor", and both are
+ * repaired the same way: add rows back with nothing in them. The anchor stays
+ * exactly where it was, the sprite's height is unchanged from the game's point
+ * of view, and no pixel returns.
+ */
+export function padToAnchor(rows, ay) {
+  if (!rows.length || ay < rows.length) return rows;
+  const w = rows[0].length;
+  const out = rows.slice();
+  while (out.length <= ay) out.push(TRANSPARENT.repeat(w));
+  return out;
+}
+
+/**
  * WHERE AN OBJECT ACTUALLY MEETS THE GROUND — measured from the art, and blind
  * to the shadow it already casts.
  *

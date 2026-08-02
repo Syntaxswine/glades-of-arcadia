@@ -60,9 +60,9 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite } from './format.js';
+import { defineSprite, padToAnchor } from './format.js';
 import { variant } from '../palette.js';
-import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
+import { LEVEL_H } from '../iso.js';
 
 // ===========================================================================
 // Authoring plumbing
@@ -83,27 +83,29 @@ function sprite(name, [dx, up], rows, opts = {}) {
 
 /** Generated sprite: the grid already knows exactly where its anchor is. */
 function spriteAt(name, [ax, ay], g, opts = {}) {
-  // `contact: r` lays the standard 2:1 contact shadow down at the ANCHOR —
-  // which is the tile's centre point, and therefore exactly where the circle
-  // under an object is centred. Opt-in and stated at the call site, beside the
-  // anchor it depends on.
+  // NO CONTACT SHADOW IS BAKED HERE. It used to be, opt-in per sprite via
+  // `contact: r`, and the reasoning for making it opt-in was sound: a blanket
+  // rule would have put a dark ring around every PAVING tile in this file —
+  // gravel walk, flagstone, terrace paving — which lie IN the ground plane
+  // rather than standing on it, and no predicate separates the two.
   //
-  // NOT AUTOMATIC, and that is the interesting part. Nine props in this file
-  // had no contact shadow at all, which is why they were the last nine sprites
-  // the iso audit flagged: with nothing under them, the lowest thing in each
-  // column was the object's own base, cut off square by the bottom of its grid.
-  // But a blanket "give everything a shadow" would put a dark ring around every
-  // PAVING tile in the file — gravel walk, flagstone, terrace paving — and
-  // those lie IN the ground plane rather than standing on it. There is no
-  // predicate that separates the two; there is only knowing which is which,
-  // so it is written down one sprite at a time.
-  if (opts.contact) skirt(g, ax + 0.5, ay, opts.contact);
+  // What that reasoning could not reach is that 'm' is GRASS[0], so a baked
+  // shadow is grass-green wherever the object stands. render.js now draws the
+  // contact pass itself, sized from the art and coloured from the tile beneath,
+  // and it needs no per-sprite declaration at all: an object that stands on the
+  // ground casts a shadow because it has a base, and a paving tile does not
+  // because it has none. The predicate that did not exist in the art turned out
+  // to exist in the scene.
   const rows = g.map((r) => r.join(''));
   const w = Math.max(...rows.map((r) => r.length));
   return defineSprite({
     name,
     anchor: [ax, ay],
-    rows: rows.map((r) => r.padEnd(w, '.')),
+    // The grids here are built to a declared height, but `skirt()` used to GROW
+    // them past it, and a few anchors were placed in the rows it added. Now that
+    // it is gone those anchors would fall outside the sprite — the same
+    // "the art shrank past the anchor" as stripping a band. See padToAnchor.
+    rows: padToAnchor(rows.map((r) => r.padEnd(w, '.')), ay),
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
@@ -308,38 +310,6 @@ function stamp(g, rowsArr, x0, y0) {
 }
 
 /**
- * The contact skirt: ground ramp darkened two steps, hugging the base.
- *
- * IT IS A CIRCLE ON THE GROUND, so it is a 2:1 ellipse — see GROUND_ELLIPSE in
- * js/iso.js. This used to return a RECTANGULAR BAND, three rows of solid 'm'
- * with every row a horizontal line, stamped under sixteen different props; an
- * isometric world has no horizontal edges at ground level, and that one helper
- * put a twelve-pixel one under each of them.
- *
- * Now it takes the grid, like the props.js version it is deliberately a twin
- * of, and:
- *
- *   * fills only EMPTY pixels, so it can be laid down last without eating the
- *     plinth it is bedding in (the old one stamped straight over the base);
- *   * makes room for itself, because `put` silently drops anything past the
- *     last row and a clipped ellipse is a straight horizontal line — the fault
- *     arriving by the back door. Growing downward is free: the anchor is
- *     measured from the top, so appending rows moves nothing in the game.
- */
-function skirt(g, cx, cy, r) {
-  const ry = r * GROUND_ELLIPSE;
-  const need = Math.round(cy + ry) + 1;
-  while (g.length < need) g.push(new Array(g[0].length).fill('.'));
-  for (let y = Math.round(cy - ry); y <= Math.round(cy + ry); y++) {
-    for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
-      const nx = (x - cx) / r;
-      const ny = (y - cy) / ry;
-      if (nx * nx + ny * ny <= 1 && peek(g, x, y) === '.') put(g, x, y, 'm');
-    }
-  }
-}
-
-/**
  * A member running along the +tx axis. One tile step is 32 px across and 16 px
  * down, so everything linear steps 1 down per 2 across and a sprite drawn 33
  * wide (one column of overlap) butts into a run with no seam.
@@ -442,7 +412,6 @@ function benchGrid() {
   return g;
 }
 export const STONE_BENCH = spriteAt('stone-bench', [16, 30], benchGrid(), {
-  contact: 25,
   tags: ['decor', 'furniture', 'marble', 'neoclassical', 'seat'],
 });
 
@@ -856,7 +825,6 @@ function amphoraGrid(withPlinth) {
   const base = AMPHORA_PROFILE.length + 1;
   if (withPlinth) {
     stamp(g, plinth(20, 5, MARBLE), cx - 9, base);
-    skirt(g, cx + 0.5, base + plinthH(5), 11);
     return { g, cx, ay: base + plinthH(5) - 1 };
   }
   // A small ring stand — a pointed amphora will not stand on grass by itself,
@@ -866,7 +834,6 @@ function amphoraGrid(withPlinth) {
     for (let i = -w; i <= w; i++) put(g, cx + i, base + k, roundKey(i, w + 0.5, TERRA));
   }
   hline(g, cx - 8, cx + 8, base + 3, 'P');
-  skirt(g, cx + 0.5, base + 4, 9);
   return { g, cx, ay: base + 4 };
 }
 {
@@ -920,7 +887,6 @@ function kraterGrid() {
     }
   }
   const base = KRATER_PROFILE.length + 1;
-  skirt(g, cx + 0.5, base, 11);
   return { g, cx, ay: base };
 }
 {
@@ -956,7 +922,6 @@ function flutedUrnGrid() {
   hline(g, cx - 8, cx + 8, 9, 'E');
   const base = 4 + URN_PROFILE.length;
   stamp(g, plinth(18, 3, MARBLE), cx - 8, base);
-  skirt(g, cx + 0.5, base + plinthH(3), 10);
   return { g, cx, ay: base + plinthH(3) - 1 };
 }
 {
@@ -999,7 +964,6 @@ function sundialGrid() {
   }
   const base = 35;
   stamp(g, plinth(20, 4, MARBLE), cx - 9, base);
-  skirt(g, cx + 0.5, base + plinthH(4), 11);
   return { g, cx, ay: base + plinthH(4) - 1 };
 }
 {
@@ -1029,7 +993,6 @@ function birdbathGrid() {
   hline(g, cx - 5, cx + 2, 9, 'K'); // one glint, upper left
   const base = 31;
   stamp(g, plinth(20, 3, MARBLE), cx - 9, base);
-  skirt(g, cx + 0.5, base + plinthH(3), 11);
   return { g, cx, ay: base + plinthH(3) - 1 };
 }
 {
@@ -1052,7 +1015,6 @@ function cachePotGrid() {
   revolve(g, cx, 22, pot, { ramp: TERRA });
   drum(g, cx, 23, 10, 2, { ramp: TERRA, rim: true }); // the rim, over the foliage
   const base = 37;
-  skirt(g, cx + 0.5, base, 10);
   return { g, cx, ay: base };
 }
 
@@ -1142,7 +1104,6 @@ function arbourSeatGrid() {
   return g;
 }
 export const ARBOUR_SEAT = spriteAt('arbour-seat', [18, 46], arbourSeatGrid(), {
-  contact: 21,
   tags: ['decor', 'furniture', 'timber', 'seat', 'needs-design'],
 });
 
@@ -1266,7 +1227,6 @@ function columnGrid(capital, name) {
   capital(g, cx, yCap, MARBLE);
   const base = shaftTop + shaftH;
   stamp(g, plinth(18, 1, MARBLE), cx - 8, base);
-  skirt(g, cx + 0.5, base + plinthH(1), 10);
   return { g, cx, ay: base + plinthH(1) - 1, name };
 }
 {
@@ -1330,7 +1290,6 @@ function brokenColumnGrid() {
   // ONE shadow, and it is centred on the ANCHOR rather than on the standing
   // stump: this sprite is a broken column AND the drum fallen beside it, so
   // the ground it touches is the whole pair. r 13 against a 26px foot.
-  skirt(g, cx + 0.5, base + plinthH(1) - 1, 13);
   return { g, cx, ay: base + plinthH(1) - 1 };
 }
 {
@@ -1373,7 +1332,6 @@ function colonnadeGrid() {
     shaft(g, cx, yTop, COLH, MARBLE);
     doricCapital(g, cx, under(i), MARBLE);
     stamp(g, plinth(16, 0, MARBLE), cx - 8, yTop + COLH);
-    skirt(g, cx - 0.5, yTop + COLH + plinthH(0), 9);
   });
 
   // Architrave, then a cornice with its own oversail and a dentil course.
@@ -1430,7 +1388,6 @@ function balustradeGrid() {
   return g;
 }
 export const BALUSTRADE = spriteAt('balustrade', [10, 29], balustradeGrid(), {
-  contact: 21,
   tags: ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'],
 });
 
@@ -1727,7 +1684,6 @@ function obeliskGrid() {
   }
   const base = 8 + H;
   stamp(g, plinth(20, 6, MARBLE), cx - 9, base);
-  skirt(g, cx + 0.5, base + plinthH(6), 11);
   return { g, cx, ay: base + plinthH(6) - 1 };
 }
 {
@@ -1924,7 +1880,6 @@ function topiaryConeGrid() {
     put(g, cx - 1, 3 + H + k, 'q');
   }
   const base = 3 + H + 3;
-  skirt(g, cx + 0.5, base, 8);
   return { g, cx, ay: base };
 }
 {
@@ -1947,7 +1902,6 @@ function topiarySphereGrid() {
     put(g, cx + 1, 25 + k, 'q');
   }
   const base = 34;
-  skirt(g, cx + 0.5, base, 8);
   return { g, cx, ay: base };
 }
 {
@@ -2040,7 +1994,6 @@ function tieredFountainGrid() {
   return g;
 }
 export const FOUNTAIN_TIERED = spriteAt('fountain-tiered', [25, 58], tieredFountainGrid(), {
-  contact: 21,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 4 },
 });
@@ -2123,7 +2076,6 @@ function wallFountainGrid() {
   return g;
 }
 export const WALL_FOUNTAIN = spriteAt('wall-fountain', [18, 50], wallFountainGrid(), {
-  contact: 17,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 5 },
 });
@@ -2157,7 +2109,6 @@ function jetBasinGrid() {
   return g;
 }
 export const JET_BASIN = spriteAt('jet-basin', [22, 32], jetBasinGrid(), {
-  contact: 21,
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water'],
   cycle: { ramp: 'water', rate: 4 },
 });
@@ -2183,7 +2134,6 @@ function fountainJetGrid() {
 
   // The plinth first, so the bowl draws over its cap.
   stamp(g, plinth(28, 4, MARBLE), cx - 14, BOWL + 3);
-  skirt(g, cx - 0.5, BOWL + 3 + plinthH(4), 15);
 
   // The bowl: a drum with a real moulded rim — a lit top annulus, a dark
   // reveal under it, then the bowl's own wall. Three rows of moulding is the
@@ -2287,7 +2237,6 @@ function shellFountainGrid() {
   for (let y = cy + RY; y < 25; y++) put(g, cx - 1 + ((y & 1) ? 0 : 1), y, y > 22 ? 'H' : 'J');
   revolve(g, cx, 22, [3, 2, 2, 3, 4, 4, 3, 3, 5, 7, 8], { ramp: MARBLE, flutes: 3 });
   const base = 33;
-  skirt(g, cx + 0.5, base, 10);
   return g;
 }
 export const SHELL_FOUNTAIN = spriteAt('shell-fountain', [19, 33], shellFountainGrid(), {
@@ -3498,7 +3447,6 @@ function axeMarkerGrid() {
   return g;
 }
 export const AXE_MARKER = spriteAt('axe-marker', [15, 46], axeMarkerGrid(), {
-  contact: 15,
   tags: ['sculpture', 'rock', 'archaic', 'votive', 'quiet'],
 });
 
