@@ -593,19 +593,9 @@ export const AUDITED_MODULES = ['props', 'decor', 'tiles', 'extras', 'clumps'];
  */
 export const KNOWN_FLAT_FEET = new Set([
   // ---------------------------------------------------------------------
-  // TWO LEFT, and both are here because a GENERATED foot would be a lie.
+  // ONE LEFT, and it is here because a GENERATED foot would be a lie.
   // Everything a diamond or an ellipse could honestly answer has been
-  // answered; these two need a human to redraw a shape, not a helper to
-  // append one, which is exactly the distinction this list is for.
-
-  // A BROKEN MARBLE SLAB, 47 px of it, and the project's hero sprite. A
-  // generated diamond foot is 11 rows deep at that width and reads as a
-  // pyramid — it was built, looked at, and reverted. The slab wants drawing
-  // ISOMETRICALLY instead: a parallelogram top face and a bottom edge that
-  // runs 1-in-2 across the whole width rather than a symmetric vertex. That
-  // is a redraw of the most carefully made sprite in the game and it belongs
-  // to whoever owns the art, not to a sweep.
-  'sleeping-satyr',
+  // answered; this one needs a decision, not a helper.
 
   // A LINEAR RUN, and its contact is a STRIP along the +tx axis, not a blob:
   // `LINE_W = 33` is "32 px of run plus one overlap column", so a row of them

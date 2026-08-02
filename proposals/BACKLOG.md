@@ -1,6 +1,6 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-01 (fourth pass, after the shadow arc) against
+Reconciled 2026-08-01 (FIFTH pass, after steps 3 and 4 of the shadow arc) against
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
@@ -540,81 +540,104 @@ forgot to check, and a save claiming a facing the catalogue no longer offers).
   are not in props.js or decor.js** — they draw understudies today, so the turn
   is real but what turns is the stand-in. Harmless, worth knowing.
 
-## 4l · THE SHADOW ARC — steps 1 and 2 SHIPPED, step 3 measured (2026-08-01)
+## 4l · THE SHADOW ARC — steps 1–4 SHIPPED, ONE DECISION LEFT (2026-08-01)
 
-Full write-up: `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`, the `PROPOSAL — ONE
-SHADOW SYSTEM` section and `## The shadow arc — 2026-08-01` beneath it. The
-proposal's `### Sequence` is annotated with what landed.
+Full write-up: `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` — the `PROPOSAL — ONE
+SHADOW SYSTEM` section, then `## The shadow arc` and `## Steps 3 and 4` beneath
+it. The proposal's `### Sequence` is annotated with what landed.
 
-**Shipped.** `groundCentre()` measures where an object meets the ground from the
-art, blind to its own shadow (`2857be6`). The runtime contact shadow is sized
-from it, drawn as an ellipse, and coloured from the tile it lands on
-(`024c7a7`). Measured on rendered pixels: placeables with a 100%-invisible
-shadow went **13 → 1**, visible shadow pixels **16 004 → 47 260**.
+**Shipped.** One shadow system. `render.js` draws every object's contact with the
+ground in its own pass, sized from `groundCentre(art)` and coloured from the tile
+beneath (`2857be6`, `024c7a7`). The art no longer draws its own: 43 `skirt()`
+call sites, 53 hand-typed `'m'` bands and ~30 hand-rolled `put/hline` skirts
+deleted (`92400ce`, `e3a5f8e`). Twenty-eight square-cut feet redrawn in the
+ground plane (`618ec8b`, `e3a5f8e`).
 
-### ▸ NEXT — step 3: delete the baked skirts
+| | before | after |
+|---|---|---|
+| grass-green px on flagstone, whole catalogue | 16 710 | **3 294** |
+| `iso-audit` flat feet, of 237 sprites | 0 → 29 | **1** |
+| the picture on grass | — | 0.25% of px changed |
+| `anchor-audit` | 10 / 0 / 12 | **10 / 0 / 12** |
 
-The one with real work left in it, and it is **de-risked**: stub both `skirt()`
-implementations behind a flag, render, `git checkout`. Ten minutes, and it
-proves the two things that make the change safe —
+**It was never about the skirts' SHAPE.** `'m'` is `GRASS[0]`, so every baked
+skirt was a green mat wherever the object stood on stone. Reshaping all
+forty-three would have left every one of them. The rule that replaced them:
+*which plane does this shade lie on?* — world ground is the renderer's, a surface
+of the object itself is the art's. Exactly one call site survives on that test
+(the altar on the heroon's podium).
 
-1. on grass, deleting them is a **visual no-op** (the runtime ellipse already
-   covers the same ground in the same colour); on paving it removes the
-   grass-green mats;
-2. there are **two mechanisms**. Stubbing `skirt()` alone leaves the 48
-   hand-typed `mmmm` bands as literal flat rows — the original fault, restored.
-   `groundContact` changes from *convert the band* to *strip the band*, which
-   clears all 68 sprites with **no art edits at all**; then the ~43 `skirt()`
-   call sites go by hand so the secondary ones (the altar inside the heroon) can
-   be kept.
+### ▸ THE ONE DECISION LEFT — the stamp scallops under runs
 
-### ▸ THEN — step 4: 28 flat feet
+Put four hedges, walls or balustrades in a row and each casts its own round
+pool: a string of dark bubbles, not one band of shade. **A step-2 regression** —
+the stamp went from rhombus to ellipse, and *rhombi tile, ellipses do not*. For
+a game whose linear pieces are built to butt (`LINE_W = 33` is "32 px of run plus
+one overlap column"), tiling is the property that decides the shape.
 
-`iso-audit` goes 0 → **28** the moment the skirts go. **None of it is visible** —
-every one of those feet sits inside the runtime shadow — so step 4 may FOLLOW
-step 3 rather than block it. `test/iso-ground.test.mjs` is a ratchet built for
-exactly this. Worst first: `sleeping-satyr` 36px of level edge (allowed 20),
-`wall-fountain` 33 (16), `jet-basin` 33 (19), `half-buried-pithos` 29 (22), then
-a long tail of plinths at 15–22.
+Rendered both: at `p = 1` the runs join cleanly and compact objects get thin
+pointed smudges; at `p = 2` (shipped) compact objects read well and runs
+scallop. **Neither shape serves both.** The stamp has to follow the object's
+ORIENTATION.
 
-Redraw each as a real 2:1 base — an **ellipse** for a round foot, a **diamond**
-for a square plinth. Both satisfy "no horizontal edges at ground level"; a
-column plinth is a square block and drawing it round is a different lie.
+**Step 4 unblocked the measurement, which is why it went first.** Compact
+sprites now measure a base tilt of exactly 0.00 (13 of 13 — before step 4 it was
+noise, because their feet had been flattened). Linear ones need the DOMINANT
+SLOPE rather than the endpoints: `hedge-low` descends 1-in-2 for 34 of its 50
+columns and then its end cap rises, so end-to-end reads 0.04 and files it as
+compact. Threshold on *longest constant 1-in-2 descent / span*: a diamond is
+symmetric (~0.5), a run is not (~0.7).
+
+`KNOWN_FLAT_FEET` has one name left — **`balustrade`** — and it is blocked on
+this same decision, because fixing its foot and fixing the stamp are one
+question with two halves.
+
+### ▸ NOT DONE, and named: the sleeping satyr is drawn in ELEVATION
+
+Its block's base is now an honest fracture, so it passes the audit and the
+figure did not move a pixel. But measure the silhouette: the block's top edge is
+dead level and so is the figure's long axis. **It is the one sprite in the game
+whose long axis is the screen horizontal, which is not a world direction** — the
+owner's original complaint about the cave, in the sprite that gets the most care.
+Compare with `hedge-low` at 6×.
+
+Fixing it means re-seating the figure along +tx: a redraw of the game's signature
+image. A commission, not a sweep.
 
 ### ▸ OPEN, owner's call: transparency-based shadows
 
-Owner asked for shadows that "work with anything underneath them". **Feasible**
-— as palette-space darkening (read the pixel below, walk ITS ramp down two
-steps), never alpha, which SPEC §3 forbids in capitals and which would break the
-palette-purity assertions. Measured: **100% of rendered pixels are exact palette
-colours** so the reverse lookup always hits, and the remap costs **0.50 ms** of
-an **8.20 / 16.7 ms** frame. It also fixes two things nobody asked about — the
-opaque stamp currently ERASES grass speckle and flagstone joints, and a shadow
-spanning a grass/paving boundary is one wrong colour across both.
+Unchanged and now unblocked (step 3 was the prerequisite). **Feasible** as
+palette-space darkening — read the pixel below, walk ITS ramp down two steps —
+never alpha, which SPEC §3 forbids in capitals. Measured: **100% of rendered
+pixels are exact palette colours** so the reverse lookup always hits, and the
+remap costs **0.50 ms** of an **8.20 / 16.7 ms** frame. It also fixes two things
+nobody asked about: the opaque stamp currently ERASES grass speckle and flagstone
+joints, and a shadow spanning a grass/paving boundary is one wrong colour across
+both. Needs a rule for the six ACCENT colours, which have no ramp to walk down —
+mix toward `ACCENT[6]` and snap, which is finally what that "universal shadow
+mixer" is for.
 
-Blocked on step 3 (a baked opaque skirt cannot participate in a blend). Needs a
-rule for the six ACCENT colours, which have no ramp to walk down — mix toward
-`ACCENT[6]` and snap, which is finally what that "universal shadow mixer" is for.
-
-**Object-on-object shading is OFF the table** — owner: "the shadows are fairly
-high noon shadows, so i don't think they would ever truly drop down to another
-level". That was the expensive half.
+**Object-on-object shading stays OFF the table** — owner: "the shadows are fairly
+high noon shadows".
 
 ### ▸ The 10 undersized placeables — a ratchet, not a to-do
 
 `KNOWN_UNDERSIZED` in `test/sprite-anchors.test.mjs`. Ten catalogue entries
-reserve more garden than their art was drawn to cover, `sleeping-satyr` among
-them. Each is either a redraw or a catalogue correction — a decision about how
-much ground an object takes, so it is the owner's, not a cleanup. The list may
-only ever shrink; the test enforces that in both directions.
+reserve more garden than their art covers. Each is either a redraw or a
+catalogue correction — a decision about how much ground an object takes, so it is
+the owner's. The list may only shrink; the test enforces that both ways.
 
-### ▸ A cheap sweep with a good hit rate
+### ▸ Two sweeps with a good hit rate
 
-Every fault in this arc was **a consumer that was never written** — `shadow:`,
-`CREATURE_SHADOWS`, `cell.ground`, `ACCENT[6]`, and a comment in
-`js/art/extras.js:17` describing a `variant` that does not exist. Five in one
-subsystem. **Grep for a field and check who reads it.** That found more here than
-reading code for mistakes did.
+**Grep for a field and check who reads it.** Every fault in steps 1–2 was a
+consumer that was never written — `shadow:`, `CREATURE_SHADOWS`, `cell.ground`,
+`ACCENT[6]`, and a comment in `js/art/extras.js:17` describing a `variant` that
+does not exist. Five in one subsystem.
+
+**Render the thing next to a copy of itself.** Every probe here isolates its
+subject so nothing contaminates the reading, and isolation is a configuration
+too. The scalloping shipped and ran live for a day on every hedge and wall in the
+game; one frame with four hedges in it found it.
 
 ---
 
@@ -682,3 +705,13 @@ the **shadow arc** — a contact shadow measured from the art instead of guessed
 from the tile, and coloured by the ground it lands on. Four instruments came out
 of it and are the durable half: `tools/isogeom.mjs`, `tools/shadow-probe.mjs`,
 and two more arms each on `iso-audit` and `anchor-audit` · 386 tests.
+
+Then, 2026-08-01 last: **steps 3 and 4 of the shadow arc** — the art stopped
+drawing its own contact with the ground. Forty-three `skirt()` call sites,
+fifty-three hand-typed `'m'` bands and about thirty hand-rolled ones deleted;
+twenty-eight square-cut feet redrawn in the ground plane, a DIAMOND for a square
+base and an ELLIPSE for a turned one. It was never about their shape: `'m'` is
+`GRASS[0]`, so every baked skirt was a green mat wherever the object stood on
+stone — **16 710 grass-green pixels on flagstone down to 3 294**, while the
+picture on grass changed by 0.25%. `iso-audit` 0 → 29 → **1**, and the anchor
+audit read 10 / 0 / 12 before, during and after · 386 tests.

@@ -186,7 +186,7 @@ const rep = (n, s) => new Array(n).fill(s);
 
 export const SLEEPING_SATYR = sprite(
   'sleeping-satyr',
-  [0, 2],
+  [0, 8],
   [
     // AUTHORING NOTE — five takes on this one object, and what each taught.
     //
@@ -258,13 +258,19 @@ export const SLEEPING_SATYR = sprite(
     'ACCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
     'ACCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
     'ACCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAA',
-    'ABCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAA.',
-    '.ABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAA..',
-    '..AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-    '.mmnommmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnommmm...',
-    '..mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm....',
-    '....mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm......',
-    '........mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm........',
+    '.AACCCCCCCCCCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBAA.',
+    '...AACCCCCCCCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBAA...',
+    '.....AACCCCCCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBAA.....',
+    '.......AACCCCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBAA.......',
+    '.........AACCCCCCCCCCCCCCCBBBBBBBBBBBBBBBAA.........',
+    '...........AACCCCCCCCCCCCCBBBBBBBBBBBBBAA...........',
+    '.............AACCCCCCCCCCCBBBBBBBBBBBAA.............',
+    '...............AACCCCCCCCCBBBBBBBBBBA...............',
+    '.................AACCCCCCCBBBBBBBBAA................',
+    '...................AACCCCCBBBBBBAA..................',
+    '.....................AACCCBBBBAA....................',
+    '.......................AACBBAA......................',
+    '.........................AAA........................',
   ],
   { tags: ['sculpture', 'marble', 'satyr', 'ruin', 'wildness'] }
 );

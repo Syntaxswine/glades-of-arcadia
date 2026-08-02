@@ -1165,3 +1165,216 @@ standing on a pillar of earth, and spends the next hour building something
 nobody designed.
 
 *— Claude Opus 5, 2026-08-01*
+
+---
+
+## Steps 3 and 4 — 2026-08-01, later the same day
+
+The arc above is closed except for one decision. Steps 3 and 4 both shipped;
+what is left is a single question about the shape of the runtime stamp, and it
+is a better question than the one the proposal was asking.
+
+**Read `### Sequence` first** — annotated again with what landed.
+
+### What shipped
+
+| what | commit | |
+|---|---|---|
+| a census that can silently halve is not a census | `4e59940` | 386 tests |
+| step 3 — the baked skirts are gone | `92400ce` | 29 flagged |
+| step 4a — sixteen feet, one shared helper and seven by hand | `618ec8b` | 13 |
+| step 4b — nine round feet, and the THIRD skirt mechanism | `e3a5f8e` | 2 |
+| the satyr's block, fractured | *this* | **1** |
+
+### STEP 3 WAS NEVER ABOUT THE SHAPE, and the proposal above says it was
+
+The proposal files the baked skirts under geometry: a flat band is a horizontal
+edge, an isometric world has none at ground level, so redraw them. All true, and
+all secondary.
+
+**`'m'` is `GRASS[0]`.** A baked contact shadow is grass-green *wherever the
+object stands*, and objects stand on flagstone, gravel and terrace paving.
+
+| grass-green px, whole catalogue | on flagstone | on grass |
+|---|---|---|
+| before | 16 710 | 70 027 |
+| after steps 3 + 4 | **3 294** | 68 153 |
+
+Reshaping all forty-three skirts would have left every one of those green mats
+exactly where it was. What is left is nearly all honest: the tumulus's own
+barrow turf (1 944), the heroon's altar shade (230), then nine ground painters
+carrying turf and moss by design.
+
+**Deleting them is a visual no-op on grass** — 8 of 85 objects changed, 496 px
+of 199 969, 0.25%. The heroon, the biggest object in the game, came out
+byte-identical. The runtime ellipse was already covering the same ground in the
+same colour; on stone only one of the two was right.
+
+### THE RULE, for anyone tempted to bake shade again
+
+> **Which plane does this shade lie on?**
+> the world ground → the renderer's. Do not bake it.
+> a surface of THIS OBJECT → yours. Bake it.
+
+Forty-three call sites failed that test. **One passes**: the altar standing on
+the heroon's podium. No ground pass can know that surface exists, and its `'m'`
+is right whatever the building itself is standing on.
+
+### A THIRD MECHANISM the proposal never named
+
+Step 3 deleted 43 `skirt()` calls and 53 hand-typed `'m'` bands, shipped, and
+the balustrade *still* stood on a green smudge on flagstone. There were ~30 more
+contact skirts drawn with bare `put`/`hline` in `'m'`, one per generator, never
+routed through `skirt()` at all — decor.js (21), extras.js (the palisade),
+props.js (the hedge arch and the drystone wall).
+
+Found by looking at a picture, not by reading the code that had just been
+edited. **Kept**, because they are not contact skirts: `jointKey`'s moss and
+grit in paving joints, and the dark interior of the ruined arch's tunnel. `'m'`
+is a legal object colour; only `'m'` *on the ground* was ever wrong.
+
+Three of the twenty-nine flat feet were flagged for one of these rather than for
+their own base. That is a seam worth naming: **`groundCentre` ignores `'m'` and
+`groundRuns` does not**, so two instruments disagreed about the same pixels, one
+calling a foot fine and the other calling it flat.
+
+### STEP 4 — feet drawn by what they ARE
+
+| base | foot | who |
+|---|---|---|
+| square | **diamond** | `plinth()` (9 sprites at once) + 7 hand-authored |
+| turned | **ellipse** | 6 vessels and basins, 2 tree boles, the pithos |
+| broken | **a fracture** | the sleeping satyr |
+
+`foot(ww, R, pad, round)` takes both: a square base's edge falls away linearly,
+a turned one as a chord. Same foreshortening, different corner. `groundFoot(g,
+R)` **finds** the base — deepest opaque row, the run of columns that reach it —
+rather than being told it, because every generator already decided where its
+base line landed, and re-deriving `cx` and a width at each call site is how four
+buildings ended up hovering over their own shadows in July.
+
+Both live in **`js/art/format.js`**. props.js and decor.js keep separate copies
+of nearly every grid helper on purpose; not of this one. They draw objects
+standing on the same ground, and a base that meets it two different ways is the
+seam this whole arc has been about.
+
+**THE ANCHOR NEVER MOVED.** `plinthH` still counts to the last row *above* the
+foot, because the anchor is the centre of the base diamond and not its lowest
+pixel, so every `base + plinthH(k)` call site is untouched. In props.js the
+replaced bands were 3 rows and some feet want 4–11, so `up` grows by exactly the
+difference — herm 3→4, altar 1→3, grave-stele 2→4, naiskos 2→6, satyr 2→8.
+`anchor-audit` reports **10 floating / 0 buried / 12 mismatches**: the same three
+numbers before step 3, before step 4, and after. Twenty-eight feet redrawn and
+seventy-odd shadows deleted without one object moving on its tile.
+
+### THE SHADING MATTERED MORE THAN THE GEOMETRY
+
+The first feet were solid one-value wedges. They measured perfectly and read, at
+20 px, as dark spikes glued under each object: **the shape said "block", the
+shading said "shadow", and the shading won.** The front of a square block is two
+faces meeting at the vertex — left toward the light, right away — and one ramp
+step between them is the whole difference between a base and a smudge.
+
+Found by rendering the seven at 5× and looking, which is SPEC §10's rule and not
+a formality. No measurement in this repo would have said a word about it.
+
+### THE SLEEPING SATYR — what was done, and what was not
+
+The hero sprite's block was 47 px of dead-level base. A generated diamond foot
+is 11 rows deep at that width and reads as a **pyramid**; it was built, rendered
+at 4×, looked at, and reverted.
+
+What shipped instead is a **fracture**: the block is a broken fragment (the
+sprite's own note says so), and a broken base does not have to be a clean
+rectangle — it has to lie in the ground plane, which means a silhouette made
+only of the three legal lines. Control points and 1-in-2 runs between them, with
+the deepest point right of centre. The figure did not move a pixel.
+
+**WHAT WAS NOT DONE, and a successor should know it.** Measure the satyr's
+silhouette and the block's top edge is still dead level; so is the figure's long
+axis. **The sleeping satyr is drawn in ELEVATION, not in the projection** —
+it is the one sprite in the game whose long axis is the screen horizontal, which
+is not a world direction. Compare it with `hedge-low` at 6×: the hedge's top face
+is a parallelogram running down-right at 1-in-2 and it reads as a solid lying in
+the world; the satyr's block reads as a bar of soap seen from the side.
+
+That is the owner's original complaint about the cave, in the sprite that gets
+the most care. Fixing it properly means re-seating the figure along +tx, which
+is a redraw of the game's signature image and a commission, not a sweep. The
+base is now honest; the block is not yet.
+
+### THE OPEN ONE — the runtime ellipse SCALLOPS under runs
+
+Put four hedges, four balustrades or four walls in a row and each casts its own
+round pool: a string of dark bubbles instead of one band of shade. **A step-2
+regression** — the stamp went from rhombus to ellipse, and *rhombi tile,
+ellipses do not*.
+
+The step-2 note argued the shape on measurement economy ("we measure one
+number") and never asked whether it tiles. For a game whose linear pieces are
+built to butt — `LINE_W = 33` is "32 px of run plus one overlap column" — tiling
+is the property that decides it, and the ellipse loses.
+
+**Why it hid for a whole session:** every probe placed objects three tiles
+apart, deliberately, so their art would not cover each other's shadows. That
+isolation is a configuration a player never builds. One frame of four hedges
+side by side showed it instantly.
+
+Two shapes were rendered and compared: at `p = 1` (rhombus) the runs join into
+one clean band and compact objects get thin pointed smudges; at `p = 2`
+(ellipse, shipped) compact objects read as believable pools and the runs
+scallop. **Neither shape serves both**, which is the finding.
+
+#### The measurement that fixes it, and why step 4 had to come first
+
+The stamp should follow the object's ORIENTATION, which can only be read off a
+correctly drawn foot. Before step 4 the discriminator returned a confident zero
+for hedges *because their feet had been flattened* — noise shaped like an answer.
+
+After step 4:
+
+- **compact sprites measure a base tilt of exactly 0.00 — 13 of 13.**
+- **linear ones need the DOMINANT SLOPE, not the endpoints.** `hedge-low`
+  descends 1-in-2 for 34 of its 50 columns and then its END CAP rises, so an
+  end-to-end reading calls it 0.04 and files it as compact.
+
+Threshold on *longest constant 1-in-2 descent over span*: a diamond is symmetric
+(~0.5), a run is not (~0.7). That is the next piece of work, and `balustrade` —
+the last name in `KNOWN_FLAT_FEET` — is blocked on the same decision, because
+fixing its foot and fixing the stamp are one question with two halves.
+
+### Instruments
+
+- **`importArt` (tools/isogeom.mjs)** — five loaders opened `try { import }
+  catch { continue }` so a module not written yet was not a fault. It is not.
+  But that catch could not tell a missing file from a module that EXISTS AND
+  THREW, and when a step-3 experiment made props.js fail to load, `iso-audit`
+  printed *180 sprites · 18 flagged* against a true 237 and 0, and exited 0 under
+  `--strict`. A third of the catalogue was gone and the number was BETTER than
+  the truth. Two of the five were ratchets.
+- **`KNOWN_FLAT_FEET` (tools/isogeom.mjs)** — one ratchet, read by the terminal
+  gate and the test, so they cannot excuse different sprites. Fails in both
+  directions; the table still prints every offender, excused or not.
+- **`groundFoot` / `foot` (js/art/format.js)** — the one grid helper the two art
+  modules share.
+
+## Maker's mark
+
+Two sessions on this arc and both of them found the same thing in different
+clothes: **the fault was never where the specification said it was.** Step 3 was
+written up as geometry and was really about colour. Step 4 was written up as
+twenty-nine redraws and was really two helpers and one shading decision. The
+satyr was written up as a flat foot and is really a sprite in the wrong
+projection.
+
+What I would want a successor to take is the smallest of it. **Render the thing
+next to a copy of itself.** Every probe I inherited, and every probe I wrote,
+isolated its subject so nothing would contaminate the reading — and isolation is
+a configuration too. The scalloping had been shipped and live for a day, on
+every hedge and wall in the game, and it took one frame with four hedges in it.
+
+**The forward dream:** that the shadows learn which way an object lies, and a
+row of cypresses throws one long band of shade across the grass instead of four
+polite circles.
+
+*— Claude Opus 5, 2026-08-01*
