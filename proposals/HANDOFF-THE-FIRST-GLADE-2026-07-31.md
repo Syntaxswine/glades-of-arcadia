@@ -1378,3 +1378,288 @@ row of cypresses throws one long band of shade across the grass instead of four
 polite circles.
 
 *— Claude Opus 5, 2026-08-01*
+
+---
+
+# THE IMAGE PACK AND THE COMPASS — 2026-08-02
+
+A new commission, and it opens with the same finding as the last one.
+
+> **The owner:** *"the image pack needs to be updated for isometric perspective.
+> as noted in the last handoff there are certain objects like the bench that
+> don't follow the diagonal of the grid pattern, they instead point at the
+> viewer. while redoing the image packs we should also think about how we can
+> have certain objects have different sprites depending on how they are
+> rotated, so things like hedges and fences can go around corners and ramps can
+> go up a hill in any direction."*
+
+Three things, and they are not equally hard. The bench turned out not to be an
+art fault at all. The ramps were a comment that was wrong. The corners are real
+work and are specified below rather than half-built.
+
+## What shipped
+
+| what | commit | |
+|---|---|---|
+| the bench was never an art fault | `503ff57` | 2 objects, 1 census |
+| a fence with gaps in it is not a fence | `84bf404` | 23x25 -> 33x28 |
+| ramps climb all four ways | `3c6d53c` | facings 2 -> 4 |
+
+## 1 · THE BENCH: NOTHING ASKED FOR THE GOOD ONE
+
+`stone-bench` drew `props.BENCH` — a front elevation whose every edge is
+horizontal, a little table pasted on the screen. `decor.STONE_BENCH` had existed
+the whole time, **registered under that exact id**: a `slab()` seat on two
+`plinth()` legs running along +tx like every other linear piece, and the sprite
+decor.js's own header holds up as the vocabulary the rest of the set follows.
+Nothing pointed at it.
+
+`doric-column` was the same. Its blurb says *"a stout **fluted** shaft with a
+plain square capital"*; it drew `props.column`, which has neither, while the
+fluted `doric-column` sat beside it unreachable. `ionic-` and `corinthian-` had
+been migrated and this one was missed — the order that gives the group its name.
+
+**NOTHING FAILED**, and that is the whole finding:
+
+- the sprite resolves, so `playtest` is content;
+- there is no `wanted`, so it is not art debt either;
+- `iso-audit` measured the GOOD sprite, found it clean, and printed a green
+  line about a picture the game does not draw.
+
+> An audit over every sprite in the tree answers *"is the ART correct"*. The
+> question an owner asks is *"is the GAME correct"*, and the two differ by
+> exactly the set of things nothing points at.
+
+`iso-audit --catalog` measures the second: **87 of 237 sprites are reachable.**
+Two of the other 150 were the correct drawings of things on screen.
+
+Five further name mismatches were checked and are correct — `still-pool` and
+`gravel-walk` carry `ground:` so they paint tiles and a tile sprite is right;
+the two props hedges are superseded by the decor pair. That check is worth
+repeating whenever art is added, and `tools/iso-audit.mjs --catalog` is where.
+
+## 2 · A FENCE WITH GAPS IN IT IS NOT A FENCE
+
+`palisade-fence` was neither of the two things its own header said it was.
+
+> *"The one thing that has to be right is that it runs ALONG A TILE EDGE — 2
+> across for 1 down ... Every stake therefore steps down 2 rows per 5 columns,
+> which is the 2:1 diamond slope to within a pixel over the run."*
+
+Two-in-five is 0.4. The projection's slope is 0.5. The sentence stating the
+requirement sat four lines above the line breaking it, and over the fence's own
+23 columns it was two and a half rows off true.
+
+And 23 px of run on a 32 px tile means **a row of fences is a dotted line**.
+props.js had already learned this on the drystone wall, in as many words — *"it
+used to be a 24px stub, which meant a row of them left gaps — visibly not a
+barrier, which is fatal for an occluder"*. The palisade is an occluder too;
+`js/fields.js` stops influence at it while the player looks through a hole.
+
+**The fix was to delete the second copy of the numbers.** `LINE_W` and
+`LINE_DROP` now live in `js/art/format.js`; decor.js re-exports them, extras.js
+imports them. Same argument the shadow arc made for `foot` and `groundFoot`:
+props.js and decor.js keep separate copies of nearly every grid helper *on
+purpose*, and not of the ones that state a fact about the world.
+
+While in there, **the last baked contact skirt in the tree**: `seated-maiden`
+ended with two rows of solid `'m'`. Step 3 swept this file, but only its
+palisade *loop* — these were typed into a literal sprite in a module the sweep
+had already visited and ticked off. Replaced with `foot(10, MARBLE, 3)`.
+
+## 3 · RAMPS: THE COMMENT THAT COST HALF THE COMPASS
+
+decor.js's CONNECTORS header said the other three orientations were *"a
+horizontal flip and/or a re-anchor, which the renderer can do for free"*.
+
+The flip is real and free, and it buys the second ramp that climbs **away** from
+the camera: mirroring the screen's x axis swaps the tile axes, so -tx becomes
+-ty. It cannot buy the two that come **downhill at you** — that is a 180-degree
+rotation, i.e. a horizontal flip *and a vertical one*, and a vertical flip is
+forbidden here because the light is always from the upper left.
+
+`js/iso.js` §FACING had said exactly this since it was written — bit 0 is the
+mirror, bit 1 chooses the drawing — and **this is the first placeable to use
+bit 1.**
+
+| facing | rise | ascends toward | on screen |
+|---|---|---|---|
+| 0 | `1 - s` | -tx | uphill, away to the upper LEFT |
+| 1 | mirror | -ty | uphill, away to the upper RIGHT |
+| 2 | `s` | +tx | uphill, toward the lower RIGHT |
+| 3 | mirror | +ty | uphill, toward the lower LEFT |
+
+`back` lives **on the art** (`format.js` `defineSprite`), not as a catalogue
+string: an artist who draws a ramp both ways has made one object with two views,
+and a name-based join can go stale. `render.js` `artRaster` follows it in one
+line, and `playtest` refuses a `facings: 4` entry whose art has no `back` —
+otherwise half the wheel's travel draws the same picture twice.
+
+### The geometry is right and it is counter-intuitive
+
+A unit tile projects to **1024 px²** of ground. The away ramp's surface projects
+to **1536** and the near ramp's to **512**. Tilting a plane toward a high camera
+makes it MORE edge-on, not less — so a ramp coming at you is mostly end wall,
+and that is what it should look like. Do not "fix" it.
+
+### Three things the picture found that no number would have
+
+1. **The mirror had never been rendered by a tool.** The first offline probe to
+   draw a turned object died on `ctx.translate is not a function`: the headless
+   shim implements the calls render.js needed, and the flip used two it did not.
+   *Half the facings in the game had only ever been seen by a human with a
+   browser open.* `mirroredRaster` now reverses rows in pixels — one pass over a
+   raster built once and cached forever, and every offline instrument can see a
+   turned piece.
+2. **`def.shadow` was a dead field.** main.js passes it, render.js honours
+   `=== false`, and catalog.js `normalise` — an explicit whitelist — never named
+   it. **Third consumer in this subsystem caught the same way**; `flatFooting`
+   carries the same note. A CONNECTOR IS GROUND, so it casts no contact shadow:
+   `groundCentre` gives r = 32 on a 64 px ramp and every ramp in the game sat in
+   a dark pool wider than itself.
+3. **The near ramp painted its own internal face.** A ramp exists against a step
+   and the step buries the edge it climbs. For the away drawing that edge is at
+   the back and its face was hidden by the ramp's own surface, so nobody had to
+   say so. For the near one it is a NEAR edge, and a full 16 px wall went
+   straight across the terrace it was joining.
+
+## 4 · THE INSTRUMENTS
+
+### `tools/joinshot.mjs` — DOES THIS PIECE JOIN?
+
+Every probe in this repo isolates its subject, and **isolation is a
+configuration a player never builds.** That blind spot has now cost three
+findings: the scalloping (last session), the palisade's gaps, and the corner
+problem below. So this one only ever draws things TOUCHING.
+
+```
+node tools/joinshot.mjs --ids hedge-low --corner --n 4 --zoom 4 --grid
+```
+
+`--run`, `--corner`, `--cross`, `--grid` (the tile diamond in red, which is how
+you check a 1x1's anchor — `anchor-audit` is multi-tile only), `--flat`.
+
+**It corrected me on its first outing.** A +ty run of hedges came out as four
+separate stubs and looked like an art fault. It is not: the pieces are drawn
+along +tx and the player TURNS them. A probe that leaves everything at facing 0
+tests a garden nobody builds, so the +ty leg is now turned by default.
+
+### `iso-audit --elev` — the second fault
+
+Everything the audit measured before is ONE EDGE, the bottom contour. The
+sleeping satyr proved that is not the whole question: its base is an honest
+fracture, it passes cleanly, and it is still drawn in elevation.
+
+- **seam** — longest level SURFACE BOUNDARY inside the silhouette. The sharp
+  one: where two faces of a solid meet, that edge runs 1-in-2. `props.BENCH`
+  puts D over C over B across twenty-one columns.
+- **top** — longest level run along the TOP contour. A flat top is a horizontal
+  plane, and a horizontal plane in this projection is a DIAMOND.
+
+A horizontal screen line is **not** illegal — `project(1, -1)` is `(64, 0)`, the
+diamond's own W–E diagonal. What it is not is a GRID direction.
+
+**REPORTED, NEVER VOTED.** The bottom contour has one legal answer so a ratchet
+can hold it; the top of a sprite has many. The table ranks and a human looks —
+and the first thing looking said was that the three column capitals it flags are
+FINE, a cylinder being allowed to be symmetric. Same lesson that demoted
+`mirror`. **Do not promote this to a gate.**
+
+### `elevation-probe.mjs` gains a `ramps` scene
+
+A plateau with a way up on all four sides, each ramp on the low ground with the
+step it climbs beside it — the only configuration that can tell a ramp from a
+wedge. On flat grass in a contact sheet the near drawing reads as a box.
+
+## 5 · THE CORNERS — SPECIFIED, NOT BUILT
+
+`node tools/joinshot.mjs --ids hedge-low,balustrade,palisade-fence,drystone-wall
+--corner` and all four fail, in three different ways. The straight runs are
+fine; **a corner is two finished bars crossing.** The piece on the corner tile
+carries on past the turn and its end cap sticks out as a spike.
+
+### Why the facing wheel cannot solve it
+
+An L-corner has four kinds — `{+tx,+ty}`, `{-tx,-ty}`, `{-tx,+ty}`, `{+tx,-ty}`
+— and the mirror (which swaps tx and ty) maps the first two to *themselves* and
+the last two to each other. So corners need **three drawings**, plus the
+straight, plus caps and T-junctions. `FACINGS` is 4. It does not fit, and it
+should not: a corner is not something the player should have to aim.
+
+### The shape of the answer
+
+**Neighbour-driven, and the plumbing is already event-driven.**
+`js/main.js` `buildObjects` is *"rebuilt only when the world changes — panning
+and dusk cost nothing"*, so a piece can choose its art from its neighbours there
+with **no cache-invalidation problem at all**: the raster cache is keyed by the
+art object, so picking a different art object simply hits a different entry.
+
+1. **`joins`** on the catalogue entry — a group name, defaulting to the id. Two
+   pieces connect when their groups match. (Whether a low hedge should corner
+   into a tall one is a design question; same-id is the safe default.)
+2. **A 4-bit mask** per object: `E=+tx, S=+ty, W=-tx, N=-ty`.
+3. **Generate the art from the mask, do not hand-draw sixteen variants.** Draw
+   an ARM from the tile centre outward for each connected direction, plus a hub.
+   Every one of the 16 masks then falls out of one generator and they are
+   consistent by construction. The four half-tile arms from the centre are
+   `+tx → (+16,+8)`, `-tx → (-16,-8)`, `+ty → (-16,+8)`, `-ty → (+16,-8)`.
+4. **Mask 0 keeps the wheel.** An isolated piece obeys the facing the player
+   chose; a connected one obeys its neighbours. That is the right behaviour and
+   not a compromise — the first hedge you put down still has a direction.
+5. Carry the set on the art as `joins: {mask -> sprite}`, the same pattern as
+   `back`, for the same reason: the pairing is a fact about the pictures.
+
+**Start with `palisade-fence`.** It is already hub-and-arms in nature (stakes
+along a line), it is the smallest, and it was just rebuilt so its geometry is
+known-good. `hedge-low`/`hedge-tall`, `balustrade` and `drystone-wall` follow
+the same generator change.
+
+**And `balustrade` is still the one name in `KNOWN_FLAT_FEET`**, blocked on the
+scalloping decision from the last arc, which is the same decision as this one
+wearing a different hat: both are about a linear piece knowing it is part of a
+run rather than an object standing alone.
+
+## 6 · STILL OPEN, and where
+
+- **The sleeping satyr is drawn in ELEVATION.** Unchanged. Owner's commission —
+  re-seating the figure along +tx is a redraw of the signature image.
+- **The scalloping.** Unchanged, and now visibly the same question as the
+  corners.
+- **`bridge`, `naiskos`, `grave-stele`, `votive-shelf`, `altar`** — the top of
+  `iso-audit --elev --catalog` after the bench dropped off it. All fronted
+  objects drawn as front elevations. `bridge` is the sorest: its own comment
+  says *"It is drawn along the +tx axis like the wall"* and it is not, it is a
+  32 px arch seen face-on standing on a 2x1 plot.
+- **Non-square footprints cannot turn.** `js/iso.js` names the work (transpose
+  the footprint through `canPlace`, the collision test and the depth key) and it
+  is why `cave-mouth` (2x1), `colonnade` (3x1) and `level-bridge` (2x1) are
+  absent from a `TURNS` list they belong at the top of. Doing it would let the
+  bridge cross a stream running either way.
+- **Ramps do not auto-orient.** The player has all four now; a ramp placed
+  against a cliff could *default* its facing from the surrounding levels and
+  still let the wheel override. `world.levelAt` on the four neighbours is all it
+  needs.
+
+## Maker's mark
+
+Three commits, three faults, and all three were **a sentence in the source that
+was not true of the code beneath it**. The bench's blurb described art it was
+not drawing. The fence's header insisted on a slope it did not use. The
+connectors' header claimed a flip could do what a flip cannot.
+
+Which suggests a sweep worth keeping: **read the comment as a claim and check
+it.** This codebase comments unusually well, and that is exactly what makes a
+stale comment dangerous — a reader trusts it, and so does the next author, and
+the claim outlives the code it was written about.
+
+The other thing I would hand on is smaller and mechanical. **Ask what nothing
+points at.** Two of this session's three objects were fixed by changing one
+string in the catalogue, because the good art was already there. Before drawing
+anything, run `iso-audit --catalog` and see whether the picture you are about to
+make already exists.
+
+**The forward dream:** that a player drags a hedge round three sides of a lawn
+and it turns both corners without being asked, and that the ramp they put
+against the terrace already knows which way is up.
+
+*— Claude Opus 5, 2026-08-02*

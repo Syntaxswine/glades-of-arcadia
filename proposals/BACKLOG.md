@@ -1,7 +1,7 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-01 (FIFTH pass, after steps 3 and 4 of the shadow arc) against
-`HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
+Reconciled 2026-08-02 (SIXTH pass, after the image-pack and compass work — §4n)
+against `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
 Ordered by how much each would improve the thing a player actually sees.
@@ -661,6 +661,95 @@ Guarded by three `FEATURE:` assertions in `test/world-terrain.test.mjs`, a note
 on `_cohere` in `js/world.js`, and a section in `docs/ELEVATION.md`. Kept
 undoable and deliberately untaught.
 
+---
+
+## 4n · THE IMAGE PACK AND THE COMPASS (2026-08-02)
+
+Owner: *"the image pack needs to be updated for isometric perspective ... there
+are certain objects like the bench that don't follow the diagonal of the grid
+pattern, they instead point at the viewer. while redoing the image packs we
+should also think about how we can have certain objects have different sprites
+depending on how they are rotated, so things like hedges and fences can go
+around corners and ramps can go up a hill in any direction."*
+
+Full write-up: `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`, the section **THE IMAGE
+PACK AND THE COMPASS**.
+
+### ✅ SHIPPED
+
+| | commit |
+|---|---|
+| `stone-bench` and `doric-column` draw their own art at last | `503ff57` |
+| `palisade-fence` makes a fence; `seated-maiden`'s baked skirt goes | `84bf404` |
+| ramps climb all four ways — the first use of facing bit 1 | `3c6d53c` |
+
+**The bench was never an art fault.** `decor.STONE_BENCH` existed the whole
+time, registered under that exact id, correctly projected — and nothing pointed
+at it. Nothing failed either: the sprite resolves so `playtest` is content,
+there is no `wanted` so it is not art debt, and `iso-audit` measured the good
+sprite and printed a green line about a picture the game does not draw.
+`iso-audit --catalog` now measures only what a player can reach — **87 of 237
+sprites** — which is the census that catches this.
+
+`palisade-fence` was drawn at a slope of **0.4** under a header insisting on
+0.5, and 23 px of run on a 32 px tile, so a row of them was a dotted line — for
+a piece `js/fields.js` treats as an OCCLUDER. `LINE_W` and `LINE_DROP` moved to
+`js/art/format.js` so the two copies cannot drift again.
+
+`earth-ramp` gains `back`, a second drawing. The old header claimed a flip
+covered all four orientations; it covers the two that climb *away*. The two that
+come downhill at the camera are a 180-degree rotation, which needs a vertical
+flip, which this game may never do because the light is always upper-left.
+
+### ▸ THE CORNERS — specified in the handoff, not built
+
+`node tools/joinshot.mjs --ids hedge-low,balustrade,palisade-fence,drystone-wall
+--corner`: all four fail. Straight runs are fine. **A corner is two finished
+bars crossing**, and the piece on the corner tile carries past the turn.
+
+The facing wheel cannot fix it — corners need three drawings plus the straight,
+and `FACINGS` is 4. It has to be **neighbour-driven**, and the plumbing is
+already event-driven: `js/main.js` `buildObjects` is rebuilt only on a world
+change, and the raster cache is keyed by the art object, so there is no
+cache-invalidation problem at all.
+
+The design (five steps, with the arm vectors) is in the handoff. **Generate the
+sixteen masks from a hub-and-arms generator; do not hand-draw them.** Start with
+`palisade-fence`. Mask 0 keeps the wheel, so an isolated piece still has a
+direction the player chose.
+
+**`balustrade` — the one name in `KNOWN_FLAT_FEET` — is the same question in a
+different hat**, as is §4l's scalloping: all three are a linear piece needing to
+know it is part of a run.
+
+### ▸ THE ELEVATION LIST — `iso-audit --elev --catalog`
+
+Reported, never voted; the table ranks and a human looks. After the bench
+dropped off it, the top is `bridge`, `naiskos`, `grave-stele`, `votive-shelf`,
+`altar` — all fronted objects drawn as front elevations. `bridge` is the sorest:
+its own comment says *"drawn along the +tx axis like the wall"* and it is a
+32 px arch seen face-on standing on a 2x1 plot. **The three column capitals the
+table flags are FINE** — a cylinder is allowed to be symmetric, the same lesson
+that demoted `mirror`. Do not promote this measure to a gate.
+
+### ▸ ALSO OPEN
+
+- **Non-square footprints cannot turn.** `js/iso.js` names the work; it is why
+  `cave-mouth` (2x1), `colonnade` (3x1) and `level-bridge` (2x1) are absent from
+  a `TURNS` list they belong at the top of.
+- **Ramps do not auto-orient.** A ramp placed against a cliff could default its
+  facing from `world.levelAt` on the four neighbours, with the wheel still
+  overriding.
+
+### ▸ A SWEEP WITH A GOOD HIT RATE
+
+**Read the comment as a claim and check it.** All three faults this pass were a
+sentence in the source that was not true of the code beneath it: the bench's
+blurb described art it was not drawing, the fence's header insisted on a slope
+it did not use, the connectors' header claimed a flip could do what a flip
+cannot. This codebase comments unusually well, which is exactly what makes a
+stale one dangerous.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
@@ -715,3 +804,15 @@ base and an ELLIPSE for a turned one. It was never about their shape: `'m'` is
 stone — **16 710 grass-green pixels on flagstone down to 3 294**, while the
 picture on grass changed by 0.25%. `iso-audit` 0 → 29 → **1**, and the anchor
 audit read 10 / 0 / 12 before, during and after · 386 tests.
+
+Then, 2026-08-02: **the image pack and the compass** — `stone-bench` and
+`doric-column` given the correctly projected art that had been sitting
+unreachable in decor.js the whole time; `palisade-fence` rebuilt from 23 px of
+0.4-slope stub into a 33 px piece on the projection's own 1-in-2, so a row of
+them is a barrier rather than a dotted line; and ramps opened from two
+directions to four, the first placeable ever to use bit 1 of the facing. Three
+instruments: `tools/joinshot.mjs` (the only probe that draws pieces TOUCHING),
+`iso-audit --elev` and `--catalog`, and a `ramps` scene in the elevation probe.
+Three dead consumers found and wired or retired along the way — `def.shadow`,
+the headless canvas's missing `translate`, and the second copy of `LINE_W` ·
+390 tests, 47 playtest checks.
