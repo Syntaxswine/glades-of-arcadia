@@ -1089,6 +1089,44 @@ export function creatureAtIn(drawn, tx, ty, cards) {
  *   daySeconds     garden seconds per day for the readout. Default 480.
  *   on             { select, tool, overlay, group, undo, journal } callbacks.
  */
+/**
+ * THE ONE SHAPE A GHOST HAS, because there are TWO PATHS to the renderer and
+ * only one of them was translating.
+ *
+ * `js/input.js` states a ghost's size as `w`/`h`. `js/render.js` reads it
+ * through `footprintOf`, which — like every other object in the game — wants
+ * `footprint: [w, h]`. `setGhost` DID convert, in the one call it makes to the
+ * renderer directly... and then `js/main.js`'s draw loop handed `ui.ghost`
+ * STRAIGHT to `renderer.setGhost` on every frame, raw, overwriting it.
+ *
+ * The per-frame path always wins. So `footprintOf` saw no footprint, returned
+ * `[1, 1]`, and the plate loop drew exactly one tile — `(tx, ty)`, the north
+ * corner of the block and the top of the diamond on screen. The other three
+ * were never drawn, and the conversion that existed was dead code.
+ *
+ * The owner: *"there are items, like the paths, that are two tiles by two
+ * tiles, but the preview cursor only shows the upper most tile of the 4
+ * highlighted."*
+ *
+ * It is a named function rather than four lines inside `setGhost` because a
+ * shape two modules must agree on is exactly the kind of thing that wants a
+ * name and a test. Both vocabularies survive: `w`/`h` because `drawGhost`
+ * (preview mode, no renderer) reads them and because input.js's words are not
+ * this module's to change, and `footprint` because it is the game's.
+ */
+export function ghostShape(g) {
+  if (!g || g.tx == null) return null;
+  const next = { w: 1, h: 1, legal: true, ...g };
+  // Clamped at 1, not merely defaulted. `(n | 0) || 1` catches zero and NaN
+  // and lets a NEGATIVE through, and a negative is the quiet one: every plate
+  // loop in the game is `for (x = 0; x < fw; x++)`, so `fw = -3` runs no
+  // iterations and the preview vanishes rather than complaining.
+  next.w = Math.max(1, (next.w | 0) || 1);
+  next.h = Math.max(1, (next.h | 0) || 1);
+  next.footprint = [next.w, next.h];
+  return next;
+}
+
 export function createUI(opts = {}) {
   const game = opts.game || null;
   const canvas = opts.canvas || (game && game.canvas) || document.getElementById('screen');
@@ -2589,11 +2627,11 @@ export function createUI(opts = {}) {
     // not lose your place — but a ghost hovering under a cursor that will not
     // plant is a promise the click does not keep.
     if (S.tool === 'move' || S.tool === 'ask') g = null;
-    const next = g && g.tx != null ? { w: 1, h: 1, legal: true, ...g } : null;
+    const next = ghostShape(g);
     const before = S.ghost;
     S.ghost = next;
     if (S.renderer) {
-      ask(S.renderer, 'setGhost', next ? { tx: next.tx, ty: next.ty, footprint: [next.w, next.h], art: next.art || null, legal: next.legal, facing: next.facing || 0 } : null);
+      ask(S.renderer, 'setGhost', next ? { tx: next.tx, ty: next.ty, footprint: next.footprint, art: next.art || null, legal: next.legal, facing: next.facing || 0 } : null);
     }
     // The refusal reason, in world.js's own warm words, in the info box.
     if (next && next.mode !== 'raze' && !next.legal && next.reason) showRefusal(next.reason);
