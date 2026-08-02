@@ -729,6 +729,28 @@ staggering in its runs AND, almost certainly, its place in `KNOWN_FLAT_FEET`.
 which is now easier: a piece knows its own mask, so the stamp can come from
 `joinAxis(mask)` rather than be measured off a base contour.
 
+### ▸ AFTER THE FIRST LOOK — both fixed (2026-08-02, same evening)
+
+**The 2x2 preview highlighted one tile.** `js/input.js` says `w`/`h`,
+`js/render.js` reads `footprint`, `js/ui.js` converted — and `js/main.js`'s draw
+loop overwrote it every frame with the raw object. The tile that showed was
+`(tx, ty)`, the north corner: the one detail that identifies the bug from the
+sentence. `ghostShape()` is now a named export with a pixel-measured test.
+**Fourth producer/consumer key-name disagreement this week.**
+
+**The pergola was a front elevation** — the worst possible object to draw flat,
+since a pergola IS a grid of beams. Redrawn on the tile's own corners with
+plates on the diamond edges and rafters across. The old one is kept as
+`PERGOLA_ELEVATION`, unreachable, as the clearest before/after in the tree.
+
+**...and `--elev` scored the old pergola 0.00.** The measure saw FLAT-SHADED
+elevations and was blind to TEXTURED ones — the beam grid broke its own edge
+into six-pixel pieces by its grain. Fixed with the right statement (*an edge is
+the same transition all along it*; a dither is one surface shuffled) and
+`SEAM_KINDS = 3`, chosen by sweeping the whole catalogue at 3/4/5/6/8/12 → 24,
+29, 35, 36, 39, 44 flags. Both failure modes are now controls.
+**The audit is a ranking, not a verdict, and it has now been blind twice.**
+
 ### ▸ THE ELEVATION LIST — `iso-audit --elev --catalog`
 
 Reported, never voted; the table ranks and a human looks. After the bench

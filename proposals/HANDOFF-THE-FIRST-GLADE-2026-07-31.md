@@ -1694,7 +1694,88 @@ so the two should land together and neither alone.
   still let the wheel override. `world.levelAt` on the four neighbours is all it
   needs.
 
-## Maker's mark
+
+---
+
+## 7 · AFTER THE FIRST LOOK — 2026-08-02, same evening
+
+The owner played it and sent back two things. Both were worth more than they
+looked.
+
+> *"the pergola could use an isometric update. i'm loving the other changes
+> though. this is the aesthetic direction i was hoping to go. one other minor
+> change, there are items, like the paths, that are two tiles by two tiles, but
+> the preview cursor only shows the upper most tile of the 4 highlighted."*
+
+### The 2x2 preview — a FOURTH producer/consumer disagreement
+
+`js/input.js` states a ghost's size as `w`/`h`. `js/render.js` reads it through
+`footprintOf`, which wants `footprint: [w, h]` like every other object.
+`js/ui.js` **did** convert — in the one call it makes to the renderer — and
+`js/main.js`'s draw loop then handed `ui.ghost` STRAIGHT to `renderer.setGhost`
+on every frame, raw, overwriting it. The per-frame path always wins. The
+conversion that existed was dead code.
+
+**The one tile drawn is `(tx, ty)`** — the north corner of the block, first cell
+of the row-major loop, top of the diamond on screen. Which is exactly what the
+owner described, and it is the kind of detail that identifies a bug from a
+sentence: no other failure mode draws that tile and only that tile.
+
+`ghostShape(g)` is now a named export stating the one shape a ghost has, so
+both paths deliver the same object. **A shape two modules must agree on wants a
+name and a test**; four lines inside `setGhost` had neither. The test renders
+two frames and diffs them, because a ghost carrying the right numbers under the
+wrong key passes every structural assertion and still draws one tile.
+
+### The pergola — and the hole it opened in the instrument
+
+A pergola IS a grid of beams: the one object in a garden whose whole appearance
+is which way its timbers run, and therefore the worst possible thing to have
+drawn as a front elevation. Redrawn: four posts on the tile's own corners, top
+plates on the four diamond edges, rafters across parallel to the +ty edges and
+2 px proud so the roof reads as two layers crossing.
+
+**The vine took three goes and the lesson was the same each time — a vine that
+covers its frame has hidden the object it grows on.** 190 clumps over the roof
+plane gave a dark lump on four legs. 44 clumps thinned toward the camera gave a
+horizontal SMEAR, because a uniform scatter minus its front half is a band and
+a band is a screen-space shape. What works is to **walk the two back plates**
+and drop clumps along them: a vine climbs timber, so putting it where the
+timber is gives a shallow V following the roof's own edges.
+
+The old sprite is kept as `PERGOLA_ELEVATION`, unreachable and deliberately so.
+Read it beside the new generator and the difference is the whole arc in one
+object.
+
+#### `iso-audit --elev` scored the old pergola 0.00
+
+The measure this handoff describes as catching elevation drawings caught
+**flat-shaded** ones. `props.BENCH` is D over C over B across twenty-one solid
+columns and was caught instantly; the pergola's beam grid is just as flat and
+scored nothing, because the timber repeats every five pixels and every fifth
+column happens to hold the same key in both rows. **The edge was broken into
+six-pixel pieces by its own grain.**
+
+Letting a run survive one column of agreement fixed that and promoted every
+dithered ground tile in the game to the top of the table — `plunge-pool` at
+1.00, a 64px "seam" on every row.
+
+> **AN EDGE IS THE SAME TRANSITION ALL ALONG IT.** Where two faces of a solid
+> meet, one surface is above the line and the other below, so the transition
+> repeats. A dither is a different pair almost every column, because both sides
+> are ONE surface shuffled.
+
+`SEAM_KINDS = 3`, chosen by sweeping 3/4/5/6/8/12 and reading the whole
+catalogue at each: **24, 29, 35, 36, 39, 44** flags. Three is tightest AND
+catches the pergola at 0.96 — fewer flags than the original strict version's 26
+while seeing a fault it was blind to. Both mistakes are now controls in
+`test/iso-geometry.test.mjs`.
+
+**This is the third time this week an instrument has been wrong in a way only a
+picture could show.** The audit is a ranking, not a verdict, and the reason it
+must never become a gate is that it has been demonstrably blind twice.
+
+## Maker's mark, second sitting
 
 Three commits, three faults, and all three were **a sentence in the source that
 was not true of the code beneath it**. The bench's blurb described art it was
@@ -1716,5 +1797,10 @@ make already exists.
 and it turns both corners without being asked — which, as of this evening, it
 does — and that the ramp they put against the terrace already knows which way
 is up, which it still does not.
+
+*Added after the owner played it:* and that the next instrument I write is
+wrong in a way I find before they do. Three were not, this week. Every one
+was caught by looking at a picture, which is the argument for `--elev` staying
+a ranking a human reads and never a gate that passes things silently.
 
 *— Claude Opus 5, 2026-08-02*
