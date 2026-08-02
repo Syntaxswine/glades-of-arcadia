@@ -302,7 +302,7 @@ export const SLEEPING_SATYR = sprite(
  */
 export const HERM = sprite(
   'herm',
-  [0, 3],
+  [0, 4],
   [
     '..........AABBAA..........',
     '.........ABBCCBBA.........',
@@ -360,10 +360,11 @@ export const HERM = sprite(
     '..ADDDDDDDDDCCCBBBBBBBBA..',
     '..ACCCCCCCCCBBBBBBBBBBBA..',
     '..ABBBBBBBBBBBBBBBBBBBAA..',
-    '...AAAAAAAAAAAAAAAAAAAA...',
-    '...mmmmmmmmmmmmmmmmmmmm...',
-    '..mmmmmmmmmmmmmmmmmmmmmm..',
-    '.....mmmmmmmmmmmmmmmm.....',
+    '...ACCCCCCCCCBBBBBBBBBA...',
+    '.....ACCCCCCCBBBBBBBA.....',
+    '.......ACCCCCBBBBBA.......',
+    '.........ACCCBBBA.........',
+    '...........ACBA...........',
   ],
   { tags: ['nullifier', 'sculpture', 'marble', 'satyr', 'boundary', 'order'] }
 );
@@ -416,10 +417,10 @@ export const MARBLE_TORSO = sprite(
     '...ACCCCCCCBBBBBBBBA......',
     '...ACCCCCCBBBBBBBBAA......',
     '...ABBBBBBBBBBBBBAA.......',
-    '....AAAAAAAAAAAAAA........',
-    '....mmmmmmmmmmmmmm........',
-    '.....mmmmmmmmmmmm.........',
-    '.......mmmmmmmm...........',
+    '....ACCCCCCBBBBBBA........',
+    '......ACCCCBBBBA..........',
+    '........ACCBBA............',
+    '..........AA..............',
   ],
   { tags: ['sculpture', 'marble', 'order', 'maturity'] }
 );
@@ -448,10 +449,10 @@ export const COLUMN = sprite(
     'BCCCCCCCCBBBBBBBAA',
     'BCCCCCCCBBBBBBBBAA',
     'ABBBBBBBBBBBBBBBAA',
-    '.AAAAAAAAAAAAAAAA.',
-    '..mmmmmmmmmmmmmm..',
-    '...mmmmmmmmmmmm...',
-    '.....mmmmmmmm.....',
+    '.ACCCCCCCBBBBBBBA.',
+    '...ACCCCCBBBBBA...',
+    '.....ACCCBBBA.....',
+    '.......ACBA.......',
   ],
   { tags: ['structure', 'marble', 'order', 'maturity'] }
 );
@@ -887,10 +888,10 @@ export const SUNDIAL = sprite(
     'ACDDDDDDDDDCCBBA',
     'ACCCCCCCBBBBBBAA',
     'ABBBBBBBBBBBBBAA',
-    '.AAAAAAAAAAAAAA.',
-    '.mmmmmmmmmmmmmm.',
-    '..mmmmmmmmmmmm..',
-    '....mmmmmmmm....',
+    '.ACCCCCCBBBBBBA.',
+    '...ACCCCBBBBA...',
+    '.....ACCBBA.....',
+    '.......AA.......',
   ],
   { tags: ['structure', 'marble', 'order', 'unicorn'] }
 );
@@ -902,7 +903,7 @@ export const SUNDIAL = sprite(
  */
 export const ALTAR = sprite(
   'altar',
-  [0, 1],
+  [0, 3],
   [
     '.....AAAAAAAAAAAAAA.....',
     '..AAADDDDDDDDDDDDDDAAA..',
@@ -928,10 +929,12 @@ export const ALTAR = sprite(
     'ADDDDDDDDDDDDDDDDDDDDDA.',
     'ACCCCCCCCCBBBBBBBBBBBBA.',
     'ABBBBBBBBBBBBBBBBBBBBAA.',
-    '.AAAAAAAAAAAAAAAAAAAAA..',
-    '.mmmmmmmmmmmmmmmmmmmmm..',
-    'mmmmmmmmmmmmmmmmmmmmmmm.',
-    '...mmmmmmmmmmmmmmmmmm...',
+    '.ACCCCCCCCCBBBBBBBBBBA..',
+    '...ACCCCCCCBBBBBBBBA....',
+    '.....ACCCCCBBBBBBA......',
+    '.......ACCCBBBBA........',
+    '.........ACBBA..........',
+    '...........A............',
   ],
   { tags: ['structure', 'marble', 'naiad', 'order', 'maturity'] }
 );
@@ -3565,7 +3568,7 @@ export const TUMULUS = (() => {
  */
 export const GRAVE_STELE = sprite(
   'grave-stele',
-  [0, 2],
+  [0, 4],
   [
     // The crowning palmette. Chipped away on the left, which is both truthful
     // and the one asymmetry that stops the object reading as a machine part.
@@ -3658,10 +3661,12 @@ export const GRAVE_STELE = sprite(
     'ADDDDDDDDDDDDDDDDDDDDDDA',
     'ACCCCCCCCCCCCCCCCCCCCCCA',
     'ABBBBBBBBBBBBBBBBBBBBBBA',
-    'AAAAAAAAAAAAAAAAAAAAAAAA',
-    '.mmmmmmmmmmmmmmmmmmmmmm.',
-    '..mmmmmmmmmmmmmmmmmmmm..',
-    '....mmmmmmmmmmmmmmmm....',
+    'ACCCCCCCCCCCBBBBBBBBBBBA',
+    '..ACCCCCCCCCBBBBBBBBBA..',
+    '....ACCCCCCCBBBBBBBA....',
+    '......ACCCCCBBBBBA......',
+    '........ACCCBBBA........',
+    '..........ACBA..........',
   ],
   { tags: ['tomb', 'nullifier', 'marble', 'relief', 'maturity'] }
 );
@@ -3689,7 +3694,7 @@ export const GRAVE_STELE = sprite(
  */
 export const NAISKOS = sprite(
   'naiskos',
-  [0, 2],
+  [0, 6],
   [
     // Three acroteria — two at the corners, one on the ridge. The left one
     // has gone, because everything in this set is old.
@@ -3767,10 +3772,14 @@ export const NAISKOS = sprite(
     'ADDDDDDDDDDDDDDDDDDDDDDDDDDDDDDA',
     'ACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA',
     'ABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
-    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    '.mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm.',
-    '..mmmmmmmmmmmmmmmmmmmmmmmmmmmm..',
-    '.....mmmmmmmmmmmmmmmmmmmmmm.....',
+    'ACCCCCCCCCCCCCCCBBBBBBBBBBBBBBBA',
+    '..ACCCCCCCCCCCCCBBBBBBBBBBBBBA..',
+    '....ACCCCCCCCCCCBBBBBBBBBBBA....',
+    '......ACCCCCCCCCBBBBBBBBBA......',
+    '........ACCCCCCCBBBBBBBA........',
+    '..........ACCCCCBBBBBA..........',
+    '............ACCCBBBA............',
+    '..............ACBA..............',
   ],
   { tags: ['tomb', 'nullifier', 'marble', 'relief', 'maturity'] }
 );

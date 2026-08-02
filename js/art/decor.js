@@ -62,7 +62,7 @@
 
 import { defineSprite, padToAnchor } from './format.js';
 import { variant } from '../palette.js';
-import { LEVEL_H } from '../iso.js';
+import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
 // ===========================================================================
 // Authoring plumbing
@@ -277,6 +277,33 @@ function drum(g, cx, cy, rx, h, opts = {}) {
  * it costs four rows.
  *
  *   rows, top to bottom:  cap top face / cap / cap underside / die... / base
+ *                         ...then THE FOOT, below the anchor
+ *
+ * ---------------------------------------------------------------------------
+ * THE FOOT LIES IN THE GROUND PLANE, which is the whole of step 4.
+ *
+ * This used to end `'.' + R[0].repeat(w - 2) + '.'` — a flat row, the block cut
+ * off square. Twelve of the twenty-nine sprites the iso audit flags come from
+ * this one line, and nobody had seen it for months because every one of them
+ * had a baked grass-green skirt stamped over the top (step 3 deleted those).
+ *
+ * A plinth is a SQUARE BLOCK. The bottom of a square block's silhouette is the
+ * front half of its base square, and a square in the ground plane is a diamond
+ * exactly twice as wide as it is tall — so the foot runs down 1-in-2 from each
+ * side to a front vertex `(w-2)/4` rows below the anchor. That is the same
+ * geometry `GROUND_ELLIPSE` states for a circle; a block and a cylinder differ
+ * in the CORNERS, not in the foreshortening.
+ *
+ * IT IS A DIAMOND AND NOT AN ELLIPSE, deliberately. A column plinth is square,
+ * and rounding it to hide a flat edge would be answering the audit rather than
+ * the object — a different lie, and one the audit cannot tell from the truth.
+ * Round feet (the pithos, the tree boles, the basins) get ellipses instead.
+ *
+ * THE ANCHOR DOES NOT MOVE. `plinthH` still counts to the last row ABOVE the
+ * foot, because the anchor is the centre of the base diamond, not its lowest
+ * pixel — so every call site that stacks on `base + plinthH(k)` is unchanged
+ * and the object stands exactly where it did. The foot hangs below it, which is
+ * what the front half of a diamond does.
  */
 function plinth(w, dieH, ramp = MARBLE, flutes = 0) {
   const R = ramp;
@@ -295,15 +322,63 @@ function plinth(w, dieH, ramp = MARBLE, flutes = 0) {
   out.push(inset(R[0] + R[n].repeat(w - 4) + R[0], 2));
   out.push(R[0] + body(w - 2, 0).slice(1, -1) + R[0]);
   out.push(R[0] + R[1].repeat(w - 2) + R[0]);
-  out.push('.' + R[0].repeat(w - 2) + '.');
+  out.push(...foot(w - 2, R, 1));
   return out;
 }
 
-/** Rows of plinth(w, dieH): cap (3) + die + base (4). Callers stack on this. */
+/**
+ * The front half of a base diamond `ww` wide, as rows, indented by `pad`.
+ *
+ * Row `k` covers the columns still inside the diamond that far down, so each
+ * edge steps two across for one down — the only slope this projection has. The
+ * lowest row is two pixels wide, which is what a vertex looks like at this
+ * scale and is nine pixels under the audit's floor.
+ *
+ * IT IS SHADED AS TWO FACES, and the first version was not. A solid wedge in
+ * one value is geometrically correct and reads as a dark spike stuck under the
+ * object — the shape says "block", the shading says "shadow", and the shading
+ * wins at 20 px. The front of a square block in this projection IS two faces
+ * meeting at the front vertex: the left one turned toward the light, the right
+ * one away. One step of the ramp between them is the whole difference between
+ * a base and a smudge, and it costs nothing.
+ */
+function foot(ww, R, pad = 0) {
+  const hw = ww / 2;
+  const cx = (ww - 1) / 2;
+  const deep = Math.max(1, Math.round(hw * GROUND_ELLIPSE));
+  const rows = [];
+  for (let k = 1; k <= deep; k++) {
+    let s = '';
+    for (let x = 0; x < ww; x++) {
+      // How far this column reaches below the diamond's widest line.
+      const reach = (hw - Math.abs(x - cx)) * GROUND_ELLIPSE;
+      if (k > reach) { s += '.'; continue; }
+      const edge = k > reach - 1; // the outline, always the darkest step
+      s += edge ? R[0] : x < cx ? R[2] : R[1];
+    }
+    rows.push('.'.repeat(pad) + s + '.'.repeat(pad));
+  }
+  return rows;
+}
+
+/**
+ * Rows of plinth(w, dieH) DOWN TO THE ANCHOR: cap (3) + die + base (4).
+ * Callers stack on this, and the foot hangs below it — see `plinth`.
+ */
 const plinthH = (dieH) => 3 + dieH + 4;
 
-/** Stamp a row array into a grid at (x, y), '.' meaning leave alone. */
+/**
+ * Stamp a row array into a grid at (x, y), '.' meaning leave alone.
+ *
+ * IT MAKES ROOM DOWNWARD. `put` silently drops anything past the last row, and
+ * a base clipped by the bottom of its own grid is a flat horizontal edge — the
+ * exact fault `plinth`'s foot exists to remove, arriving by the back door. This
+ * is the same growth `skirt()` used to do for the same reason, and it is free:
+ * the anchor is measured from the TOP, so appending rows moves nothing.
+ */
 function stamp(g, rowsArr, x0, y0) {
+  const need = y0 + rowsArr.length;
+  while (g.length < need) g.push(new Array(g[0].length).fill('.'));
   rowsArr.forEach((row, i) => {
     for (let x = 0; x < row.length; x++) if (row[x] !== '.') put(g, x0 + x, y0 + i, row[x]);
   });

@@ -592,13 +592,15 @@ export const AUDITED_MODULES = ['props', 'decor', 'tiles', 'extras', 'clumps'];
  * tests fail in both directions.
  */
 export const KNOWN_FLAT_FEET = new Set([
-  // decor.js — generated grids standing on a rectangular `plinth()`
-  'column', 'doric-column', 'ionic-column', 'corinthian-column', 'broken-column',
-  'obelisk', 'herm', 'grave-stele', 'altar', 'naiskos', 'balustrade',
-  'amphora', 'amphora-plinth', 'krater-wide', 'fluted-urn', 'cache-pot',
-  'birdbath', 'sundial', 'sundial-pedestal', 'marble-torso',
-  'jet-basin', 'wall-fountain', 'fountain-tiered', 'arbour-seat', 'axe-marker',
-  // props.js — hand-authored bases that were sitting on their own typed band
+  // ROUND FEET, still to do: vessels and basins whose base is a turned circle,
+  // so they want an ELLIPSE rather than the plinth's diamond.
+  'amphora', 'krater-wide', 'cache-pot',
+  'jet-basin', 'wall-fountain', 'fountain-tiered',
+  // LINEAR, still to do: their contact is a strip along the run, not a blob,
+  // and each is currently flagged for a hand-rolled 'm' skirt drawn as a flat
+  // row rather than for its own base — see the hand-rolled-skirt sweep.
+  'balustrade', 'arbour-seat', 'axe-marker',
+  // props.js composed grids, still to do
   'sleeping-satyr', 'half-buried-pithos', 'ancient-oak', 'plane-tree',
 ]);
 
