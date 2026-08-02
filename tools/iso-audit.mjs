@@ -31,11 +31,19 @@
 
 import {
   measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt, KNOWN_FLAT_FEET,
+  elevationScore, catalogueSprites,
 } from './isogeom.mjs';
 
 const ALL = process.argv.includes('--all');
 const STRICT = process.argv.includes('--strict');
 const RUNS = process.argv.includes('--runs');
+// The SECOND question — "does this sprite LIE IN the grid, or face the
+// viewer?" — which the bottom contour cannot see. isogeom §elevationScore.
+const ELEV = process.argv.includes('--elev');
+// Measure only what a player can reach. See isogeom §catalogueSprites: an
+// audit over every sprite in the tree answers "is the art correct", and the
+// question an owner asks is "is the GAME correct".
+const CATALOG = process.argv.includes('--catalog');
 
 // The population — which modules, and why those — is stated once in isogeom
 // and read by the sprite lab too, so the terminal and the screen cannot report
@@ -50,9 +58,59 @@ for (const name of AUDITED_MODULES) {
   sprites.push(...spritesIn(mod, `${name}.js`));
 }
 
+// Who draws what. Under --catalog this filters the population; otherwise it
+// only annotates, so the table can say which flagged sprite is on screen and
+// which is a picture nothing points at.
+const known = new Set(sprites.map((x) => x.name));
+const drawnBy = await catalogueSprites(known);
+
 const rows = [];
 for (const { name, sprite: s, from } of sprites) {
-  rows.push({ name, s, from, size: `${s.w}x${s.h}`, ...measure(s) });
+  const ids = drawnBy.get(name) || [];
+  if (CATALOG && !ids.length) continue;
+  rows.push({ name, s, from, ids, size: `${s.w}x${s.h}`, ...measure(s), elev: elevationScore(s) });
+}
+
+// ---------------------------------------------------------------------------
+// --elev : the second table, and a different question.
+//
+// It RANKS rather than judging. The bottom contour has one legal answer, so
+// the audit above can hold a ratchet against it; the top of a sprite has many
+// — a canopy, a splash, a pile of rocks and a broken column all end wherever
+// they like. So this prints an order of suspicion and a human looks. Every
+// name that has been redrawn off the top of this list was confirmed by eye
+// first, and two were dismissed the same way.
+// ---------------------------------------------------------------------------
+if (ELEV) {
+  const list = rows.slice().sort((a, b) => b.elev.worst - a.elev.worst);
+  const bad = list.filter((r) => r.elev.worst > 0);
+  console.log('iso audit --elev — does the sprite LIE IN the grid, or FACE THE VIEWER?\n');
+  console.log('  A horizontal screen line is the diamond\'s own W-E diagonal — a real');
+  console.log('  direction, but not a GRID direction. Nothing is built along it and no');
+  console.log('  face of a solid is bounded by it, so a long level edge in a sprite is a');
+  console.log('  front elevation pasted into a world that has no front.\n');
+  console.log('  seam = longest level SURFACE BOUNDARY inside the silhouette. The sharp');
+  console.log('         one: where two faces of a solid meet, that edge runs 1-in-2.');
+  console.log('  top  = longest level run along the TOP contour. A flat top is a');
+  console.log('         horizontal plane, and a horizontal plane here is a DIAMOND.');
+  console.log('  bar  = what a round thing of this width is allowed — a drum\'s rim and a');
+  console.log('         dome\'s crown are flat for a stretch on an integer grid.');
+  console.log('  REPORTED, NEVER VOTED. This table ranks; a human looks.\n');
+  console.log('  sprite                     size      bar  seam   top  worst  drawn by');
+  console.log('  ' + '-'.repeat(76));
+  for (const r of (ALL ? list : bad)) {
+    console.log(
+      '  ' + r.name.padEnd(26) + r.size.padEnd(10) +
+        String(r.elev.bar).padStart(3) + String(r.elev.seam).padStart(6) +
+        String(r.elev.top).padStart(6) + r.elev.worst.toFixed(2).padStart(7) +
+        '  ' + (r.ids.length ? r.ids.join(', ') : '(nothing — unreachable art)')
+    );
+  }
+  console.log(
+    `\n  ${rows.length} sprites measured · ${bad.length} with a level edge longer than a ` +
+      `round form of that size would give` + (CATALOG ? ' · CATALOGUE ONLY' : '')
+  );
+  process.exit(0);
 }
 
 rows.sort((a, b) => b.over - a.over || b.flat - a.flat);

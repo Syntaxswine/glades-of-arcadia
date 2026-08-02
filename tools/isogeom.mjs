@@ -404,6 +404,168 @@ export function groundRuns(s, minOverride = 0) {
   return { runs, longest, over: longest / width, band, width, min };
 }
 
+// ---------------------------------------------------------------------------
+// THE SECOND FAULT: A SPRITE DRAWN IN ELEVATION.
+//
+// Everything above measures ONE EDGE — the bottom contour, where the object
+// meets the ground. That is the right first question and it is not the whole
+// one, and the sleeping satyr is the proof: its base was redrawn as an honest
+// fracture, it passes `groundRuns` cleanly, and it is still *the one sprite in
+// the game whose long axis is the screen horizontal*. Its block's TOP edge is
+// dead level. Nothing measured it, because nothing looked anywhere but down.
+//
+// The owner has now said it twice, three months apart, about two different
+// objects — "the cave is pointed straight at the viewer instead of in the
+// direction of the grid", and then the bench. So it wants a measure.
+//
+// A HORIZONTAL SCREEN LINE IS NOT ILLEGAL, which is the subtlety. `project`
+// sends tile offset (1, -1) to (64, 0) — the diamond's own long diagonal, W
+// corner to E corner, and a perfectly real world direction. What a horizontal
+// line is NOT is a GRID direction: nothing runs along it, nothing is built
+// along it, no face of a box is bounded by it. A long horizontal edge in a
+// sprite is a front elevation pasted into a world that has no front.
+//
+// Two readings of that, because a sprite can fail either separately.
+// ---------------------------------------------------------------------------
+
+/** THE TOP CONTOUR: for each occupied column, the highest opaque pixel. */
+export function topProfile(s) {
+  const out = [];
+  for (let x = 0; x < s.w; x++) {
+    for (let y = 0; y < s.h; y++) {
+      if (opaque((s.rows[y] || '')[x])) {
+        out.push({ x, y });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** Level runs in a contour, at least `min + 1` columns long. Shared shape. */
+function levelRunsIn(prof, min) {
+  const runs = [];
+  let i = 0;
+  while (i < prof.length) {
+    let j = i;
+    while (j + 1 < prof.length && prof[j + 1].y === prof[i].y && prof[j + 1].x === prof[j].x + 1) j++;
+    const len = j - i + 1;
+    if (len > min) runs.push({ x0: prof[i].x, x1: prof[j].x, y: prof[i].y, len });
+    i = j + 1;
+  }
+  return runs;
+}
+
+/**
+ * LEVEL SEAMS — a horizontal run of pixels whose key differs from the key
+ * directly ABOVE it, inside the silhouette.
+ *
+ * This is the sharper of the two, because it sees the object's own surfaces
+ * rather than its outline. Where two faces of a solid meet, that boundary is
+ * an edge of the solid, and in this projection an edge of a solid runs at
+ * 1-in-2 or it runs vertically. `props.BENCH` puts D over C over B across
+ * twenty-one columns in three consecutive rows: that is a front elevation and
+ * nothing else draws like it.
+ *
+ * ONLY WHERE BOTH PIXELS ARE OPAQUE. A key change against transparency is the
+ * silhouette, which `topProfile` and `baseProfile` already own; counting it
+ * here would convict every flat-lying thing twice.
+ */
+export function levelSeams(s, min = 6) {
+  const runs = [];
+  for (let y = 1; y < s.h; y++) {
+    const a = s.rows[y - 1] || '';
+    const b = s.rows[y] || '';
+    let n = 0;
+    let x0 = 0;
+    for (let x = 0; x <= s.w; x++) {
+      const above = a[x];
+      const here = b[x];
+      if (opaque(here) && opaque(above) && here !== above) {
+        if (n === 0) x0 = x;
+        n++;
+      } else {
+        if (n > min) runs.push({ x0, x1: x - 1, y, len: n });
+        n = 0;
+      }
+    }
+  }
+  return runs;
+}
+
+/**
+ * The two readings together, against the allowance a ROUND thing of this size
+ * gets — because the exceptions are the same exceptions as everywhere else in
+ * this file. A drum's rim, a dome's crown and a bowl's lip are circles or
+ * spheres, and their horizontal extremity is flat for `curveAllowance` columns
+ * on an integer grid. Convicting those would convict every column in the game
+ * for being cylindrical, which is the mistake the first draft of `measure`
+ * made and which is why `mirror` was demoted to reported.
+ *
+ * REPORTED, NOT VOTED — for now, and the reason is worth stating. The bottom
+ * contour has one legal answer and the audit can hold a ratchet against it.
+ * The top of a sprite has many: a canopy, a broken column, a pile of rocks and
+ * a splash all end wherever they like. So this census RANKS, a human LOOKS,
+ * and only the names that survive looking get redrawn. See `iso-audit --elev`.
+ */
+export function elevationScore(s) {
+  const bar = Math.max(6, curveAllowance(s.w / 2));
+  const seams = levelSeams(s, bar);
+  const tops = levelRunsIn(topProfile(s), bar);
+  const seam = seams.length ? Math.max(...seams.map((r) => r.len)) : 0;
+  const top = tops.length ? Math.max(...tops.map((r) => r.len)) : 0;
+  return {
+    bar,
+    seam, // longest level SURFACE BOUNDARY inside the sprite, px
+    top, // longest level run along the TOP contour, px
+    seams,
+    tops,
+    seamPx: seams.reduce((a, r) => a + r.len, 0), // how much of it there is
+    // Both over the sprite's width, so a 24px bench and a 118px tholos are
+    // comparable. This is what the census sorts on.
+    worst: Math.max(seam, top) / s.w,
+  };
+}
+
+/**
+ * WHAT A PLAYER CAN ACTUALLY SEE. Every sprite name the catalogue resolves to,
+ * mapped to the entries that draw it.
+ *
+ * ---------------------------------------------------------------------------
+ * THE CENSUS WAS MEASURING THE WRONG POPULATION, and it cost two objects.
+ *
+ * `stone-bench` drew `props.BENCH`, a front elevation, while `decor.STONE_BENCH`
+ * — correctly projected, registered under that exact id — sat unreachable.
+ * `doric-column` drew the plain `props.column` while the fluted `doric-column`
+ * its own blurb describes sat beside it, also unreachable. Both had been that
+ * way for as long as decor.js has existed.
+ *
+ * Nothing failed. The sprite resolves, so `playtest` is content; there is no
+ * `wanted`, so it is not art debt; and `iso-audit` measured the GOOD sprite,
+ * found it clean, and printed a green line about a picture the game does not
+ * draw. An audit over every sprite in the tree answers "is the art correct".
+ * The question an owner is asking is "is the GAME correct", and those differ by
+ * exactly the set of things nothing points at.
+ */
+export async function catalogueSprites(known) {
+  const cat = await import('../js/catalog.js');
+  const has = (n) => !!n && (!known || known.has(n));
+  const out = new Map();
+  for (const d of cat.CATALOG || []) {
+    if (!d.art || d.art.kind !== 'sprite') continue;
+    // `wanted` wins ONLY WHEN IT EXISTS — that is js/main.js's dispatch, and
+    // this has to agree with it or the census is about a different game. A
+    // wanted name nobody has drawn yet leaves the understudy on screen, and
+    // resolving it here anyway would quietly excuse the sprite the player is
+    // looking at. Pass the registry; without one, `wanted` is trusted.
+    const n = has(d.art.wanted) ? d.art.wanted : d.art.sprite;
+    if (!n) continue;
+    if (!out.has(n)) out.set(n, []);
+    out.get(n).push(d.id);
+  }
+  return out;
+}
+
 /**
  * The runs of the bottom contour that are HORIZONTAL — the actual offence,
  * located. Returns `{ x0, x1, y, len }` for every level run at least `min`

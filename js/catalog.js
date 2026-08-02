@@ -1781,7 +1781,13 @@ const STRUCTURE = [
     name: 'Doric column',
     group: 'structure',
     footprint: [1, 1],
-    art: sprite('column'),
+    // Was `sprite('column')` — the plain unfluted shaft in props.js, drawn
+    // before decor.js existed. `ionic-column` and `corinthian-column` beside it
+    // were migrated to their own art and this one was not, so the order that
+    // gives the group its name was the only one still drawing the understudy.
+    // The blurb says "a stout FLUTED shaft with a plain square capital"; the
+    // sprite it drew has neither. See the note on `stone-bench` below.
+    art: sprite('doric-column'),
     zone: NEO,
     register: 'neoclassical',
     deposits: dep({ order: 3, maturity: 1 }),
@@ -2083,7 +2089,24 @@ const DECOR = [
     name: 'Stone bench',
     group: 'decor',
     footprint: [1, 1],
-    art: sprite('bench'),
+    // ------------------------------------------------------------------
+    // THE OWNER'S NAMED EXAMPLE, and it was never an art fault.
+    //
+    // This drew `props.BENCH`, which is a front elevation: every edge in it
+    // is horizontal, so it reads as a little table pasted onto the screen
+    // rather than a thing lying in the world. `decor.STONE_BENCH` — a slab()
+    // seat on two plinth() legs, running along the +tx axis like every other
+    // linear piece, and the sprite decor.js's own header holds up as the
+    // vocabulary the rest of the set follows — has existed the whole time,
+    // registered under this very id, and NOTHING ASKED FOR IT.
+    //
+    // A name that differs from the id is how art goes dead without anything
+    // failing: the sprite resolves, playtest is happy (it is not an
+    // understudy — there is no `wanted`), and the audit measures the good
+    // sprite and reports it clean while the game draws the other one.
+    // `tools/iso-audit.mjs --catalog` now measures only what a player can
+    // reach, which is the census that would have caught this.
+    art: sprite('stone-bench'),
     zone: NONE,
     deposits: dep({ order: 2, seclusion: 1, maturity: 1 }),
     tags: ['seat', 'stone', 'tended', 'quiet'],
@@ -2108,7 +2131,11 @@ const DECOR = [
     name: 'Marble exedra',
     group: 'decor',
     footprint: [2, 2],
-    art: sprite('bench', 'exedra-marble'),
+    // `exedra-marble` is registered (decor.js authors the exedra in the ROCK
+    // ramp and re-resolves it through MARBLE, so this costs no pixels), which
+    // means the understudy never draws. It was `bench` — an unrelated sprite,
+    // and a bad thing to fall back to if the variant ever went missing.
+    art: sprite('exedra-marble'),
     zone: NEO,
     register: 'neoclassical',
     deposits: dep({ order: 3, seclusion: 2, maturity: 2 }),
