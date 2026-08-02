@@ -31,7 +31,7 @@ import assert from 'node:assert/strict';
 import {
   TILE_W, TILE_H, CUBE_H, WANT, RUN_MIN, GROUND_ELLIPSE, SHADOW_KEY, curveAllowance,
   project, groundDiamond, boxHull, nearEdgeProfile,
-  baseProfile, baseLift, flatRuns, groundRuns, groundCentre, measure, measurable,
+  baseProfile, baseLift, flatRuns, groundRuns, groundCentre, measure, measurable, importArt,
 } from '../tools/isogeom.mjs';
 import { TILE_W as GAME_TILE_W, TILE_H as GAME_TILE_H, toScreen } from '../js/iso.js';
 import { defineSprite } from '../js/art/format.js';
@@ -270,12 +270,8 @@ test('a sprite too small to have geometry is not judged', () => {
 const MODULES = ['../js/art/props.js', '../js/art/decor.js', '../js/art/tiles.js'];
 const sprites = [];
 for (const path of MODULES) {
-  let mod;
-  try {
-    mod = await import(new URL(path, import.meta.url).href);
-  } catch {
-    continue;
-  }
+  const mod = await importArt(new URL(path, import.meta.url).href); // rethrows real faults
+  if (!mod) continue;
   for (const [name, s] of Object.entries(mod)) {
     if (s && Array.isArray(s.rows) && typeof s.w === 'number') sprites.push({ name, s });
   }

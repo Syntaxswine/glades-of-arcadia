@@ -42,6 +42,7 @@ installCanvas();
 
 const render = await import('../js/render.js');
 const { groundCentre } = await import('../js/art/format.js');
+const { importArt } = await import('./isogeom.mjs');
 const cat = await import('../js/catalog.js');
 
 const argv = process.argv.slice(2);
@@ -59,12 +60,9 @@ const ONLY = arg('--ids', '') ? arg('--ids', '').split(',').map((s) => s.trim())
 
 const registry = new Map();
 for (const m of ['tiles', 'extras', 'props', 'decor']) {
-  let mod;
-  try {
-    mod = await import(`../js/art/${m}.js`);
-  } catch {
-    continue;
-  }
+  // Throws loudly if the module exists and fails — see isogeom's `importArt`.
+  const mod = await importArt(new URL(`../js/art/${m}.js`, import.meta.url).href);
+  if (!mod) continue;
   const add = (name, s) => {
     if (s && s.rows && s.anchor) registry.set(s.name || name, s);
   };

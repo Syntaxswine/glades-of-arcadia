@@ -25,7 +25,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AUDITED_MODULES, spritesIn, measure } from '../tools/isogeom.mjs';
+import { AUDITED_MODULES, spritesIn, measure, importArt } from '../tools/isogeom.mjs';
 
 /**
  * THE LIST IS EMPTY. Every sprite in the game meets the ground in the ground
@@ -54,12 +54,10 @@ const KNOWN = new Set([]);
 
 const sprites = [];
 for (const name of AUDITED_MODULES) {
-  let mod;
-  try {
-    mod = await import(new URL(`../js/art/${name}.js`, import.meta.url).href);
-  } catch {
-    continue;
-  }
+  // A ratchet counted against a population that can silently halve is not a
+  // ratchet: `importArt` rethrows anything but a missing file.
+  const mod = await importArt(new URL(`../js/art/${name}.js`, import.meta.url).href);
+  if (!mod) continue;
   sprites.push(...spritesIn(mod, `${name}.js`));
 }
 

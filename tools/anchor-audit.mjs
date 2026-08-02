@@ -64,6 +64,7 @@
 import {
   groundCentre,
   SHADOW_KEY,
+  importArt,
 } from './isogeom.mjs';
 
 const strict = process.argv.includes('--strict');
@@ -127,12 +128,10 @@ const sprites = [];
 const registry = new Map();
 
 for (const m of modules) {
-  let mod;
-  try {
-    mod = await import(new URL(`../js/art/${m}.js`, import.meta.url).href);
-  } catch {
-    continue; // a module that does not exist yet is not a fault
-  }
+  // A missing module is not a fault; one that THROWS must not shrink the
+  // census in silence — see `importArt` in isogeom.mjs.
+  const mod = await importArt(new URL(`../js/art/${m}.js`, import.meta.url).href);
+  if (!mod) continue;
   const add = (name, s) => {
     if (!s || !Array.isArray(s.rows) || !Array.isArray(s.anchor)) return;
     if (!sprites.some((e) => e.sprite === s)) sprites.push({ name: s.name || name, sprite: s, from: `js/art/${m}.js` });

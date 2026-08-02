@@ -29,7 +29,7 @@
 //            on it and ranked COLUMN the fourth-worst sprite in the game.
 //   diag     how much of the outline runs on a 2:1 slope — the positive signal.
 
-import { measure, RUN_MIN, AUDITED_MODULES, spritesIn } from './isogeom.mjs';
+import { measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt } from './isogeom.mjs';
 
 const ALL = process.argv.includes('--all');
 const STRICT = process.argv.includes('--strict');
@@ -40,12 +40,11 @@ const RUNS = process.argv.includes('--runs');
 // different censuses of the same catalogue.
 const sprites = [];
 for (const name of AUDITED_MODULES) {
-  let mod;
-  try {
-    mod = await import(new URL(`../js/art/${name}.js`, import.meta.url).href);
-  } catch {
-    continue; // a module that does not exist yet is not a fault
-  }
+  // `importArt` rethrows anything that is not "no such module" — see its note.
+  // A missing module is not a fault; a module that throws while loading must
+  // never be allowed to shrink the census silently.
+  const mod = await importArt(new URL(`../js/art/${name}.js`, import.meta.url).href);
+  if (!mod) continue;
   sprites.push(...spritesIn(mod, `${name}.js`));
 }
 

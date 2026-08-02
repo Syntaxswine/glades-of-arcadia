@@ -560,6 +560,35 @@ export function measurable(s) {
 export const AUDITED_MODULES = ['props', 'decor', 'tiles', 'extras', 'clumps'];
 
 /**
+ * Import an art module, telling "not written yet" apart from "threw".
+ *
+ * THE CENSUS MUST NOT BE ABLE TO SHRINK QUIETLY. Five separate loaders — two
+ * tools and three test files — each opened with
+ *
+ *     try { mod = await import(...) } catch { continue }
+ *
+ * so that a module which does not exist yet is not a fault. It is not. But that
+ * `catch` cannot tell a missing file from a module that EXISTS and THREW, and
+ * on 2026-08-01 a change to `groundContact` made `props.js` fail to load: the
+ * audit reported "180 sprites measured · 18 flagged" — down from 237 and 0 —
+ * and exited 0 under `--strict`. A third of the catalogue was gone and the
+ * printed number was BETTER than the truth, because the sprites that vanished
+ * took their faults with them.
+ *
+ * A ratchet counted against a population that can silently halve is not a
+ * ratchet. So: `ERR_MODULE_NOT_FOUND` returns null and the caller skips;
+ * anything else is rethrown, and a tool or a test dies loudly on it.
+ */
+export async function importArt(url) {
+  try {
+    return await import(url);
+  } catch (e) {
+    if (e?.code === 'ERR_MODULE_NOT_FOUND') return null;
+    throw new Error(`art module failed to load: ${url}\n  ${e?.message || e}`, { cause: e });
+  }
+}
+
+/**
  * Every measurable sprite a module exports — top level, and one level inside a
  * plain object, because `clumps.js` exports its sprites as a CLUMPS map as well
  * as individually and the map is where most of them live.

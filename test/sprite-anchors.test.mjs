@@ -64,7 +64,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { defineSprite } from '../js/art/format.js';
-import { SHADOW_KEY } from '../tools/isogeom.mjs';
+import { SHADOW_KEY, importArt } from '../tools/isogeom.mjs';
 
 /** How far short of the front vertex a sprite may fall. Matches the tool. */
 const TOLERANCE = 10;
@@ -198,12 +198,10 @@ const sprites = [];
 const loaded = [];
 const registry = new Map();
 for (const path of MODULES) {
-  let mod;
-  try {
-    mod = await import(new URL(path, import.meta.url).href);
-  } catch {
-    continue;
-  }
+  // See `importArt`: a module that exists and throws must fail the suite, not
+  // quietly remove its own sprites from the audit.
+  const mod = await importArt(new URL(path, import.meta.url).href);
+  if (!mod) continue;
   loaded.push(path);
   const add = (name, s) => {
     if (!s || !Array.isArray(s.rows) || !Array.isArray(s.anchor)) return;
