@@ -761,13 +761,50 @@ export const BENCH = sprite(
 );
 
 /**
- * A timber pergola with vine over it. Posts in the earth ramp (timber, not
- * grey), beams above, and the vine as canopy clumps sitting ON the beams with
- * a dark core where they overlap — foliage rules, applied by hand because this
- * one has to register against built structure.
+ * A timber pergola with vine over it.
+ *
+ * ---------------------------------------------------------------------------
+ * REDRAWN IN THE PROJECTION (2026-08-02). The owner, looking at a garden:
+ * *"the pergola could use an isometric update."*
+ *
+ * The old one is preserved below as `PERGOLA_ELEVATION` and it is worth a look,
+ * because it is the clearest example in the tree of the fault this whole arc
+ * is about: four posts in a row, a flat beam grid over them, and every single
+ * edge horizontal. A front elevation of a pergola, pasted into a world that
+ * has no front.
+ *
+ * AND A PERGOLA IS THE WORST POSSIBLE OBJECT TO DRAW THAT WAY, because a
+ * pergola IS a grid of beams — the one thing in a garden whose whole
+ * appearance is which way its timbers run. Drawn correctly it is the most
+ * isometric object in the game:
+ *
+ *   FOUR POSTS on the tile's own corners. The tile's N, E, S and W vertices
+ *   are the corners of a square in world space, so posts there are a square
+ *   pergola aligned to the grid — and the two gaps between them on each axis
+ *   are the two ways you can walk through it.
+ *   TOP PLATES along the four diamond edges, which run 1-in-2 by construction.
+ *   RAFTERS across, parallel to the +ty edges and sitting 2 px proud of the
+ *   plates, so the roof reads as two layers of timber crossing rather than as
+ *   a lid.
+ *   VINE on top, thicker at the back so the near beams stay legible. A vine
+ *   that covers the frame evenly hides the only thing that says "pergola".
+ *
+ * Timber in the BARK ramp (q outline, r shade, s core, t lit) — not stone
+ * grey, which is what makes it read as a built thing rather than a ruin.
+ * ---------------------------------------------------------------------------
  */
-export const PERGOLA = sprite(
-  'pergola',
+/**
+ * The old pergola, kept where it can be looked at rather than deleted.
+ *
+ * Nothing draws it and nothing should. It is here because it is the clearest
+ * front elevation left in the tree — four posts in a row, a flat beam grid,
+ * every edge horizontal — and reading it beside `pergolaGrid` above is the
+ * fastest way to understand what "drawn in the projection" actually changes.
+ * `tools/iso-audit.mjs --elev` will keep listing it as unreachable art, which
+ * is correct and is the point.
+ */
+export const PERGOLA_ELEVATION = sprite(
+  'pergola-elevation',
   [0, 1],
   [
     '....bbb....bbbb.....bbb.....',
@@ -1113,6 +1150,156 @@ const SCRUB = 'fghi'; // dry olive scrub
 // suggestion, not an event.
 const BARK = 'qqrst';
 const STONE = 'vwxy';
+
+function pergolaGrid() {
+  const W = 70;
+  const H = 68;
+  const CX = 35; // the tile's centre column
+  const GY = 50; // ...and the row its centre sits on
+  const POST = 26; // clear height under the beams
+  const g = G(W, H);
+  const T = BARK; // 'qqrst'
+
+  // The tile's four corners, as screen offsets from its centre. A 64x32
+  // diamond, which is the only shape the ground has.
+  const CORNERS = { N: [0, -16], E: [32, 0], S: [0, 16], W: [-32, 0] };
+  const lift = ([dx, dy]) => [CX + dx, GY + dy - POST];
+
+  /** A post from a tile corner up to the roof. */
+  const post = (c) => {
+    const [dx, dy] = CORNERS[c];
+    const x = CX + dx;
+    const base = GY + dy;
+    for (let y = base - POST; y <= base; y++) {
+      // FOUR PIXELS, not three. A 3px post at this height read as wire and the
+      // whole thing came out a wrought-iron table; a pergola is sawn timber and
+      // wants to look like it could hold a vine up. Outline on the shadow side
+      // only, so the lit edge stays open against the grass.
+      put(g, x - 2, y, T[3]);
+      put(g, x - 1, y, T[4]); // lit face, toward the upper left
+      put(g, x, y, T[2]);
+      put(g, x + 1, y, T[0]); // and the shaded one
+    }
+    for (let k = -2; k <= 1; k++) put(g, x + k, base + 1, T[0]); // planted, not resting
+  };
+
+  /**
+   * A timber running between two roof points along a legal 1-in-2 diagonal.
+   * `deep` is how much of its side face shows; a beam with none is a line.
+   */
+  const beam = (a, b, deep, top = T[4]) => {
+    const n = Math.abs(b[0] - a[0]);
+    const sx = Math.sign(b[0] - a[0]);
+    const sy = Math.sign(b[1] - a[1]);
+    for (let i = 0; i <= n; i++) {
+      const x = a[0] + sx * i;
+      const y = a[1] + sy * (i >> 1);
+      put(g, x, y, top);
+      for (let k = 1; k <= deep; k++) put(g, x, y + k, k === deep ? T[0] : T[2]);
+    }
+  };
+
+  const N = lift(CORNERS.N);
+  const E = lift(CORNERS.E);
+  const S = lift(CORNERS.S);
+  const Wc = lift(CORNERS.W);
+
+  // Back posts first — N is the highest on screen and the roof draws over it.
+  post('N');
+  post('W');
+  post('E');
+
+  // The plates, on the diamond's own four edges.
+  beam(N, E, 2);
+  beam(Wc, S, 2);
+  beam(N, Wc, 2);
+  beam(E, S, 2);
+
+  // Rafters across, 2 px proud so the two layers read as crossing. Each runs
+  // parallel to N->W, from a point on N->E to the matching point on W->S.
+  for (const t of [0.28, 0.5, 0.72]) {
+    const from = [Math.round(N[0] + (E[0] - N[0]) * t), Math.round(N[1] + (E[1] - N[1]) * t) - 2];
+    const to = [Math.round(Wc[0] + (S[0] - Wc[0]) * t), Math.round(Wc[1] + (S[1] - Wc[1]) * t) - 2];
+    beam(from, to, 1, T[3]);
+  }
+
+  // The near post last: it stands in FRONT of the roof it holds up.
+  post('S');
+
+  // ------------------------------------------------------------------------
+  // THE VINE, and the whole difficulty is knowing when to stop.
+  //
+  // Take one put 190 clumps over the roof plane and produced a dark green
+  // lump on four legs: the rafters vanished, the plates vanished, and with
+  // them the only thing that says PERGOLA rather than SHRUB. A vine that
+  // covers its frame evenly has hidden the object it is growing on.
+  //
+  // So: forty clumps, small, and weighted hard toward the BACK. `u + v` grows
+  // toward the camera, so thinning by it leaves the two near plates and the
+  // near ends of the rafters bare — which is exactly where a player looking
+  // at the thing needs to see timber crossing timber.
+  //
+  // AND IT GROWS ALONG THE PLATES, not over the plane at random. Take two
+  // scattered clumps in the roof's own (u, v) and thinned toward the camera;
+  // the maths was right and it came out a horizontal smear across the middle,
+  // because a uniform scatter minus its front half is a band, and a band is a
+  // screen-space shape. A vine climbs a POST and runs along the TIMBER — so
+  // this walks the two back plates, N->E and N->W, and drops clumps with a
+  // little inward spread. That puts the foliage in a shallow V following the
+  // roof's own edges, which is the shape nothing else in the sprite could be
+  // mistaken for, and leaves the near half of the frame bare.
+  // ------------------------------------------------------------------------
+  const trail = (to, seed) => {
+    const steps = 34;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      // Denser at the corner it climbed from, ragged at the far end.
+      if (nz(i, seed) < t * 0.55) continue;
+      const inward = nz(i, seed + 5) * 15; // how far it has crept across the roof
+      const bx = N[0] + (to[0] - N[0]) * t;
+      const by = N[1] + (to[1] - N[1]) * t;
+      const ix = (E[0] + Wc[0]) / 2 - N[0];
+      const iy = (E[1] + Wc[1]) / 2 - N[1];
+      const x = Math.round(bx + (ix / 32) * inward);
+      const y = Math.round(by + (iy / 32) * inward) - 2;
+      const r = 2 + Math.round(nz(i, seed + 9) * 2.2);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r - 1; dx <= r + 1; dx++) {
+          if (dx * dx * 0.5 + dy * dy > r * r) continue;
+          // Foliage law: lit step on the upper left of each clump, and a leaf
+          // over a leaf goes one step DARKER — which is what stops a vine
+          // reading as one flat green sheet. No outline: an outlined clump at
+          // this size is mostly outline, and 'a' against canopy is a hole.
+          const lit = dx + dy < -r * 0.3;
+          const over = peek(g, x + dx, y + dy);
+          const under = LEAF.indexOf(over);
+          put(g, x + dx, y + dy, under >= 0 ? LEAF[Math.max(1, under - 1)] : lit ? LEAF[4] : LEAF[3]);
+        }
+      }
+    }
+  };
+  trail(E, 3);
+  trail(Wc, 31);
+
+  // ...and one strand come down the post it climbed, because a vine that
+  // begins in mid-air at roof height is a hat.
+  {
+    const [px, py] = [CX + CORNERS.N[0], GY + CORNERS.N[1]];
+    for (let k = 0; k < 13; k++) {
+      if (nz(k, 61) < 0.42) continue;
+      const y = py - POST + k;
+      put(g, px - 2, y, LEAF[3]);
+      put(g, px - 1, y, nz(k, 71) > 0.5 ? LEAF[4] : LEAF[2]);
+      if (nz(k, 83) > 0.6) put(g, px, y, LEAF[2]);
+    }
+  }
+  return g;
+}
+
+export const PERGOLA = composed('pergola', pergolaGrid(), [35, 51], {
+  tags: ['structure', 'timber', 'satyr', 'shade', 'seclusion'],
+});
+
 
 /**
  * One foliage mass. `wobble` breaks the circle — a perfectly round clump is

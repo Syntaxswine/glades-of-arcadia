@@ -471,22 +471,85 @@ function levelRunsIn(prof, min) {
  * silhouette, which `topProfile` and `baseProfile` already own; counting it
  * here would convict every flat-lying thing twice.
  */
-export function levelSeams(s, min = 6) {
+export const SEAM_KINDS = 3;
+
+export function levelSeams(s, min = 6, gap = 1, kinds = SEAM_KINDS) {
   const runs = [];
   for (let y = 1; y < s.h; y++) {
     const a = s.rows[y - 1] || '';
     const b = s.rows[y] || '';
     let n = 0;
     let x0 = 0;
+    let slack = 0;
+    // ---------------------------------------------------------------------
+    // AN EDGE IS THE SAME TRANSITION ALL ALONG IT, and this is the number
+    // that separates a surface boundary from a DITHER.
+    //
+    // Allowing a run to survive a coincidence (below) let the measure see
+    // textured elevations at last — and it also promoted every dithered
+    // ground tile in the game to the top of the table. `plunge-pool` scored
+    // 1.00: a 64px "seam" on every row, because a two-colour dither changes
+    // key at almost every pixel and a tolerant run-finder reads that as one
+    // long edge.
+    //
+    // The difference is not how MUCH changes, it is whether the change is the
+    // SAME CHANGE. Where two faces of a solid meet, one surface is above the
+    // line and the other is below it, so the transition repeats: the old
+    // pergola's beam grid is q->s and r->t and nothing else, and the bench is
+    // D->C and nothing else. A dither is a different pair almost every
+    // column, because both sides are the same surface shuffled.
+    //
+    // So a run is only a seam while it is made of at most `kinds` distinct
+    // (above, below) pairs. Four, not one, because a real edge in shaded art
+    // carries its own light: the lit end and the shaded end of one beam are
+    // different transitions and both are the same edge.
+    // ---------------------------------------------------------------------
+    let pairs = new Set();
     for (let x = 0; x <= s.w; x++) {
       const above = a[x];
       const here = b[x];
-      if (opaque(here) && opaque(above) && here !== above) {
-        if (n === 0) x0 = x;
-        n++;
-      } else {
-        if (n > min) runs.push({ x0, x1: x - 1, y, len: n });
+      const fresh = opaque(here) && opaque(above) && here !== above;
+      if (fresh && n > 0 && !pairs.has(above + here) && pairs.size >= kinds) {
+        // A fifth kind of transition means this is no longer one edge.
+        if (n > min) runs.push({ x0, x1: x - 1 - slack, y, len: n });
         n = 0;
+        slack = 0;
+        pairs = new Set();
+      }
+      if (fresh) {
+        if (n === 0) x0 = x;
+        pairs.add(above + here);
+        n += slack + 1;
+        slack = 0;
+      } else if (n > 0 && slack < gap && opaque(here) && opaque(above)) {
+        // ---------------------------------------------------------------
+        // A SEAM SURVIVES A COINCIDENCE, and the first draft did not.
+        //
+        // This required EVERY column of a run to change, and so it measured
+        // flat-shaded elevations only. `props.BENCH` puts D over C over B
+        // across twenty-one solid columns and was caught at once; the old
+        // pergola's beam grid —
+        //
+        //     qqrrqqrrqqrrqqrrqqrrqqrrqqrr
+        //     qsttsqsttsqsttsqsttsqsttsqst
+        //
+        // — is just as flat and scored ZERO, because the timber texture
+        // repeats every five pixels and every fifth column happens to hold
+        // the same key in both rows. The edge was broken into six-pixel
+        // pieces by its own grain.
+        //
+        // So a single column of agreement no longer ends a seam. That is not
+        // a fudge to make a number come out: an edge between two faces is an
+        // edge whether or not two adjacent pixels of a dithered surface
+        // coincide, and it is exactly the TEXTURED elevations — brickwork,
+        // planking, beams, courses — that the strict version was blind to.
+        // ---------------------------------------------------------------
+        slack++;
+      } else {
+        if (n > min) runs.push({ x0, x1: x - 1 - slack, y, len: n });
+        n = 0;
+        slack = 0;
+        pairs = new Set();
       }
     }
   }

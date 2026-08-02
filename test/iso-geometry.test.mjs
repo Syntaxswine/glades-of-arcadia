@@ -546,3 +546,84 @@ test('groundCentre reproduces the anchors the four fixed buildings were given', 
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// LEVEL SEAMS — and the two ways this measure was wrong before it was right.
+//
+// A seam is a horizontal run of pixels whose key differs from the key above,
+// inside the silhouette: where two faces of a solid meet. In this projection
+// that edge runs 1-in-2 or vertical, never level, so a long one is a front
+// elevation.
+//
+//   TOO STRICT (take one): every column of the run had to change. That saw
+//   flat-shaded elevations — `props.BENCH` puts D over C over B across
+//   twenty-one solid columns — and was BLIND to textured ones. The old
+//   pergola's beam grid is as flat as the bench and scored ZERO, because the
+//   timber repeats every five pixels and every fifth column happens to hold
+//   the same key in both rows.
+//
+//   TOO LOOSE (take two): allowing a run to survive one column of agreement
+//   fixed that and promoted every DITHERED GROUND TILE in the game to the top
+//   of the table. `plunge-pool` scored 1.00 — a 64px "seam" on every row,
+//   because a two-colour dither changes key at almost every pixel.
+//
+// What separates them is not how much changes but whether it is the SAME
+// change. An edge between two surfaces repeats its transition; a dither is a
+// different pair almost every column, because both sides are one surface
+// shuffled. Both controls are here so neither mistake can come back.
+// ---------------------------------------------------------------------------
+
+test('a seam survives its own texture, but a dither is not a seam', async () => {
+  const { levelSeams } = await import('../tools/isogeom.mjs');
+  const longest = (rows) => {
+    const s = { rows, w: rows[0].length, h: rows.length };
+    const r = levelSeams(s, 6);
+    return r.length ? Math.max(...r.map((x) => x.len)) : 0;
+  };
+
+  // FLAT-SHADED: one surface over another. The easy case, and take one got it.
+  assert.ok(longest(['DDDDDDDDDDDDDDDDDDDD', 'CCCCCCCCCCCCCCCCCCCC']) >= 19);
+
+  // TEXTURED: timber over timber, the shape the old pergola's beam grid has.
+  // Two transitions — q->s and r->t — with every fifth column happening to
+  // hold the same key in both rows, which is what broke take one into
+  // six-pixel pieces. Still one edge.
+  let a = '';
+  let b = '';
+  for (let x = 0; x < 40; x++) {
+    if (x % 5 === 0) { a += 'q'; b += 'q'; } // the coincidence
+    else if (x % 2) { a += 'r'; b += 't'; }
+    else { a += 'q'; b += 's'; }
+  }
+  assert.ok(longest([a, b]) >= 30, 'a textured elevation is still an elevation');
+
+  // DITHER: the same four keys above and below, shuffled. Not an edge — there
+  // is no "other surface", it is one surface with grain.
+  const dither = (seed) =>
+    Array.from({ length: 40 }, (_, i) => 'vwxy'[(i * 7 + seed * 13 + ((i * i) % 5)) % 4]).join('');
+  assert.ok(
+    longest([dither(1), dither(2)]) < 12,
+    'a dithered surface should not read as a horizontal edge'
+  );
+
+  // ...and a 2:1 edge, which is what correct art does, is never a long seam.
+  const diagonal = [];
+  for (let y = 0; y < 12; y++) {
+    let row = '';
+    for (let x = 0; x < 40; x++) row += y * 2 > x ? 'D' : 'B';
+    diagonal.push(row);
+  }
+  assert.ok(longest(diagonal) < 8, 'a 1-in-2 boundary is not a horizontal seam');
+});
+
+test('the pergola was redrawn, and the measure agrees', async () => {
+  const { elevationScore } = await import('../tools/isogeom.mjs');
+  const props = await import('../js/art/props.js');
+  // The old one is kept in the tree, unreachable, precisely so this comparison
+  // can be made — see PERGOLA_ELEVATION's note.
+  const before = elevationScore(props.PERGOLA_ELEVATION);
+  const after = elevationScore(props.PROPS.pergola);
+  assert.ok(before.worst > 0.8, `the old pergola should score badly, got ${before.worst}`);
+  assert.equal(after.seam, 0, 'the new pergola has a level surface boundary in it');
+  assert.equal(after.top, 0, 'the new pergola has a level top edge');
+});
