@@ -1003,3 +1003,165 @@ control that visibly does nothing.
 out of the corner of your eye, and you click it, and there he is, playing.
 
 *— Claude Opus 5, 2026-08-01*
+
+---
+
+## The shadow arc — 2026-08-01
+
+Steps 1 and 2 of the shadow proposal above, built and shipped. Step 3 measured
+but not started. Plus one owner decision that is not about shadows at all and
+matters more than any of it.
+
+**Read the proposal's `### Sequence` first** — it is annotated with what
+actually landed, and with six corrections to its own numbers.
+
+### What shipped
+
+| what | commit | |
+|---|---|---|
+| `groundCentre()` + three audit holes closed | `2857be6` | 375 tests |
+| the contact shadow does the whole job | `024c7a7` | 383 tests |
+| step 3 measured before starting it | `d511599` | — |
+| the pillar trick defended | `dc28b5a` | 386 tests |
+
+### The thing worth carrying forward
+
+**Every fault in this arc was a consumer that was never written.** Not a bug in
+working code — a piece of infrastructure somebody designed carefully, and then
+nothing ever called:
+
+- `shadow:` on a scene object. Documented at `render.js:76` as a per-object
+  scale. `catalog.js` sets it **nowhere**, so every object in the game arrived
+  with `scale = 1` and the field had never once been used.
+- `CREATURE_SHADOWS` — five hand-authored contact shadows in `creatures.js`.
+  `main.js` passes them, the old renderer's `typeof === 'number'` test threw
+  them away, and **not one of them has ever been drawn**.
+- `cell.ground` on a terrain cell. `_groundKeyAt` reads it; `terrainCell` has
+  never set it. Result: every paved tile in the game cast a grass-green shadow.
+- `ACCENT[6] = '#2A2620' // universal shadow mixer — the only near-black in the
+  game`. Named for a job nothing does. It is used as grape and poppy pixels and
+  as the minimap frame; **nothing mixes toward it.**
+- `js/art/extras.js:17` claims the renderer recolours the baked skirt on soil
+  "for free" via a `variant({grass:'earth'})`. **No such variant exists**, and
+  that comment has been wrong since it was written.
+
+Five of them, in one subsystem. If you are looking for what to fix next in this
+codebase, **grep for a field and check who reads it** — that has a far better
+hit rate here than reading code for mistakes.
+
+### The instruments, which are the durable part
+
+- **`tools/shadow-probe.mjs`** (new). Renders one object on flat ground three
+  times — bare / shadow only / whole — and differences them. `--paved`,
+  `--png`, and a per-pixel colour census. It is what turned "the stamp looks
+  small" into "thirteen placeables draw a stamp that is 100% invisible".
+- **`tools/anchor-audit.mjs`** now has four arms (FLOAT, SINK, PLOT, `--feet`)
+  and reads the CATALOGUE footprint, because that is the plot the renderer
+  places on.
+- **`groundCentre(art)`** in `js/art/format.js` — where an object meets the
+  ground, blind to its own shadow. One implementation, three consumers.
+
+### A trap I fell into, twice, in one session
+
+**A differencing probe must pin everything except the one variable.** The first
+version of `shadow-probe` isolated the shadow by passing `art: null` — which
+worked perfectly until the shadow's SIZE started coming from the art. Then
+dropping the art dropped the measurement too, and the tool cheerfully reported
+numbers that were the difference between two different shadows.
+
+The same shape of error got into a test: a "3x1 and 2x2 do not collapse"
+assertion that was equally true under the old code, so it could not fail for the
+reason it named. **A test that passes on the broken version is not a test.**
+
+### Step 3 is de-risked — do this before you touch 68 sprites
+
+Stub both `skirt()` implementations and `groundContact` behind a flag, render,
+`git checkout`. It takes ten minutes and it establishes the two facts that make
+step 3 safe:
+
+1. **On grass, deleting the baked skirts is a visual no-op.** The runtime
+   ellipse already covers the same ground in the same colour.
+2. **There are TWO mechanisms.** Stubbing `skirt()` alone leaves the 48
+   hand-typed `mmmm` bands as literal flat rows — the original fault, restored.
+   `groundContact` must change from *convert the band* to *strip the band*,
+   which clears all 68 sprites with no art edits at all.
+
+### OPEN, and the owner's to call: transparency-based shadows
+
+The owner asked whether shadows could be transparency-based "so they work with
+anything underneath them". **Feasible, and better than what is there** — but as
+palette-space darkening, not alpha: read the pixel underneath and walk ITS OWN
+ramp down two steps. Alpha is forbidden by SPEC §3 in capitals and would break
+the palette-purity assertions.
+
+Measured, both numbers:
+
+- **100% of rendered pixels are exact palette colours** (256 000 of 256 000, on
+  a scene with buildings, trees and terrain), so the reverse lookup always hits.
+  That is the fact the whole idea rests on and it is not a near miss.
+- **0.50 ms/frame** over realistic shadow bounding boxes, 1.37 ms for the whole
+  viewport, against a current **8.20 ms of a 16.7 ms budget**.
+
+What it buys beyond the owner's ask: the ground's own texture survives (today an
+opaque stamp *erases* grass speckle and flagstone joints), and a shadow spanning
+a grass/paving boundary stops being one wrong colour across both.
+
+Two caveats. **Six accent colours have no ramp to walk down**, so flowers under
+a shadow would stay bright — they need a mix-toward-`ACCENT[6]`-and-snap rule,
+which is finally what that "universal shadow mixer" is for. And it makes **step
+3 a prerequisite**: a baked opaque skirt cannot participate in a blend and would
+sit as a flat patch inside the new shade.
+
+**Not needed:** shadows falling on other objects. The owner settled it —
+"the shadows are fairly high noon shadows, so i don't think they would ever
+truly drop down to another level except for maybe very tall cliff faces". That
+was the expensive half, and it is off the table.
+
+### AND THE ONE TO READ TWICE: the pillar trick is a FEATURE
+
+Owner, 2026-08-01: *"you can remove the ground under an object allowing it to
+float in space. this is a classic bug of that era that players would use
+creatively to build things they otherwise couldn't, so i don't want it
+corrected. that bug was most popular in Ultima Online."*
+
+**This document spends thousands of words treating floating as a fault. It is
+talking about a different float.**
+
+- **ART space** — a sprite drawn too high inside its own bitmap, hovering over
+  its own plot wherever the player puts it. Nobody asked for it. A bug.
+- **WORLD space** — the art is correct; the player dug the ground away on
+  purpose. A toy.
+
+`_cohere()` drags an object's whole FOOTPRINT along with any edit touching part
+of it, so it can never straddle two heights. **It stops at the footprint and the
+stopping is the trick**: the tiles an object's art merely *overhangs* are
+ordinary ground. Dig the glade out but one tile and you get an oak on a pillar.
+
+Guarded by three `FEATURE:` assertions in `test/world-terrain.test.mjs`, a note
+on `_cohere` in `js/world.js`, and a section in `docs/ELEVATION.md`. Kept
+**undoable** (a toy you cannot take back is a trap) and **untaught** (nothing in
+the UI mentions it; it is something a player finds by digging).
+
+## Maker's mark
+
+I came in to finish a specced list and spent most of the session discovering
+that the specification's own numbers were wrong — in every case in the direction
+of the fault being *worse* than reported. The catalogue mismatch was 10 and not
+12 because seven were ground painters. The old sink guard caught none of the
+four floating buildings rather than one. The green mat was in both shadow
+systems, not just the baked one.
+
+What I would want a successor to take from that is not "check the numbers". It
+is that **the corrections all came from building an instrument and pointing it
+at the thing, and none of them came from reading the code more carefully.** I
+read `_groundKeyAt` twice and saw nothing; I rendered a prop on flagstone and
+the bug was a green mat you could see from across the room.
+
+The best thing here is `shadow-probe.mjs`, and it is the smallest. Three frames
+and a subtraction.
+
+**The forward dream:** that someone digs a hole for no reason, finds their oak
+standing on a pillar of earth, and spends the next hour building something
+nobody designed.
+
+*— Claude Opus 5, 2026-08-01*

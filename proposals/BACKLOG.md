@@ -1,6 +1,6 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-07-31 (twice — second pass after the flourish layer) against
+Reconciled 2026-08-01 (fourth pass, after the shadow arc) against
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
@@ -540,6 +540,104 @@ forgot to check, and a save claiming a facing the catalogue no longer offers).
   are not in props.js or decor.js** — they draw understudies today, so the turn
   is real but what turns is the stand-in. Harmless, worth knowing.
 
+## 4l · THE SHADOW ARC — steps 1 and 2 SHIPPED, step 3 measured (2026-08-01)
+
+Full write-up: `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`, the `PROPOSAL — ONE
+SHADOW SYSTEM` section and `## The shadow arc — 2026-08-01` beneath it. The
+proposal's `### Sequence` is annotated with what landed.
+
+**Shipped.** `groundCentre()` measures where an object meets the ground from the
+art, blind to its own shadow (`2857be6`). The runtime contact shadow is sized
+from it, drawn as an ellipse, and coloured from the tile it lands on
+(`024c7a7`). Measured on rendered pixels: placeables with a 100%-invisible
+shadow went **13 → 1**, visible shadow pixels **16 004 → 47 260**.
+
+### ▸ NEXT — step 3: delete the baked skirts
+
+The one with real work left in it, and it is **de-risked**: stub both `skirt()`
+implementations behind a flag, render, `git checkout`. Ten minutes, and it
+proves the two things that make the change safe —
+
+1. on grass, deleting them is a **visual no-op** (the runtime ellipse already
+   covers the same ground in the same colour); on paving it removes the
+   grass-green mats;
+2. there are **two mechanisms**. Stubbing `skirt()` alone leaves the 48
+   hand-typed `mmmm` bands as literal flat rows — the original fault, restored.
+   `groundContact` changes from *convert the band* to *strip the band*, which
+   clears all 68 sprites with **no art edits at all**; then the ~43 `skirt()`
+   call sites go by hand so the secondary ones (the altar inside the heroon) can
+   be kept.
+
+### ▸ THEN — step 4: 28 flat feet
+
+`iso-audit` goes 0 → **28** the moment the skirts go. **None of it is visible** —
+every one of those feet sits inside the runtime shadow — so step 4 may FOLLOW
+step 3 rather than block it. `test/iso-ground.test.mjs` is a ratchet built for
+exactly this. Worst first: `sleeping-satyr` 36px of level edge (allowed 20),
+`wall-fountain` 33 (16), `jet-basin` 33 (19), `half-buried-pithos` 29 (22), then
+a long tail of plinths at 15–22.
+
+Redraw each as a real 2:1 base — an **ellipse** for a round foot, a **diamond**
+for a square plinth. Both satisfy "no horizontal edges at ground level"; a
+column plinth is a square block and drawing it round is a different lie.
+
+### ▸ OPEN, owner's call: transparency-based shadows
+
+Owner asked for shadows that "work with anything underneath them". **Feasible**
+— as palette-space darkening (read the pixel below, walk ITS ramp down two
+steps), never alpha, which SPEC §3 forbids in capitals and which would break the
+palette-purity assertions. Measured: **100% of rendered pixels are exact palette
+colours** so the reverse lookup always hits, and the remap costs **0.50 ms** of
+an **8.20 / 16.7 ms** frame. It also fixes two things nobody asked about — the
+opaque stamp currently ERASES grass speckle and flagstone joints, and a shadow
+spanning a grass/paving boundary is one wrong colour across both.
+
+Blocked on step 3 (a baked opaque skirt cannot participate in a blend). Needs a
+rule for the six ACCENT colours, which have no ramp to walk down — mix toward
+`ACCENT[6]` and snap, which is finally what that "universal shadow mixer" is for.
+
+**Object-on-object shading is OFF the table** — owner: "the shadows are fairly
+high noon shadows, so i don't think they would ever truly drop down to another
+level". That was the expensive half.
+
+### ▸ The 10 undersized placeables — a ratchet, not a to-do
+
+`KNOWN_UNDERSIZED` in `test/sprite-anchors.test.mjs`. Ten catalogue entries
+reserve more garden than their art was drawn to cover, `sleeping-satyr` among
+them. Each is either a redraw or a catalogue correction — a decision about how
+much ground an object takes, so it is the owner's, not a cleanup. The list may
+only ever shrink; the test enforces that in both directions.
+
+### ▸ A cheap sweep with a good hit rate
+
+Every fault in this arc was **a consumer that was never written** — `shadow:`,
+`CREATURE_SHADOWS`, `cell.ground`, `ACCENT[6]`, and a comment in
+`js/art/extras.js:17` describing a `variant` that does not exist. Five in one
+subsystem. **Grep for a field and check who reads it.** That found more here than
+reading code for mistakes did.
+
+---
+
+## 4m · THE PILLAR TRICK — a FEATURE, do not fix (2026-08-01)
+
+Owner: *"you can remove the ground under an object allowing it to float in
+space. this is a classic bug of that era that players would use creatively to
+build things they otherwise couldn't, so i don't want it corrected. that bug was
+most popular in Ultima Online."*
+
+**Not a backlog item. It is here so nobody puts it on the backlog.** This
+document and the handoff both spend a lot of words treating floating as a fault,
+and they mean a *different* float: art drawn too high inside its own bitmap
+(`tools/anchor-audit.mjs`). This one is world-space and the player asked for it.
+
+`_cohere()` drags an object's whole footprint along with any terrain edit, so it
+can never straddle two heights — **and it stops there, which is the trick**. The
+ground an object's art merely *overhangs* is ordinary ground.
+
+Guarded by three `FEATURE:` assertions in `test/world-terrain.test.mjs`, a note
+on `_cohere` in `js/world.js`, and a section in `docs/ELEVATION.md`. Kept
+undoable and deliberately untaught.
+
 ## 5 · Housekeeping
 
 - `docs/creature-lab.html` is a dev tool committed alongside the game; decide
@@ -577,3 +675,10 @@ cursor, and `?garden=all`, the ladder-derived proving ground with all four
 species welcome. Plus the third and final recital bug: the
 score now starts on the same statement that raises the pipes, instead of on his
 arrival · 302 tests.
+
+Then, 2026-08-01 later: **the save screen**, **facing on the middle wheel**, the
+sprites redrawn to face the world rather than the viewer, **mobile mode**, and
+the **shadow arc** — a contact shadow measured from the art instead of guessed
+from the tile, and coloured by the ground it lands on. Four instruments came out
+of it and are the durable half: `tools/isogeom.mjs`, `tools/shadow-probe.mjs`,
+and two more arms each on `iso-audit` and `anchor-audit` · 386 tests.
