@@ -60,7 +60,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, foot, groundFoot } from './format.js';
+import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP } from './format.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -352,9 +352,13 @@ function stamp(g, rowsArr, x0, y0) {
  * A member running along the +tx axis. One tile step is 32 px across and 16 px
  * down, so everything linear steps 1 down per 2 across and a sprite drawn 33
  * wide (one column of overlap) butts into a run with no seam.
+ *
+ * BOTH NOW LIVE IN format.js and are re-exported here, not copied — see the
+ * note there. extras.js drew the palisade fence to its own private slope and
+ * its own private run length, and got both wrong; a constant that two modules
+ * need is a constant that must have one home.
  */
-export const LINE_W = 33; // 32 px of run plus one overlap column
-export const LINE_DROP = (x) => x >> 1;
+export { LINE_W, LINE_DROP };
 
 /**
  * A horizontal SLAB running along the +tx axis: the top face is a

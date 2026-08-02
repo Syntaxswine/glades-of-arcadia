@@ -365,6 +365,42 @@ export function foot(ww, R, pad = 0, round = false) {
   return rows;
 }
 
+// ---------------------------------------------------------------------------
+// LINEAR PIECES — the two numbers that decide whether a run is a RUN.
+//
+// Moved here from decor.js, which is where they were written and where they
+// stopped being enough. The same argument as `foot` and `groundFoot` above:
+// props.js and decor.js keep separate copies of nearly every grid helper on
+// purpose, and NOT of the ones that state a fact about the world. Two modules
+// drawing hedges that butt at different pitches is the seam this arc is about.
+//
+// It is not hypothetical. `js/art/extras.js` authored the palisade fence with
+// its own private `slope = round(x * 2 / 5)` and its own private `RUN = 23`,
+// under a header insisting that running along the tile edge "is the one thing
+// that has to be right". Two-in-five is 0.4 and the projection's slope is 0.5,
+// so the fence drifted two rows off true over its own length; and 23 px of run
+// on a 32 px tile means a ROW of fences is a dotted line with gaps in it —
+// which for a piece the field model treats as an OCCLUDER is worse than ugly.
+// Neither number could have drifted if there had only ever been one of them.
+// ---------------------------------------------------------------------------
+
+/**
+ * The screen width of a linear piece that spans exactly one tile along +tx.
+ *
+ * 33, not 32: **32 px of run plus one overlap column**. A tile step is 32 px
+ * across, so a piece drawn 32 wide leaves a hairline where two meet and a
+ * piece drawn 33 wide butts into a continuous object.
+ */
+export const LINE_W = 33;
+
+/**
+ * How far a linear piece has fallen after `x` px of run: one down per two
+ * across, the only slope the ground plane has. `x >> 1` and not `x * 0.4`,
+ * not `x / 2` rounded some other way — the shift is exact, integer, and
+ * matches what a 2:1 line drawn as pixel PAIRS actually does.
+ */
+export const LINE_DROP = (x) => x >> 1;
+
 /**
  * Give a generated grid the foot its own base implies, and stamp it in place.
  *

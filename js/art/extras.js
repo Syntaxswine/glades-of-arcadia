@@ -20,7 +20,10 @@
 //
 // DOM-free. Imports cleanly in Node.
 
-import { defineSprite } from './format.js';
+import { defineSprite, foot, LINE_W, LINE_DROP } from './format.js';
+
+/** The marble ramp's keys, darkest first — the same letters props.js uses. */
+const MARBLE = 'ABCDE';
 
 function sprite(name, [dx, up], rows, opts = {}) {
   const w = Math.max(...rows.map((r) => r.length));
@@ -37,11 +40,35 @@ function sprite(name, [dx, up], rows, opts = {}) {
 // ===========================================================================
 // PALISADE FENCE
 //
-// Split-timber stakes, pointed, wired to two rails. The one thing that has to
-// be right is that it runs ALONG A TILE EDGE — 2 across for 1 down — because a
-// fence that ignores the isometric grid is the loudest possible tell that the
-// artist drew it flat and rotated it. Every stake therefore steps down 2 rows
-// per 5 columns, which is the 2:1 diamond slope to within a pixel over the run.
+// Split-timber stakes, pointed, wired to two rails.
+//
+// ---------------------------------------------------------------------------
+// IT WAS NEITHER OF THE TWO THINGS ITS OWN HEADER SAID IT WAS.
+//
+// The header read: "The one thing that has to be right is that it runs ALONG A
+// TILE EDGE — 2 across for 1 down ... Every stake therefore steps down 2 rows
+// per 5 columns, which is the 2:1 diamond slope to within a pixel over the
+// run." Two-in-five is 0.4. The projection's slope is 0.5. Over the fence's own
+// 23 columns that is two and a half rows off true, and the sentence stating the
+// requirement and the line violating it were four lines apart.
+//
+// And 23 px of run on a 32 px tile means A ROW OF FENCES IS A DOTTED LINE. Put
+// five down and you get five separate little fences with grass between them.
+// props.js had already learned this exact lesson on the drystone wall — "it
+// used to be a 24px stub, which meant a row of them left gaps — visibly not a
+// barrier, which is FATAL FOR AN OCCLUDER" — and the palisade is an occluder
+// too: js/fields.js stops influence at it, and the player is looking through a
+// hole. The lesson was learned for one sprite and never carried to its sibling.
+//
+// Both numbers now come from format.js, so neither can drift again. Six stakes
+// at `round(i * 32 / 6)` — 0, 5, 11, 16, 21, 27 — which keeps the original
+// density AND lands the next tile's first stake exactly 5 px past the last, so
+// the rhythm crosses the joint without a doubled post.
+//
+// Found with tools/joinshot.mjs, which is the only probe here that draws
+// pieces TOUCHING. Every other one spaces its subjects out, and a fence spaced
+// out from itself looks fine.
+// ---------------------------------------------------------------------------
 //
 // Earth ramp: q outline, r shade, s core, t lit, u top. The lit face of a round
 // post is one column in from its left edge, not on the edge (props.js's
@@ -49,13 +76,17 @@ function sprite(name, [dx, up], rows, opts = {}) {
 // steps in from the left as it narrows.
 // ===========================================================================
 
-const STAKE_X = [0, 5, 10, 15, 20]; // 5 stakes, 5px apart along the tile edge
+const STAKES = 6; // per tile
+/** Stake feet along the run, spaced so the rhythm continues across the joint. */
+const STAKE_X = Array.from({ length: STAKES }, (_, i) => Math.round((i * (LINE_W - 1)) / STAKES));
 const STAKE_H = 13; // tip to ground
-const RUN = 23; // the fence's own horizontal run
-const FENCE_W = 24;
-const FENCE_H = 25;
-const slope = (x) => Math.round((x * 2) / 5); // 2 down per 5 across
-const baseAt = (x) => STAKE_H + slope(x); // stake 0's tip lands on row 0
+const RUN = LINE_W - 1; // 32 px of run; the 33rd column is the overlap
+const FENCE_W = LINE_W;
+const baseAt = (x) => STAKE_H + LINE_DROP(x); // stake 0's tip lands on row 0
+// Exactly as tall as the last stake's planted row, so there are no dead rows
+// under it. `up` in the anchor is measured from the bottom, so a sprite with
+// slack at the bottom is a sprite whose anchor arithmetic has a fudge in it.
+const FENCE_H = baseAt(STAKE_X[STAKES - 1]) + 2;
 
 function palisadeRows() {
   const g = Array.from({ length: FENCE_H }, () => new Array(FENCE_W).fill('.'));
@@ -65,10 +96,11 @@ function palisadeRows() {
 
 
   // Then the two rails, so the stakes draw over them and read as in front.
-  // Each rail follows the same 2:5 slope and is 2px deep — a rail seen very
-  // nearly edge-on, which is all a rail is at this size.
+  // Each rail follows the tile edge's own slope and is 2px deep — a rail seen
+  // very nearly edge-on, which is all a rail is at this size. It runs the FULL
+  // width including the overlap column, so two pieces meet rail to rail.
   for (const drop of [4, 9]) {
-    for (let x = 0; x < RUN; x++) {
+    for (let x = 0; x < FENCE_W; x++) {
       const y = baseAt(x) - drop;
       put(x, y, 't');
       put(x, y + 1, 'r');
@@ -97,9 +129,21 @@ function palisadeRows() {
   return g.map((r) => r.join('').replace(/\.+$/, '') || '.');
 }
 
-export const PALISADE_FENCE = sprite('palisade-fence', [0, 6], palisadeRows(), {
-  tags: ['structure', 'enclosure', 'timber'],
-});
+/**
+ * The anchor sits at the MIDPOINT OF THE RUN — column 16, on the ground line
+ * the stakes are planted in — because that is the pixel a linear piece puts on
+ * its tile's centre. With it there, a fence at tile (t+1, u) draws its first
+ * stake exactly where this one's 33rd column falls, at exactly the row this
+ * one's rail has reached. That is not a tuning: it is `LINE_W` and `LINE_DROP`
+ * doing what they say, and it is checkable — `node tools/joinshot.mjs --ids
+ * palisade-fence`.
+ */
+export const PALISADE_FENCE = sprite(
+  'palisade-fence',
+  [0, FENCE_H - 1 - (STAKE_H + LINE_DROP(RUN / 2))],
+  palisadeRows(),
+  { tags: ['structure', 'enclosure', 'timber'] }
+);
 
 // ===========================================================================
 // SEATED MAIDEN
@@ -119,9 +163,30 @@ export const PALISADE_FENCE = sprite('palisade-fence', [0, 6], palisadeRows(), {
 //     as a horizontal shelf. Seated is a SHAPE, not a pose you can shade in.
 // ===========================================================================
 
+/**
+ * ...AND THE SKIRT STEP 3 MISSED.
+ *
+ * This sprite ended with two rows of solid `'m'`. `'m'` is `SHADOW_KEY` and it
+ * is also `GRASS[0]`, so a baked contact shadow is GRASS-GREEN WHEREVER THE
+ * OBJECT STANDS — a green mat under a marble kore set on flagstone. Step 3
+ * deleted forty-three `skirt()` calls, fifty-three typed bands and thirty
+ * hand-rolled ones across props.js and decor.js, and swept this file too, but
+ * only its palisade loop: these two rows are typed into a literal sprite in a
+ * module the sweep had already visited.
+ *
+ * The rule, restated because it is the whole of it: **which plane does this
+ * shade lie on?** The world ground is the renderer's — js/render.js draws every
+ * object's contact in its own pass, sized from the art and coloured from the
+ * tile beneath. Only a surface of THIS OBJECT is the art's.
+ *
+ * What replaces them is what belongs there: her block is a square block, and
+ * the bottom of a square block in this projection is the front half of a
+ * diamond. The anchor does not move — it stays on the block's last full row,
+ * which is the base diamond's CENTRE, and the foot hangs below it.
+ */
 export const SEATED_MAIDEN = sprite(
   'seated-maiden',
-  [0, 2],
+  [0, 3],
   [
     '......BAAB......',
     '.....BADDAB.....', // hair, parted, dark against the face
@@ -149,9 +214,8 @@ export const SEATED_MAIDEN = sprite(
     '..ABCDDDDDDDCBA.',
     '..ABBCCCCCCCBBA.',
     '..ABBBBBBBBBBAA.', // front face of the block, a step darker
-    '...AAAAAAAAAA...',
-    '...mmmmmmmmmm...', // contact skirt, grass ramp
-    '....mmmmmmmm....',
+    '...AAAAAAAAAA...', // the anchor row: the base diamond's centre line
+    ...foot(10, MARBLE, 3), // ...and its front half, in the ground plane
   ],
   { tags: ['sculpture', 'marble', 'maiden'] }
 );
