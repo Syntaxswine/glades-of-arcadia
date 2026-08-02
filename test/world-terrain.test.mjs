@@ -223,6 +223,111 @@ test('a multi-tile object is never left straddling two heights', () => {
 });
 
 // ---------------------------------------------------------------------------
+// THE PILLAR TRICK — A FEATURE. DO NOT FIX IT.
+//
+// Owner's call, 2026-08-01: "you can remove the ground under an object allowing
+// it to float in space. this is a classic bug of that era that players would
+// use creatively to build things they otherwise couldn't, so i don't want it
+// corrected. that bug was most popular in Ultima Online."
+//
+// So this is not an oversight that survived; it is a decision, and these tests
+// exist to make a future session's "fix" fail loudly with the reason attached.
+//
+// ---------------------------------------------------------------------------
+// THE TWO FLOATS ARE DIFFERENT THINGS AND THIS IS THE LIKELIEST WAY TO LOSE IT.
+//
+// A whole session in July 2026 went into hunting "floating objects", and that
+// was a REAL bug of a completely different kind: art drawn too high inside its
+// own bitmap, so a building hovered over the front half of its own plot no
+// matter what the player did. `tools/anchor-audit.mjs` and
+// `test/sprite-anchors.test.mjs` guard against it.
+//
+//   THAT float  is in ART space. The object is wrong wherever you put it, the
+//               player did not ask for it, and it is a fault.
+//   THIS float  is in WORLD space. The art is correct; the player dug the
+//               ground out from under it on purpose, and got what they asked
+//               for. It is a toy.
+//
+// Anyone reading anchor-audit and then reaching for world.js to "finish the
+// job" is about to delete a feature. That is what these assertions are for.
+//
+// ---------------------------------------------------------------------------
+// WHERE THE LINE ACTUALLY IS, mechanically:
+//
+//   `_cohere` drags an object's WHOLE FOOTPRINT along with any edit that
+//   touches part of it, so an object can never straddle two heights or hang
+//   over a hole in its own plot. That is the "objects ride up" law above, and
+//   it stays.
+//
+//   It stops there, and the stopping is the feature. The tiles an object's ART
+//   OVERHANGS — everything outside its footprint — are ordinary ground and may
+//   be dug away freely. A tall thing on a 1x1 then stands on a pillar with its
+//   art hanging over air.
+//
+// TO KILL THIS FEATURE BY ACCIDENT you would extend `_cohere` past the
+// footprint to neighbours, or add an object guard to `_terrain`, or make
+// placement refuse a tile whose neighbours are lower. Don't.
+// ---------------------------------------------------------------------------
+
+test('FEATURE: the ground an object OVERHANGS may be dug away', () => {
+  const w = new World({ seed: 40 });
+  // A plateau, so there is something to dig down from.
+  const all = [];
+  for (let y = 3; y <= 8; y++) for (let x = 3; x <= 8; x++) all.push([x, y]);
+  w.applyTerrain('raise', all);
+  w.applyTerrain('raise', all);
+
+  const o = w.place('oak', 5, 5);
+  assert.ok(o, 'could not place the test object');
+  assert.equal(w.levelOf(o), 2);
+
+  // Dig the three tiles it faces — the ones its canopy and trunk hang over on
+  // screen, and which it does not occupy.
+  const dug = w.applyTerrain('lower', [[6, 5], [5, 6], [6, 6]]);
+  assert.ok(dug.ok, 'the world refused to dig beside an object — the guard grew');
+  assert.equal(dug.changed.length, 3, 'the edit spread past the tiles asked for');
+
+  assert.equal(w.levelOf(o), 2, 'the object rode down with ground it does not stand on');
+  assert.equal(w.levelAt(6, 6), 1, 'the ground in front did not drop');
+  assert.equal(w.objectAt(5, 5), o, 'digging beside the object disturbed it');
+});
+
+test('FEATURE: an object can be left on a pillar with the glade dug out around it', () => {
+  const w = new World({ seed: 41 });
+  const all = [];
+  for (let y = 2; y <= 9; y++) for (let x = 2; x <= 9; x++) all.push([x, y]);
+  w.applyTerrain('raise', all);
+  w.applyTerrain('raise', all);
+
+  const o = w.place('oak', 5, 5);
+  assert.ok(o);
+  const rest = all.filter(([x, y]) => !(x === 5 && y === 5));
+  w.applyTerrain('lower', rest);
+  w.applyTerrain('lower', rest);
+
+  assert.equal(w.levelOf(o), 2, 'the object did not keep its pillar');
+  assert.equal(w.levelAt(6, 5), 0, 'the glade around it did not come down');
+  assert.equal(w.objectAt(5, 5), o, 'the object was destroyed by being isolated');
+  // ...and, this being a cosy game where SPEC §0 says every edit is reversible,
+  // the player can put it back. A toy you cannot undo is a trap.
+  w.undo();
+  assert.equal(w.levelAt(6, 5), 1, 'the dig was not undoable');
+});
+
+test('FEATURE: nothing refuses a placement for standing next to a drop', () => {
+  // The other way this dies: not by changing the terrain tools, but by making
+  // PLACEMENT fussy about what is beside a tile. A 1x1 is flat by definition
+  // and its neighbours are none of its business.
+  const w = new World({ seed: 42 });
+  const all = [];
+  for (let y = 3; y <= 7; y++) for (let x = 3; x <= 7; x++) all.push([x, y]);
+  w.applyTerrain('raise', all);
+  w.applyTerrain('lower', [[6, 5], [5, 6], [6, 6]]);
+  const o = w.place('oak', 5, 5);
+  assert.ok(o, 'the world refused to plant on a tile with a step in front of it');
+});
+
+// ---------------------------------------------------------------------------
 // Placement legality
 // ---------------------------------------------------------------------------
 

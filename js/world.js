@@ -1106,6 +1106,27 @@ export class World {
    * (it cannot: footprints never overlap), and terminates in any case because
    * the set only ever grows and the map is finite.
    */
+  /**
+   * Expand an edited region to include the WHOLE FOOTPRINT of every object it
+   * touches, so an object can never be left straddling two heights or hanging
+   * over a hole in its own plot.
+   *
+   * ---------------------------------------------------------------------------
+   * IT STOPS AT THE FOOTPRINT, AND THE STOPPING IS A FEATURE. DO NOT WIDEN IT.
+   *
+   * The tiles an object's ART OVERHANGS — everything outside its footprint —
+   * are ordinary ground and may be dug away freely, which leaves a tall thing
+   * standing on a pillar with its art hanging over air. That is the Ultima
+   * Online trick, players built with it, and the owner has asked for it kept
+   * (2026-08-01): "a classic bug of that era that players would use creatively
+   * to build things they otherwise couldn't, so i don't want it corrected."
+   *
+   * Do not confuse it with the floating BUG that `tools/anchor-audit.mjs`
+   * hunts. That one is in ART space — a sprite drawn too high inside its own
+   * bitmap, wrong wherever the player puts it. This one is in WORLD space and
+   * the player asked for it. `test/world-terrain.test.mjs` holds three
+   * assertions that fail if this is "fixed", and says so in full.
+   */
   _cohere(tiles) {
     const set = new Set();
     const queue = [];

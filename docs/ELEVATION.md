@@ -128,6 +128,31 @@ Classic builder verbs, click-and-drag:
 Cosy guarantee holds absolutely: terrain editing is free, unlimited, and
 reversible. There is no terraforming cost and never will be.
 
+### The pillar trick is a FEATURE. Do not fix it.
+
+An object rides with its **own footprint** and no further. The tiles its art
+merely *overhangs* are ordinary ground, so you can dig them out and leave a tall
+thing standing on a pillar with its art hanging over air — and if you dig the
+whole glade but one tile, that is exactly what you get.
+
+Owner's call, 2026-08-01: *"this is a classic bug of that era that players would
+use creatively to build things they otherwise couldn't, so i don't want it
+corrected. that bug was most popular in Ultima Online."*
+
+**It is not the same thing as the floating bug `tools/anchor-audit.mjs` hunts.**
+That one lives in ART space — a sprite drawn too high inside its own bitmap,
+wrong wherever the player puts it, and a fault. This one lives in WORLD space:
+the art is right and the player dug the ground away on purpose. Anyone who reads
+the anchor audit and then goes to `world.js` to "finish the job" is about to
+delete a toy.
+
+Guarded by three `FEATURE:` assertions in `test/world-terrain.test.mjs` and a
+note on `_cohere` in `js/world.js`. It is also **undoable**, like every other
+edit — a toy you cannot take back is a trap.
+
+And it is deliberately **not taught**. Nothing in the UI mentions it; it is
+something a player finds by digging.
+
 ## Slopes are neutral; terraces are ordinary ground
 
 Three rules, from the owner:
