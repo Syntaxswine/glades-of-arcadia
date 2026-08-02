@@ -805,6 +805,38 @@ function checkArt() {
   report.artLanded = paid.map((d) => `${d.id} now draws '${d.art.wanted}'`);
   if (paid.length) ok(`${paid.length} placeable(s) draw their real art`, paid.map((d) => d.art.wanted).join(', '));
   if (debt.length) note(`${debt.length} placeable(s) still draw with an understudy sprite (see artDebt)`);
+
+  // --- FOUR FACINGS MEANS TWO DRAWINGS ------------------------------------
+  //
+  // js/iso.js §FACING: bit 0 of a facing is the mirror and bit 1 chooses
+  // between the art and its `back`. A `facings: 4` entry whose sprite has no
+  // `back` therefore offers the player four wheel positions that draw two
+  // pictures — the third and fourth are the first and second again, and the
+  // control silently does nothing for half its travel.
+  //
+  // That is exactly the fault `TURNS` was written to avoid from the other
+  // side ("the test for membership is not could it be flipped but WOULD
+  // FLIPPING IT VISIBLY CHANGE which way the thing is turned"), so it gets
+  // the same treatment. This has to live here rather than in the catalogue's
+  // own self-check because js/catalog.js does not import the art modules —
+  // it names sprites by string, on purpose.
+  const noBack = [];
+  for (const d of cat.CATALOG) {
+    if ((d.facings || 1) < 4 || !d.art || d.art.kind !== 'sprite') continue;
+    const s = registry.get(d.art.wanted) || registry.get(d.art.sprite);
+    if (!s || !s.back) noBack.push(`${d.id} -> '${(s && s.name) || d.art.sprite}'`);
+  }
+  if (noBack.length) {
+    fault('facings: 4 with only one drawing', noBack.join('; '));
+  } else {
+    const four = cat.CATALOG.filter((d) => (d.facings || 1) >= 4);
+    if (four.length) {
+      ok(
+        `${four.length} placeable(s) turn all four ways`,
+        four.map((d) => d.id).join(', ') + ' — each has a second drawing, so no wheel position repeats'
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

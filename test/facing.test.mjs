@@ -153,3 +153,88 @@ test('every other facing is a mirror, and every pair shares a drawing', () => {
   const drawings = new Set([0, 1, 2, 3].map(facingDrawing));
   assert.equal(drawings.size, 2);
 });
+
+// ---------------------------------------------------------------------------
+// THE SECOND DRAWING — bit 1 of the facing, and the first placeable to use it.
+//
+// The owner: *"ramps can go up a hill in any direction."* They could not.
+// js/art/decor.js authored one connector drawing and its section header
+// claimed the other three orientations were "a horizontal flip and/or a
+// re-anchor, which the renderer can do for free". The flip is free and it
+// buys the second uphill-AWAY direction; the two that come downhill at the
+// camera are a 180-degree rotation, which on screen needs a VERTICAL flip
+// too, and this game may never do that because the light is always from the
+// upper left. So they are a second drawing.
+// ---------------------------------------------------------------------------
+
+test('a connector has a second drawing, and it is a different picture', async () => {
+  const { EARTH_RAMP, EARTH_RAMP_NEAR } = await import('../js/art/decor.js');
+  assert.equal(EARTH_RAMP.back, EARTH_RAMP_NEAR, 'earth-ramp lost its back drawing');
+  assert.notEqual(EARTH_RAMP.rows.join('\n'), EARTH_RAMP_NEAR.rows.join('\n'));
+  // ...and NOT merely its mirror, which is the whole point: if the second
+  // drawing were reachable by flipping the first, it would not need to exist.
+  const flipped = EARTH_RAMP.rows.map((r) => r.split('').reverse().join('')).join('\n');
+  assert.notEqual(flipped, EARTH_RAMP_NEAR.rows.join('\n'));
+});
+
+test('the two drawings tilt opposite ways', async () => {
+  const { EARTH_RAMP, EARTH_RAMP_NEAR } = await import('../js/art/decor.js');
+  // The top of the silhouette per column. `square()` puts s = 0 on the N-W
+  // edge of the tile and s = 1 on the S-E one, so the away drawing lifts the
+  // LEFT of the sprite and the near drawing lifts the RIGHT. Lower y is
+  // higher on screen.
+  const topAt = (s, x) => {
+    let y = 0;
+    while (y < s.h && s.rows[y][x] === '.') y++;
+    return y;
+  };
+  const away = { l: topAt(EARTH_RAMP, 6), r: topAt(EARTH_RAMP, 57) };
+  const near = { l: topAt(EARTH_RAMP_NEAR, 6), r: topAt(EARTH_RAMP_NEAR, 57) };
+  assert.ok(away.l < away.r, `away ramp should be high on the left: ${JSON.stringify(away)}`);
+  assert.ok(near.r < near.l, `near ramp should be high on the right: ${JSON.stringify(near)}`);
+});
+
+test('four facings means two drawings — nothing claims four with one', async () => {
+  const decor = await import('../js/art/decor.js');
+  const props = await import('../js/art/props.js');
+  const extras = await import('../js/art/extras.js');
+  const reg = new Map();
+  for (const table of [decor.DECOR, props.PROPS, extras.EXTRAS]) {
+    for (const [k, v] of Object.entries(table || {})) if (v && v.rows) reg.set(k, v);
+  }
+  for (const d of CATALOG) {
+    if (facingsOf(d) < 4 || !d.art || d.art.kind !== 'sprite') continue;
+    const s = reg.get(d.art.wanted) || reg.get(d.art.sprite);
+    assert.ok(
+      s && s.back,
+      `${d.id} offers four wheel positions but its art has one drawing — ` +
+        `facings 2 and 3 would repeat 0 and 1 and the control would do nothing ` +
+        `for half its travel`
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// A CONNECTOR IS GROUND, so it casts no contact shadow.
+//
+// js/main.js has always passed `shadow: def.shadow` to the renderer and
+// js/render.js has always honoured `o.shadow === false`. The middle was never
+// written: js/catalog.js `normalise` is an explicit whitelist and `shadow` was
+// not in it, so the field could only ever be `undefined`. Third consumer in
+// this subsystem caught the same way — see `flatFooting`'s own note.
+// ---------------------------------------------------------------------------
+
+test('connectors lie in the ground plane and cast no contact shadow', () => {
+  const conn = CATALOG.filter((d) => d.connector);
+  assert.ok(conn.length >= 4, 'lost the connectors');
+  for (const d of conn) {
+    assert.equal(d.shadow, false, `${d.id} would sit in a dark pool wider than itself`);
+  }
+  // ...and NOTHING ELSE changed. The renderer tests `=== false`, so absence
+  // means "yes, as before"; a stray `false` here would silently delete the
+  // shadow under a statue.
+  for (const d of CATALOG) {
+    if (d.connector) continue;
+    assert.notEqual(d.shadow, false, `${d.id} quietly lost its contact shadow`);
+  }
+});

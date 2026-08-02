@@ -567,6 +567,30 @@ export async function catalogueSprites(known) {
 }
 
 /**
+ * Follow every `back` link, so a second drawing is not reported as dead art.
+ *
+ * A sprite reached only through another sprite's `back` is drawn by exactly
+ * the entries that draw its front — js/render.js picks between them on bit 1
+ * of the facing. Without this the census that was written to catch unreachable
+ * art would have flagged `earth-ramp-near` the day it was authored, which is
+ * the false positive that teaches people to stop reading a census.
+ */
+export function withBackDrawings(drawn, sprites) {
+  const byName = new Map(sprites.map((x) => [x.name, x.sprite]));
+  for (const [name, ids] of [...drawn]) {
+    let s = byName.get(name);
+    const seen = new Set([name]);
+    while (s && s.back && !seen.has(s.back.name)) {
+      seen.add(s.back.name);
+      const prev = drawn.get(s.back.name) || [];
+      drawn.set(s.back.name, [...new Set([...prev, ...ids])]);
+      s = byName.get(s.back.name) || s.back;
+    }
+  }
+  return drawn;
+}
+
+/**
  * The runs of the bottom contour that are HORIZONTAL — the actual offence,
  * located. Returns `{ x0, x1, y, len }` for every level run at least `min`
  * columns long.

@@ -35,7 +35,7 @@ const TRANSPARENT = '.';
 
 /** Validate and freeze a sprite definition. Throws loudly on malformed art. */
 export function defineSprite(def) {
-  const { name, rows, anchor, footprint = [1, 1], cycle = null, tags = [] } = def;
+  const { name, rows, anchor, footprint = [1, 1], cycle = null, tags = [], back = null } = def;
 
   if (!name || typeof name !== 'string') {
     throw new Error('defineSprite: a sprite needs a name');
@@ -71,7 +71,21 @@ export function defineSprite(def) {
     );
   }
 
-  return Object.freeze({ name, rows: Object.freeze(rows.slice()), w, h, anchor: Object.freeze(anchor.slice()), footprint: Object.freeze(footprint.slice()), cycle, tags: Object.freeze(tags.slice()) });
+  // THE SECOND DRAWING. `back` is this sprite seen from the other side — the
+  // half of the compass a horizontal mirror cannot reach, because reaching it
+  // would need a VERTICAL flip too and the light in this game is always from
+  // the upper left. js/iso.js §FACING: bit 0 of a facing is the mirror, bit 1
+  // chooses the drawing, and `back` is what bit 1 selects.
+  //
+  // IT LIVES ON THE ART, not in the catalogue, because the pairing is a fact
+  // about the pictures: an artist who draws a ramp climbing away and the same
+  // ramp climbing toward you has made ONE object with two views, and a
+  // catalogue key naming the second by string is a join that can go stale.
+  // js/render.js `artRaster` follows it; nothing else needs to know.
+  if (back && !(back.rows && back.anchor)) {
+    throw new Error(`defineSprite(${name}): back must be a sprite, not ${typeof back}`);
+  }
+  return Object.freeze({ name, rows: Object.freeze(rows.slice()), w, h, anchor: Object.freeze(anchor.slice()), footprint: Object.freeze(footprint.slice()), cycle, tags: Object.freeze(tags.slice()), back });
 }
 
 /**

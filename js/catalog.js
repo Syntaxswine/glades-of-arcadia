@@ -2334,6 +2334,30 @@ const TURNS = new Set([
   'axe-marker',
 ]);
 
+/**
+ * ...AND THE ONES WITH A SECOND DRAWING, which get all four.
+ *
+ * `TURNS` gives two facings because two is what one drawing can honestly
+ * express: the projection is symmetric about the vertical, so a horizontal
+ * flip is an exact quarter-turn of the world and costs no pixels.
+ *
+ * A CONNECTOR NEEDS FOUR, and cannot get them that way. Mirroring turns
+ * "ascends toward -tx" into "ascends toward -ty" — both of them uphill away
+ * from the camera. The two that come downhill AT you are a 180-degree
+ * rotation, which on screen is a horizontal flip AND a vertical one, and a
+ * vertical flip is forbidden here because the light is always from the upper
+ * left. So they are a second drawing, and decor.js now authors it:
+ * `EARTH_RAMP.back` is the same ramp climbing the other way.
+ *
+ * The owner: *"ramps can go up a hill in any direction."* They could not. A
+ * player who terraced a hill and wanted to climb it from the south had two of
+ * the four sides available and no way to see why.
+ *
+ * A name here without a `back` on its art would be a wheel position that draws
+ * the same picture twice, so the self-check below refuses that.
+ */
+const TURNS_FOUR = new Set(['earth-ramp']);
+
 function normalise(raw) {
   const z = raw.zone || NONE;
   const def = {
@@ -2354,6 +2378,35 @@ function normalise(raw) {
     requires: raw.requires ?? (raw.ground === 'water' || raw.ground === 'marsh' ? 'any' : 'land'),
     growth: raw.growth ?? null,
     connector: raw.connector === true,
+    // ------------------------------------------------------------------
+    // DOES THIS OBJECT CAST A CONTACT SHADOW ON THE GROUND?
+    //
+    // js/main.js:1255 has always passed `shadow: def.shadow` to the renderer
+    // and js/render.js has always honoured `o.shadow === false`. Both halves
+    // were written; the middle was not. This normaliser is an explicit
+    // whitelist — "a key that is not named here is silently dropped", as the
+    // note on `flatFooting` above says, having been caught by the same fault
+    // — and `shadow` was not named, so `def.shadow` could never be anything
+    // but `undefined` and the option was dead on arrival.
+    //
+    // A CONNECTOR IS GROUND. It does not stand on the tile, it IS the tile:
+    // a wedge of earth or a flight of steps filling the diamond and rising to
+    // meet the terrace beside it. Its silhouette has no base, and the runtime
+    // stamp sized one anyway — `groundCentre` gives r = 32 on a 64px ramp, so
+    // every ramp in the game sat in a dark pool wider than itself, poking out
+    // at the W and E corners where the wedge is thinnest.
+    //
+    // Same test as everywhere else in this arc: WHICH PLANE DOES THIS SHADE
+    // LIE ON? There is no gap between a ramp and the ground for a shadow to
+    // fall into. `js/art/decor.js` spriteAt already argues exactly this for
+    // paving — "an object that stands on the ground casts a shadow because it
+    // has a base, and a paving tile does not because it has none" — and a
+    // ramp is paving that climbs.
+    //
+    // `undefined` for everything else, deliberately: the renderer's test is
+    // `=== false`, so absence means "yes, as before" and no existing object
+    // changes. An entry may still say `shadow: false` for itself.
+    shadow: raw.shadow !== undefined ? raw.shadow : raw.connector === true ? false : undefined,
     crossing: raw.crossing === true,
     // A place you may cross WATER on foot — the bridge, the stepping stones,
     // the rocky ford. Distinct from `connector`, which is how you cross a
@@ -2373,7 +2426,10 @@ function normalise(raw) {
     // nothing. See TURNS above and js/iso.js §FACING. An entry may override
     // the list explicitly, which is how a second (back) drawing will raise one
     // of these to 4 without touching the set.
-    facings: Math.max(1, Math.min(FACINGS, raw.facings ?? (TURNS.has(raw.id) ? 2 : 1))),
+    facings: Math.max(
+      1,
+      Math.min(FACINGS, raw.facings ?? (TURNS_FOUR.has(raw.id) ? 4 : TURNS.has(raw.id) ? 2 : 1))
+    ),
   };
   return Object.freeze(def);
 }

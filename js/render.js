@@ -165,6 +165,7 @@ import {
   pickTileAt,
   snap,
   facingMirrored,
+  facingDrawing,
 } from './iso.js';
 
 import { RAMPS, ACCENT, PALETTE, resolve as basePalette, shade, contactShadow, cycleWater } from './palette.js';
@@ -528,9 +529,36 @@ function mirroredRaster(base) {
   const cv = makeCanvas(base.w, base.h);
   const ctx = ctxOf(cv);
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(base.w, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(base.canvas, 0, 0);
+  // ---------------------------------------------------------------------
+  // DONE IN PIXELS, NOT IN A TRANSFORM, and the reason is the instrument.
+  //
+  // This used to be `translate(w, 0); scale(-1, 1); drawImage(...)`, which
+  // is the idiomatic canvas flip and works perfectly in a browser. It also
+  // meant THE MIRROR COULD NOT BE LOOKED AT OUTSIDE ONE: every headless
+  // probe in tools/ runs on the shim in tools/headless-canvas.mjs, the shim
+  // implements the handful of context calls this renderer actually needed,
+  // and `translate`/`scale` were not among them — so the first probe ever to
+  // render a turned object died on `ctx.translate is not a function`.
+  //
+  // Half the facings in the game had therefore never been rendered by any
+  // tool, only by a human with a browser open. Reversing the rows costs one
+  // pass over a raster that is built once and cached forever, and it buys
+  // every offline instrument the ability to see a turned piece.
+  // ---------------------------------------------------------------------
+  const src = ctxOf(base.canvas).getImageData(0, 0, base.w, base.h);
+  const out = ctx.createImageData(base.w, base.h);
+  for (let y = 0; y < base.h; y++) {
+    for (let x = 0; x < base.w; x++) {
+      const s = (y * base.w + (base.w - 1 - x)) * 4;
+      const d = (y * base.w + x) * 4;
+      out.data[d] = src.data[s];
+      out.data[d + 1] = src.data[s + 1];
+      out.data[d + 2] = src.data[s + 2];
+      out.data[d + 3] = src.data[s + 3];
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  // The anchor moves with it: the pixel at `ax` ends up at `w - 1 - ax`.
   return { canvas: cv, ax: base.w - 1 - base.ax, ay: base.ay, w: base.w, h: base.h };
 }
 
@@ -538,11 +566,27 @@ function mirroredRaster(base) {
  * @returns {{canvas:HTMLCanvasElement, ax:number, ay:number, w:number, h:number}|null}
  */
 export function artRaster(art, variantKey = 'base', facing = 0) {
+  // THE SECOND DRAWING, first. `facingDrawing` is bit 1 of the facing and it
+  // selects between the art as drawn and its `back` — the view a horizontal
+  // mirror cannot reach, because reaching it needs a VERTICAL flip too and the
+  // light in this game is always from the upper left (js/iso.js §FACING).
+  //
+  // The connectors are the first placeables to use it: a ramp climbing away
+  // from the camera and a ramp climbing toward it are different pictures, and
+  // decor.js's own header used to claim otherwise and thereby cost the player
+  // half the compass. `back` is carried by the ART, not named in the
+  // catalogue, so the pairing cannot go stale — format.js §defineSprite.
+  //
+  // Bit 0 is handled below and still applies, so the four facings are two
+  // drawings times the mirror. A sprite with no `back` ignores bit 1, which is
+  // what keeps `facings: 2` meaning exactly what it meant before.
+  if (art && facingDrawing(facing) && art.back) {
+    return artRaster(art.back, variantKey, facing & 1);
+  }
+
   // A mirrored facing is the SAME drawing seen from the other side, so it is
   // cached against the same art under its own key rather than being rebuilt
-  // per frame. `facingDrawing` is reserved for a second (back) drawing, which
-  // no placeable has yet — when one does, it arrives as separate art and this
-  // line is where it will be chosen.
+  // per frame.
   if (art && facingMirrored(facing)) {
     const base = artRaster(art, variantKey, 0);
     return base ? cachedFor(art, `${variantKey}|mirror`, () => mirroredRaster(base)) : null;

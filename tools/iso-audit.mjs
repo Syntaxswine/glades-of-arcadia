@@ -31,7 +31,7 @@
 
 import {
   measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt, KNOWN_FLAT_FEET,
-  elevationScore, catalogueSprites,
+  elevationScore, catalogueSprites, withBackDrawings,
 } from './isogeom.mjs';
 
 const ALL = process.argv.includes('--all');
@@ -62,7 +62,7 @@ for (const name of AUDITED_MODULES) {
 // only annotates, so the table can say which flagged sprite is on screen and
 // which is a picture nothing points at.
 const known = new Set(sprites.map((x) => x.name));
-const drawnBy = await catalogueSprites(known);
+const drawnBy = withBackDrawings(await catalogueSprites(known), sprites);
 
 const rows = [];
 for (const { name, sprite: s, from } of sprites) {

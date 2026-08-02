@@ -109,6 +109,9 @@ function spriteAt(name, [ax, ay], g, opts = {}) {
     footprint: opts.footprint || [1, 1],
     tags: opts.tags || [],
     cycle: opts.cycle || null,
+    // The view from the other side, when this object has one. See
+    // format.js §defineSprite and js/iso.js §FACING.
+    back: opts.back || null,
   });
 }
 
@@ -2637,10 +2640,41 @@ export const MOSAIC_PANEL = tile(
 // rises exactly 16 px over one tile, and it does it in FOUR of the family's
 // 4 px treads.
 //
-// Orientation: all four ascend toward the UPPER LEFT (the -tx neighbour). The
+// ---------------------------------------------------------------------------
+// ORIENTATION, and this comment used to be WRONG in a way that cost the player
+// half the compass.
+//
+// It read: "all four ascend toward the UPPER LEFT (the -tx neighbour). The
 // other three orientations are a horizontal flip and/or a re-anchor, which the
 // renderer can do for free — authoring four rotations of each would be four
-// times the pixels for no new information.
+// times the pixels for no new information."
+//
+// The flip is real and it is free. What it gives you is the OTHER ramp that
+// climbs away from the camera: mirroring the screen's x axis swaps the two
+// tile axes, so ascending toward -tx becomes ascending toward -ty. Both of
+// those go uphill into the screen.
+//
+// It cannot give you the two that come DOWNHILL AT YOU. Ascending toward +tx
+// is the 180-degree rotation of ascending toward -tx, and a 180-degree
+// rotation on screen is a horizontal flip AND A VERTICAL ONE — which is not a
+// transform this game may use, because the light is always from the upper left
+// and flipping vertically puts the lit face underneath. A ramp tilted toward
+// the camera shows a different surface, a different silhouette and different
+// shading. It is a second drawing, and it always was.
+//
+// So: TWO DRAWINGS, FOUR FACINGS. `js/iso.js` §FACING has said exactly this
+// since it was written — bit 0 is the mirror, bit 1 chooses the drawing — and
+// this is the first placeable to use bit 1.
+//
+//     facing  rise      ascends toward   on screen
+//     0       1 - s     -tx              uphill, away to the upper LEFT
+//     1       (mirror)  -ty              uphill, away to the upper RIGHT
+//     2       s         +tx              uphill, toward the lower RIGHT
+//     3       (mirror)  +ty              uphill, toward the lower LEFT
+//
+// `square(x, y)` puts s = 0 on the W-N edge and s = 1 on the S-E edge, so
+// `1 - s` lifts the far side and `s` lifts the near one. That is the whole
+// difference between the two drawings; everything else is shared.
 // ===========================================================================
 
 // iso.js's, re-exported rather than re-typed — a connector that rises by a
@@ -2659,20 +2693,36 @@ function rampSurface(paintTop, paintFace, opts = {}) {
   const g = grid(TILE_W, H);
   const Y0 = LEVEL_H; // where the un-raised diamond would sit
   const step = opts.step || 0; // >0 quantises the rise into treads
+  // WHICH WAY IT CLIMBS, as a height field over the tile: 1 at the top of the
+  // slope, 0 at the foot. `1 - s` is the drawing that has always existed;
+  // `s` is its 180-degree twin, the one the mirror cannot reach. See the
+  // section header. Anything else here would not be a ramp between two
+  // adjacent levels, so the two are the whole set.
+  const near = !!opts.near;
+  const rise = near ? (sq) => sq.s : (sq) => 1 - sq.s;
   // BACK TO FRONT. Take one ran the loop front-to-back and every column's side
   // face was overpainted by the column behind it, which is why the earth ramp
   // came out a flat brown lozenge and the rock scramble came out solid black.
   for (let y = 0; y < TILE_H; y++) {
     const { x0, len } = rowSpan(y);
     for (let x = x0; x < x0 + len; x++) {
-      const { s } = square(x, y);
-      const raw = LEVEL_H * clamp(1 - s, 0, 1);
+      const raw = LEVEL_H * clamp(rise(square(x, y)), 0, 1);
       const lift = step ? Math.floor(raw / step) * step : Math.round(raw);
       const sy = Y0 + y - lift;
       // How far down to carry the side face: enough to cover the drop to the
       // next column forward, and all the way to the ground on the two lower
       // edges of the diamond, which is where the wedge is actually visible.
-      const edge = y >= TILE_H / 2 && (x <= x0 + 1 || x >= x0 + len - 2);
+      //
+      // ...EXCEPT THE EDGE IT CLIMBS. A ramp only exists against a step, and
+      // the step buries the edge the ramp meets it on. For the away-facing
+      // drawing that edge is N-W, at the back, and a face there was hidden by
+      // the ramp's own surface — so nobody ever had to say this. For the
+      // near-facing one it is S-E, which is a NEAR edge, and carrying a full
+      // 16 px wall down it painted a dark band straight across the terrace
+      // the ramp is joining: terrain draws before objects, so the ramp's own
+      // internal face lands on top of the tile that ought to hide it.
+      const climbing = near && x >= x0 + len - 2;
+      const edge = !climbing && y >= TILE_H / 2 && (x <= x0 + 1 || x >= x0 + len - 2);
       // A SMOOTH ramp must carry almost no face per column: adjacent columns
       // differ by half a pixel, so a 4 px face under each one showed as
       // corduroy ribbing all the way up the earth ramp. A stepped one needs a
@@ -2686,7 +2736,7 @@ function rampSurface(paintTop, paintFace, opts = {}) {
 }
 
 /** Earth ramp — rough, un-dressed, archaic. Bare trodden soil with a lip. */
-function earthRampGrid() {
+function earthRampGrid(near = false) {
   const { g, H } = rampSurface(
     (x, y) => {
       const n = hash(x, y, 33);
@@ -2702,9 +2752,22 @@ function earthRampGrid() {
     // The per-column face is painted in the SAME earth as the surface. Take
     // two used the darkest key and every row's one exposed pixel became a
     // stripe: the whole slope came out corduroy. The wedge's real side faces
-    // are on the diamond's two lower edges, and those still go dark.
-    (x, y, k, lift) => (lift > 3 && k > 1 ? 'q' : hash(x, y + k, 44) > 0.5 ? 't' : 's'),
-    { face: 1 }
+    // are on the diamond's two lower edges, and those still go dark —
+    // BUT IN TWO VALUES, NOT ONE.
+    //
+    // The away-facing ramp shows only a corner of its wedge and got away with
+    // a single darkest key. The near-facing one is nearly ALL wedge: its high
+    // end is the edge closest to the camera, so what you see is a 16 px end
+    // wall with a sliver of slope above it. In one value that wall reads as a
+    // hole in the ground rather than as a bank of earth — step 4's finding
+    // about generated feet, arriving at the top of the object instead of the
+    // bottom. The two lower edges of a diamond face opposite ways: the left
+    // one is turned toward the light and the right one away.
+    (x, y, k, lift) => {
+      if (lift <= 3 || k <= 1) return hash(x, y + k, 44) > 0.5 ? 't' : 's';
+      return x < TILE_W / 2 ? 'r' : 'q';
+    },
+    { face: 1, near }
   );
   // A scatter of stones holding the toe, and turf creeping over the edges.
   for (let i = 0; i < 26; i++) {
@@ -2718,13 +2781,20 @@ function earthRampGrid() {
   return { g, H };
 }
 {
+  const near = earthRampGrid(true);
   const r = earthRampGrid();
+  // eslint-disable-next-line no-var
+  var ERAMP_NEAR = spriteAt('earth-ramp-near', [32, LEVEL_H + 16], near.g, {
+    tags: ['decor', 'connector', 'earth', 'archaic', 'ramp'],
+  });
   // eslint-disable-next-line no-var
   var ERAMP = spriteAt('earth-ramp', [32, LEVEL_H + 16], r.g, {
     tags: ['decor', 'connector', 'earth', 'archaic', 'ramp'],
+    back: ERAMP_NEAR,
   });
 }
 export const EARTH_RAMP = ERAMP;
+export const EARTH_RAMP_NEAR = ERAMP_NEAR;
 
 /**
  * Stone stair — dressed steps, neoclassical. FOUR treads of the family profile,
@@ -3547,6 +3617,9 @@ export const DECOR = Object.freeze({
   'mosaic-panel': MOSAIC_PANEL,
   // connectors (ELEVATION.md)
   'earth-ramp': EARTH_RAMP,
+  // The uphill-toward-the-viewer drawing. Reachable through EARTH_RAMP.back,
+  // registered here so the shot tools and the sprite lab can look at it.
+  'earth-ramp-near': EARTH_RAMP_NEAR,
   'stone-stair': STONE_STAIR,
   'rock-scramble': ROCK_SCRAMBLE,
   'terrace-wall-stepped': TERRACE_WALL_STEPPED,

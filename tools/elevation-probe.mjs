@@ -36,6 +36,12 @@ try {
 } catch {
   tiles = null; // another owner's module, mid-flight — the probe does not care
 }
+let decor = null;
+try {
+  decor = await import('../js/art/decor.js');
+} catch {
+  decor = null; // same contract: the ramps scene skips itself rather than dying
+}
 
 const argv = process.argv.slice(2);
 const arg = (f, d) => {
@@ -145,6 +151,54 @@ const SCENES = {
       }
     }),
 
+  // ------------------------------------------------------------------------
+  // A PLATEAU WITH A WAY UP ON ALL FOUR SIDES.
+  //
+  // The owner: *"ramps can go up a hill in any direction."* They could not —
+  // decor.js authored one drawing and its header claimed the other three
+  // orientations were "a horizontal flip and/or a re-anchor, which the
+  // renderer can do for free". The flip is free and it gives you the second
+  // uphill-AWAY direction; the two that come downhill at the camera are a
+  // 180-degree rotation, which needs a vertical flip as well, which this game
+  // may not do because the light is always from the upper left.
+  //
+  // So this scene exists to be LOOKED AT. Four ramps, one per side of a square
+  // terrace, at facings 0..3, standing on the low ground with the step they
+  // climb immediately beside them — which is the only configuration that can
+  // tell a ramp from a wedge. Rendered on flat grass in a contact sheet, the
+  // near-facing drawing reads as a box; against the terrace it climbs, it
+  // reads as a ramp. Same lesson as tools/joinshot.mjs, one axis over.
+  // ------------------------------------------------------------------------
+  ramps: () => {
+    const sc = scene(13, 13, (s) => {
+      for (let y = 0; y < s.mapH; y++) {
+        for (let x = 0; x < s.mapW; x++) {
+          const i = s.i(x, y);
+          const on = x >= 5 && x <= 7 && y >= 5 && y <= 7;
+          s.levels[i] = on ? 1 : 0;
+          s.grass[i] = on ? 2 : 0;
+        }
+      }
+    });
+    const art = decor && decor.EARTH_RAMP;
+    if (art) {
+      // One per side of the terrace, each on the LOW ground with the step it
+      // climbs immediately beside it. facing 0 climbs toward -tx, 1 toward
+      // -ty (its mirror), 2 toward +tx (the second drawing) and 3 toward +ty.
+      // `shadow: false` is what js/catalog.js now normalises for every
+      // connector — a ramp IS the ground, so there is no gap under it for a
+      // shadow to fall into. Stated here too because this scene is built for
+      // render.js directly and never sees the catalogue.
+      sc.objects = [
+        { art, tx: 8, ty: 6, facing: 0, level: 0, shadow: false }, // -tx, up-left
+        { art, tx: 6, ty: 8, facing: 1, level: 0, shadow: false }, // -ty
+        { art, tx: 4, ty: 6, facing: 2, level: 0, shadow: false }, // +tx, at the camera
+        { art, tx: 6, ty: 4, facing: 3, level: 0, shadow: false }, // +ty
+      ];
+    }
+    return sc;
+  },
+
   // Everything at once, which is what the game looks like and therefore the
   // one to judge: terraces, a pinnacle, a fall, four grass types, contest.
   glade: () =>
@@ -175,6 +229,7 @@ const FRAMING = {
   waterfall: [7, 7],
   zoning: [9.5, 9.5],
   glade: [6.5, 6.5],
+  ramps: [6, 6],
 };
 
 function draw(name, opts = {}) {
@@ -210,6 +265,14 @@ for (const name of Object.keys(SCENES)) {
   made[name] = m;
   writeFileSync(join(OUT, `elev-${name}.png`), encodePNG(m.cv));
   log(`wrote elev-${name}.png`);
+}
+
+// ...and the ramps close up, because the whole question about them is what
+// happens in the eight pixels where the slope meets the step it climbs, and
+// at 1x that is eight pixels.
+if (made.ramps) {
+  writeFileSync(join(OUT, 'elev-ramps-close.png'), encodePNG(crop(made.ramps.cv, 190, 110, 260, 180, 3)));
+  log('wrote elev-ramps-close.png');
 }
 
 // PLANTED TERRACES — the shot that tests the depth sort with height. Trees on
