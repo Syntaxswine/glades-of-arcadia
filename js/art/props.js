@@ -51,7 +51,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor } from './format.js';
+import { defineSprite, padToAnchor, groundFoot } from './format.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -1520,6 +1520,8 @@ export const PLANE_TREE = (() => {
   clump(g, 61, 15, 16, 11, LEAF, { seed: 5.5 });
   clump(g, 41, 11, 20, 11, LEAF, { seed: 6.1 });
   shadeCanopy(g);
+  // The bole meets the ground in the ground plane — see groundFoot.
+  groundFoot(g, BARK, { round: true });
   return composed('plane-tree', g, [42, 77], { tags: ['tree', 'centaur', 'naiad', 'shade', 'water-loving'] });
 })();
 
@@ -1636,6 +1638,8 @@ export const ANCIENT_OAK = (() => {
   clump(g, 33, 11, 16, 10, LEAF, { seed: 7.3 });
   clump(g, 56, 12, 15, 10, LEAF, { seed: 8.8 });
   shadeCanopy(g);
+  // The bole meets the ground in the ground plane — see groundFoot.
+  groundFoot(g, BARK, { round: true });
   return composed('ancient-oak', g, [44, 96], { tags: ['tree', 'satyr', 'centaur', 'unicorn', 'maturity', 'shade'] });
 })();
 
@@ -1782,6 +1786,8 @@ export const HALF_BURIED_PITHOS = (() => {
     if (!'qrstu'.includes(peek(g, sx, sy))) continue;
     put(g, sx, sy, nz(i, 7) > 0.6 ? '1' : '6');
   }
+  // A buried jar sits in a round hollow, so its foot is an ellipse.
+  groundFoot(g, 'PQRS', { round: true });
   return composed('half-buried-pithos', g, [30, 41], {
     tags: ['prop', 'terracotta', 'satyr', 'centaur', 'wine', 'wildness'],
   });
@@ -2990,7 +2996,6 @@ function hedgeRun(name, opt) {
       const t = (y - near) / high;
       put(g, x, y, tex(x, y, t < 0.16 ? 2 : t < 0.78 ? 1 : 0, 2));
     }
-    if (arch === null) for (let k = 1; k <= 3; k++) put(g, x, foot + k, 'm');
     // The cut edge of clipped foliage is PALER — you are looking at fresh leaf
     // ends. It is what makes an opening read as cut rather than as damage, and
     // it is the only light anywhere in the lower half of the arch sprite.
@@ -3089,7 +3094,6 @@ export const DRYSTONE_WALL = (() => {
       if (t > 0.82) i -= 1;
       put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
     }
-    for (let k = 1; k <= 3; k++) put(g, x, foot + k, 'm');
   }
   return composed('drystone-wall', g, [32, Math.round(y0 + 16 + deep + high)], {
     tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'],

@@ -60,7 +60,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor } from './format.js';
+import { defineSprite, padToAnchor, foot, groundFoot } from './format.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -327,41 +327,6 @@ function plinth(w, dieH, ramp = MARBLE, flutes = 0) {
 }
 
 /**
- * The front half of a base diamond `ww` wide, as rows, indented by `pad`.
- *
- * Row `k` covers the columns still inside the diamond that far down, so each
- * edge steps two across for one down — the only slope this projection has. The
- * lowest row is two pixels wide, which is what a vertex looks like at this
- * scale and is nine pixels under the audit's floor.
- *
- * IT IS SHADED AS TWO FACES, and the first version was not. A solid wedge in
- * one value is geometrically correct and reads as a dark spike stuck under the
- * object — the shape says "block", the shading says "shadow", and the shading
- * wins at 20 px. The front of a square block in this projection IS two faces
- * meeting at the front vertex: the left one turned toward the light, the right
- * one away. One step of the ramp between them is the whole difference between
- * a base and a smudge, and it costs nothing.
- */
-function foot(ww, R, pad = 0) {
-  const hw = ww / 2;
-  const cx = (ww - 1) / 2;
-  const deep = Math.max(1, Math.round(hw * GROUND_ELLIPSE));
-  const rows = [];
-  for (let k = 1; k <= deep; k++) {
-    let s = '';
-    for (let x = 0; x < ww; x++) {
-      // How far this column reaches below the diamond's widest line.
-      const reach = (hw - Math.abs(x - cx)) * GROUND_ELLIPSE;
-      if (k > reach) { s += '.'; continue; }
-      const edge = k > reach - 1; // the outline, always the darkest step
-      s += edge ? R[0] : x < cx ? R[2] : R[1];
-    }
-    rows.push('.'.repeat(pad) + s + '.'.repeat(pad));
-  }
-  return rows;
-}
-
-/**
  * Rows of plinth(w, dieH) DOWN TO THE ANCHOR: cap (3) + die + base (4).
  * Callers stack on this, and the foot hangs below it — see `plinth`.
  */
@@ -383,7 +348,6 @@ function stamp(g, rowsArr, x0, y0) {
     for (let x = 0; x < row.length; x++) if (row[x] !== '.') put(g, x0 + x, y0 + i, row[x]);
   });
 }
-
 /**
  * A member running along the +tx axis. One tile step is 32 px across and 16 px
  * down, so everything linear steps 1 down per 2 across and a sprite drawn 33
@@ -472,9 +436,6 @@ function benchGrid() {
       put(g, x + w - 1, ly + k, 'A');
       if (k === 0 || k === 10) hline(g, x + 1, x + w - 2, ly + k, 'E');
     }
-    hline(g, lx, lx + 9, ly + 12, 'A');
-    hline(g, lx - 2, lx + 11, ly + 13, 'm');
-    hline(g, lx - 1, lx + 10, ly + 14, 'm');
   }
   // The seat: one slab, with the two joints a mason would leave in a 3 m bench.
   slabBackEdge(g, X0, TOP, LINE_W, 'A');
@@ -572,16 +533,6 @@ function exedraGrid(ramp = ROCK) {
       put(g, x, foot - WALL - 1, ramp[n]);
       put(g, x, foot + 7, ramp[0]);
     }
-    hline(g, x0 - 3 + (dir < 0 ? -2 : 0), x0 + 6 + (dir < 0 ? -2 : 0), foot + 8, 'm');
-  }
-
-  // Skirt under the seat's front arc only.
-  for (let a = A0 - 4; a <= A1 + 4; a += 0.4) {
-    const th = (a * Math.PI) / 180;
-    const ri = RX - DEPTH;
-    const xi = cx + ri * Math.cos(th);
-    const yi = SEAT + ri * (RY / RX) * Math.sin(th);
-    put(g, xi, yi + 4, 'm');
   }
   return g;
 }
@@ -695,12 +646,6 @@ function exedraMarbleGrid(ramp = MARBLE) {
         put(g, x, top + dy + 1 + j, K(j === RISER - 1 ? 0.3 : x < cx ? 1.5 : 0.9));
       }
     }
-  }
-  // The contact skirt on the ground, along the podium's own front edges.
-  for (let x = cx - 64; x <= cx + 64; x++) {
-    const dy = 32 * (1 - Math.abs(x - cx) / 64);
-    put(g, x, AY + dy + 1, 'm');
-    if (Math.abs(x - cx) < 58) put(g, x, AY + dy + 2, 'm');
   }
 
   // ---- the ground contact ---------------------------------------------------
@@ -847,13 +792,12 @@ function exedraMarbleGrid(ramp = MARBLE) {
       for (let y = front; y <= cy - 2; y++) put(g, ax + dx, y, K(3.3 - ((dx + ARM) / (2 * ARM)) * 2.4));
       put(g, ax + dx, front, K(0.6)); // the arris under the coping
     }
-    // The base moulding, overhanging by one, and its contact skirt.
+    // The base moulding, overhanging by one. Its contact skirt is gone: the
+    // renderer draws that now, in the colour of whatever this is standing on.
     for (let dx = -ARM - 1; dx <= ARM + 1; dx++) {
       put(g, ax + dx, cy - 1, K(3.2 - ((dx + ARM) / (2 * ARM)) * 1.6));
       put(g, ax + dx, cy, K(0.4));
     }
-    hline(g, ax - ARM - 2, ax + ARM + 2, cy + 1, 'm');
-    hline(g, ax - ARM, ax + ARM, cy + 2, 'm');
   }
 
   return g;
@@ -909,6 +853,8 @@ function amphoraGrid(withPlinth) {
     for (let i = -w; i <= w; i++) put(g, cx + i, base + k, roundKey(i, w + 0.5, TERRA));
   }
   hline(g, cx - 8, cx + 8, base + 3, 'P');
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, TERRA, { round: true });
   return { g, cx, ay: base + 4 };
 }
 {
@@ -962,6 +908,8 @@ function kraterGrid() {
     }
   }
   const base = KRATER_PROFILE.length + 1;
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, TERRA, { round: true });
   return { g, cx, ay: base };
 }
 {
@@ -1090,6 +1038,8 @@ function cachePotGrid() {
   revolve(g, cx, 22, pot, { ramp: TERRA });
   drum(g, cx, 23, 10, 2, { ramp: TERRA, rim: true }); // the rim, over the foliage
   const base = 37;
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, TERRA, { round: true });
   return { g, cx, ay: base };
 }
 
@@ -1175,7 +1125,6 @@ function arbourSeatGrid() {
     const y = 6 + LINE_DROP(i) + Math.round(D / 2);
     vline(g, x, y, y + 2, 's');
   }
-  hline(g, X0 - 2 * D - 2, X0 + LEN, 50, 'm');
   return g;
 }
 export const ARBOUR_SEAT = spriteAt('arbour-seat', [18, 46], arbourSeatGrid(), {
@@ -1456,10 +1405,6 @@ function balustradeGrid() {
   slabBackEdge(g, X0, TOP, LINE_W, 'A');
   slab(g, X0, TOP, LINE_W, DEPTH, (a, b) => (b < 1 ? 'D' : 'E'));
   slabFace(g, X0, TOP, LINE_W, DEPTH, 3, (i, k) => (k === 2 ? 'A' : k === 0 ? 'D' : 'B'));
-  for (let i = 0; i < LINE_W; i++) {
-    put(g, X0 + i - 2 * DEPTH, TOP + LINE_DROP(i) + DEPTH + 22, 'm');
-    put(g, X0 + i - 2 * DEPTH, TOP + LINE_DROP(i) + DEPTH + 23, 'm');
-  }
   return g;
 }
 export const BALUSTRADE = spriteAt('balustrade', [10, 29], balustradeGrid(), {
@@ -1523,8 +1468,6 @@ function pergolaArchGrid() {
   };
   drape(1, 19, 15, 1);
   drape(38, 19, 8, 4);
-  hline(g, 2, 12, 49, 'm');
-  hline(g, 32, 42, 49, 'm');
   return g;
 }
 export const PERGOLA_ARCH = spriteAt('pergola-arch', [21, 48], pergolaArchGrid(), {
@@ -1602,10 +1545,6 @@ function ruinedArchwayGrid() {
       if (peek(g, x, y) === 'w' && hash(x, y, 37) > 0.95) put(g, x, y, 'k');
     }
   }
-  hline(g, cx - R - 9, cx + 3 - R, SPRING + 15, 'm');
-  hline(g, cx - R - 8, cx + 2 - R, SPRING + 16, 'm');
-  hline(g, cx + R - 4, cx + R + 11, SPRING + 15, 'm');
-  hline(g, cx + R - 3, cx + R + 10, SPRING + 16, 'm');
   return g;
 }
 export const RUINED_ARCHWAY = spriteAt('ruined-archway', [24, 51], ruinedArchwayGrid(), {
@@ -1724,13 +1663,6 @@ function tholosGrid() {
   revolve(g, cx, APEXY(ENT) - 6, [1, 2, 3, 3, 2, 1, 1], { ramp: MARBLE }); // finial
 
   // --- contact skirt around the bottom step -------------------------------
-  for (let dx = -52; dx <= 52; dx++) {
-    const t = 1 - (dx * dx) / (52 * 52);
-    if (t < 0) continue;
-    const yb = GROUND - RISER - 25 + 25 * Math.sqrt(t) + RISER;
-    put(g, cx + dx, yb + 1, 'm');
-    put(g, cx + dx, yb + 2, 'm');
-  }
   return g;
 }
 export const THOLOS = spriteAt('tholos', [57, 88], tholosGrid(), {
@@ -1827,12 +1759,6 @@ function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
     if (hash(fx, 9, seed + 6) < nickRate * 0.7) put(g, fx, fy, ramp[n - 1]);
   }
 
-  for (let i = 0; i < LINE_W; i++) {
-    const fx = X0 + i - 2 * D;
-    const fy = TOP + LINE_DROP(i) + D + h + 1;
-    put(g, fx, fy, 'm');
-    put(g, fx, fy + 1, 'm');
-  }
   return { g, ax: X0 + 16 - D, ay: TOP + LINE_DROP(16) + D + h + 1 };
 }
 
@@ -1911,12 +1837,6 @@ function hedgeArchGrid() {
   });
   for (let i = 0; i < LINE_W; i++) {
     if (hash(X0 + i, 0, 96) < 0.1) put(g, X0 + i, TOP + LINE_DROP(i), '.');
-    const fx = X0 + i - 2 * D;
-    const fy = TOP + LINE_DROP(i) + D + h + 1;
-    if (!inArch(i, 0)) {
-      put(g, fx, fy, 'm');
-      put(g, fx, fy + 1, 'm');
-    }
   }
   return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + h + 1 };
 }
@@ -2059,13 +1979,8 @@ function tieredFountainGrid() {
     for (let y = 17; y < 24; y++) put(g, cx + side * 7, y, y > 21 ? 'H' : 'J');
     for (let y = 29; y < 38; y++) put(g, cx + side * 13, y, y > 34 ? 'H' : 'J');
   }
-  for (let dx = -26; dx <= 26; dx++) {
-    const t = 1 - (dx * dx) / 676;
-    if (t < 0) continue;
-    const yb = 40 + 12 * Math.sqrt(t) + 7;
-    put(g, cx + dx, yb, 'm');
-    put(g, cx + dx, yb + 1, 'm');
-  }
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, MARBLE, { round: true });
   return g;
 }
 export const FOUNTAIN_TIERED = spriteAt('fountain-tiered', [25, 58], tieredFountainGrid(), {
@@ -2147,7 +2062,8 @@ function wallFountainGrid() {
     put(g, cx - hw, 39 + dy, 'A');
     put(g, cx + hw, 39 + dy, 'A');
   }
-  hline(g, cx - 16, cx + 16, 51, 'm');
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, MARBLE, { round: true });
   return g;
 }
 export const WALL_FOUNTAIN = spriteAt('wall-fountain', [18, 50], wallFountainGrid(), {
@@ -2175,12 +2091,8 @@ function jetBasinGrid() {
       put(g, cx + r * Math.cos(th), 20 + (r / 2) * Math.sin(th), a % 2 ? 'K' : 'J');
     }
   }
-  for (let dx = -23; dx <= 23; dx++) {
-    const t = 1 - (dx * dx) / 529;
-    if (t < 0) continue;
-    const yb = 20 + 10.5 * Math.sqrt(t) + 5;
-    put(g, cx + dx, yb, 'm');
-  }
+  // A turned base is a circle on the ground: an ellipse, not a diamond.
+  groundFoot(g, MARBLE, { round: true });
   return g;
 }
 export const JET_BASIN = spriteAt('jet-basin', [22, 32], jetBasinGrid(), {
@@ -2347,11 +2259,6 @@ function rillGrid() {
   // Near kerb, sitting on the channel's near edge.
   const nx = wx - 2 * CHAN;
   const ny = wy + CHAN - 2;
-  slab(g, nx, ny, LINE_W, KERB, (a, b) => (b < 1 ? 'D' : 'E'));
-  slabFace(g, nx, ny, LINE_W, KERB, 3, (i, k) => (k === 2 ? 'A' : k === 0 ? 'C' : 'B'));
-  for (let i = 0; i < LINE_W; i++) {
-    put(g, nx + i - 2 * KERB, ny + LINE_DROP(i) + KERB + 4, 'm');
-  }
   return { g, ax: nx + 16 - KERB, ay: ny + LINE_DROP(16) + KERB + 4 };
 }
 const RILL_G = rillGrid();
@@ -2959,7 +2866,6 @@ function terraceWallGrid() {
       else if (hash(Math.floor((x + course * 4) / 9), course, 83) > 0.82) key = 'C';
       put(g, x, top + k, key);
     }
-    put(g, x, top + LEVEL_H + 3, 'm');
   }
 
   // PASS 3 — the flight let into the middle third, drawn last so its nosings
@@ -2974,14 +2880,6 @@ function terraceWallGrid() {
       const cheek = t < 0.37 || t > 0.63;
       put(g, x, sy, cheek ? 'C' : 'E');
       for (let k = 1; k <= RISER + 1; k++) put(g, x, sy + k, k === 1 ? 'B' : k > RISER ? 'A' : cheek ? 'B' : 'C');
-    }
-  }
-  for (let x = 0; x < TILE_W; x++) {
-    for (let y = H - 2; y > 0; y--) {
-      if (peek(g, x, y) !== '.') {
-        put(g, x, y + 1, 'm');
-        break;
-      }
     }
   }
   return g;
@@ -3148,14 +3046,6 @@ function rockOutcropGrid() {
   }
 
   // The contact skirt, continuous along the plot's front edges. Drawn per
-  // COLUMN and never per row: the foot jitters a pixel either way to keep the
-  // mass irregular, and a skirt that follows the jitter is a dotted green
-  // fringe running round the object like a caterpillar rather than a shadow.
-  for (let x = cx - HW; x <= cx + HW; x++) {
-    const lo = Math.round(front(x));
-    put(g, x, lo + 1, 'm');
-    if (Math.abs(x - cx) < HW - 6) put(g, x, lo + 2, 'm');
-  }
   return { g, ay: AY };
 }
 {
@@ -3354,14 +3244,6 @@ function caveMouthWoodedGrid() {
     }
   }
 
-  // ---- the ground contact --------------------------------------------------
-  // Continuous, never dotted: a shadow on the ground does not care that the
-  // thing casting it has a ragged foot.
-  for (let x = cx - HW; x <= cx + HW; x++) {
-    const lo = Math.round(front(x));
-    put(g, x, lo + 1, 'm');
-    if (Math.abs(x - cx) < HW - 5) put(g, x, lo + 2, 'm');
-  }
   return g;
 }
 export const CAVE_MOUTH_WOODED = spriteAt('cave-mouth-wooded', [52, 72], caveMouthWoodedGrid(), {
@@ -3517,8 +3399,6 @@ function axeMarkerGrid() {
       }
     }
   }
-  hline(g, cx - 15, cx + 13, FOOT + 2, 'm');
-  hline(g, cx - 12, cx + 11, FOOT + 3, 'm');
   return g;
 }
 export const AXE_MARKER = spriteAt('axe-marker', [15, 46], axeMarkerGrid(), {

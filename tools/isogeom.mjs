@@ -592,16 +592,29 @@ export const AUDITED_MODULES = ['props', 'decor', 'tiles', 'extras', 'clumps'];
  * tests fail in both directions.
  */
 export const KNOWN_FLAT_FEET = new Set([
-  // ROUND FEET, still to do: vessels and basins whose base is a turned circle,
-  // so they want an ELLIPSE rather than the plinth's diamond.
-  'amphora', 'krater-wide', 'cache-pot',
-  'jet-basin', 'wall-fountain', 'fountain-tiered',
-  // LINEAR, still to do: their contact is a strip along the run, not a blob,
-  // and each is currently flagged for a hand-rolled 'm' skirt drawn as a flat
-  // row rather than for its own base — see the hand-rolled-skirt sweep.
-  'balustrade', 'arbour-seat', 'axe-marker',
-  // props.js composed grids, still to do
-  'sleeping-satyr', 'half-buried-pithos', 'ancient-oak', 'plane-tree',
+  // ---------------------------------------------------------------------
+  // TWO LEFT, and both are here because a GENERATED foot would be a lie.
+  // Everything a diamond or an ellipse could honestly answer has been
+  // answered; these two need a human to redraw a shape, not a helper to
+  // append one, which is exactly the distinction this list is for.
+
+  // A BROKEN MARBLE SLAB, 47 px of it, and the project's hero sprite. A
+  // generated diamond foot is 11 rows deep at that width and reads as a
+  // pyramid — it was built, looked at, and reverted. The slab wants drawing
+  // ISOMETRICALLY instead: a parallelogram top face and a bottom edge that
+  // runs 1-in-2 across the whole width rather than a symmetric vertex. That
+  // is a redraw of the most carefully made sprite in the game and it belongs
+  // to whoever owns the art, not to a sweep.
+  'sleeping-satyr',
+
+  // A LINEAR RUN, and its contact is a STRIP along the +tx axis, not a blob:
+  // `LINE_W = 33` is "32 px of run plus one overlap column", so a row of them
+  // butts into one continuous piece and its shade has to butt too. Blocked on
+  // the same open question as the runtime shadow's scalloping — the renderer
+  // draws one ellipse per object and ellipses on adjacent tiles do not tile.
+  // Fixing the art and fixing the stamp are the same decision; see the shadow
+  // arc notes in proposals/.
+  'balustrade',
 ]);
 
 /**

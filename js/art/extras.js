@@ -63,12 +63,6 @@ function palisadeRows() {
     if (x >= 0 && x < FENCE_W && y >= 0 && y < FENCE_H) g[y][x] = k;
   };
 
-  // Contact skirt first (grass ramp — see the header), so everything else
-  // draws over it and the skirt only ever shows where the timber does not.
-  for (let x = -1; x < RUN + 2; x++) {
-    put(x, baseAt(x) + 1, 'm');
-    put(x, baseAt(x) + 2, 'm');
-  }
 
   // Then the two rails, so the stakes draw over them and read as in front.
   // Each rail follows the same 2:5 slope and is 2px deep — a rail seen very

@@ -320,3 +320,108 @@ export function decode(sprite, resolve) {
 }
 
 export { TRANSPARENT };
+
+// ---------------------------------------------------------------------------
+// THE FOOT. Shared by props.js and decor.js, which keep separate copies of
+// almost every other grid helper on purpose — but not of this one. Both files
+// draw objects that stand on the same ground, and a base that meets it two
+// different ways is the seam the whole shadow arc was about.
+/**
+ * The front half of a base diamond `ww` wide, as rows, indented by `pad`.
+ *
+ * Row `k` covers the columns still inside the diamond that far down, so each
+ * edge steps two across for one down — the only slope this projection has. The
+ * lowest row is two pixels wide, which is what a vertex looks like at this
+ * scale and is nine pixels under the audit's floor.
+ *
+ * IT IS SHADED AS TWO FACES, and the first version was not. A solid wedge in
+ * one value is geometrically correct and reads as a dark spike stuck under the
+ * object — the shape says "block", the shading says "shadow", and the shading
+ * wins at 20 px. The front of a square block in this projection IS two faces
+ * meeting at the front vertex: the left one turned toward the light, the right
+ * one away. One step of the ramp between them is the whole difference between
+ * a base and a smudge, and it costs nothing.
+ */
+export function foot(ww, R, pad = 0, round = false) {
+  const hw = ww / 2;
+  const cx = (ww - 1) / 2;
+  const deep = Math.max(1, Math.round(hw * GROUND_ELLIPSE));
+  const rows = [];
+  for (let k = 1; k <= deep; k++) {
+    let s = '';
+    for (let x = 0; x < ww; x++) {
+      // How far this column reaches below the base's widest line. A SQUARE
+      // base is a diamond, so its edge falls away linearly; a TURNED one — an
+      // urn's ring, a basin's bowl — is a circle, so its edge falls away as a
+      // chord. Same foreshortening, different corner.
+      const d = Math.abs(x - cx) / hw;
+      const reach = (round ? Math.sqrt(Math.max(0, 1 - d * d)) : 1 - d) * hw * GROUND_ELLIPSE;
+      if (k > reach) { s += '.'; continue; }
+      const edge = k > reach - 1; // the outline, always the darkest step
+      s += edge ? R[0] : x < cx ? R[2] : R[1];
+    }
+    rows.push('.'.repeat(pad) + s + '.'.repeat(pad));
+  }
+  return rows;
+}
+
+/**
+ * Give a generated grid the foot its own base implies, and stamp it in place.
+ *
+ * The base is found rather than declared: the deepest opaque row, and the run
+ * of columns that reach it. Every one of these objects already draws its base
+ * as a flat line at a place its own arithmetic decided, so asking the grid
+ * where that line ended up is both shorter and harder to get wrong than
+ * re-deriving `cx` and a width at each call site — which is how four buildings
+ * ended up hovering over their own shadows in July.
+ */
+export function groundFoot(g, R, { round = false } = {}) {
+  let deepest = -1;
+  const low = [];
+  for (let x = 0; x < g[0].length; x++) {
+    let y = g.length - 1;
+    while (y >= 0 && g[y][x] === '.') y--;
+    low[x] = y;
+    if (y > deepest) deepest = y;
+  }
+  let x0 = -1;
+  let x1 = -1;
+  for (let x = 0; x < low.length; x++) {
+    if (low[x] < deepest) continue;
+    if (x0 === -1) x0 = x;
+    x1 = x;
+  }
+  if (x0 === -1) return;
+  const rows = foot(x1 - x0 + 1, R, 0, round);
+  // Make room. A base clipped by the bottom of its own grid is a flat
+  // horizontal edge — the exact fault this removes, by the back door.
+  while (g.length < deepest + 1 + rows.length) g.push(new Array(g[0].length).fill(TRANSPARENT));
+  rows.forEach((row, i) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] !== TRANSPARENT) g[deepest + 1 + i][x0 + x] = row[x];
+    }
+  });
+}
+
+/**
+ * Rows of plinth(w, dieH) DOWN TO THE ANCHOR: cap (3) + die + base (4).
+ * Callers stack on this, and the foot hangs below it — see `plinth`.
+ */
+const plinthH = (dieH) => 3 + dieH + 4;
+
+/**
+ * Stamp a row array into a grid at (x, y), '.' meaning leave alone.
+ *
+ * IT MAKES ROOM DOWNWARD. `put` silently drops anything past the last row, and
+ * a base clipped by the bottom of its own grid is a flat horizontal edge — the
+ * exact fault `plinth`'s foot exists to remove, arriving by the back door. This
+ * is the same growth `skirt()` used to do for the same reason, and it is free:
+ * the anchor is measured from the TOP, so appending rows moves nothing.
+ */
+function stamp(g, rowsArr, x0, y0) {
+  const need = y0 + rowsArr.length;
+  while (g.length < need) g.push(new Array(g[0].length).fill('.'));
+  rowsArr.forEach((row, i) => {
+    for (let x = 0; x < row.length; x++) if (row[x] !== '.') put(g, x0 + x, y0 + i, row[x]);
+  });
+}
