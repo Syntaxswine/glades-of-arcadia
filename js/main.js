@@ -2060,6 +2060,10 @@ async function bootOnce(shell = {}) {
         on: {
           undo: doUndo,
           audio: (on) => audio.setMuted(!on),
+          // The brush changed size, so the preview under the cursor is now the
+          // wrong shape. input.js owns the ghost and is built after this call,
+          // which is why this is a late read rather than a direct reference.
+          brush: () => invoke(input, ['refreshGhost']),
         },
       });
     } catch (err) {

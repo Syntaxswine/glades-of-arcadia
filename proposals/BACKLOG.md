@@ -1,6 +1,6 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever and the back rim)
+Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever, the back rim and the brush)
 against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** §8, which is now the
 keystone for anything about which way an object faces or how two pieces meet.
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
@@ -668,7 +668,7 @@ undoable and deliberately untaught.
 
 ---
 
-## 4o · THE CLOCK LEVER AND THE BACK RIM ✅ SHIPPED (2026-08-03)
+## 4o · THE CLOCK LEVER, THE BACK RIM AND THE BRUSH ✅ SHIPPED (2026-08-03)
 
 Full write-up: **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md` §8.** Both were owner
 asks on the same day, and they are the same ask twice: a garden is something you
@@ -705,13 +705,29 @@ the bug**: fed the old algorithm it reports 32 columns of 62 and 30 gaps.
 Third blind instrument in two days. **An assertion about a picture that was
 never compared to a wrong picture is one you are trusting on its own word.**
 
+### ▸ The brush — 1 / 2 / 3 / 5, shipped the same evening
+
+**THE BRUSH IS THE WIDTH OF THE STROKE.** The terrain tools already dragged a
+rectangle, so a brush of n thickens it by n-1 — a press with no drag is then an
+n x n square for free. It grows toward +tx/+ty, the corner every multi-tile
+placeable already anchors at, so there is no second anchoring rule. `[` and `]`.
+
+`doTerrain` is the one choke point, so the drag, the `+`/`-` nudge and the
+keyboard tool all get it; `terrainRegion` thickens the preview by the same rule
+and never feeds `doTerrain`, so they cannot double up. Partial strokes are
+allowed and silent — a brush that only works on empty squares cannot be used
+twice in the same place. Multi-tile placeables ignore it, per the owner's own
+scoping. Still one undo step.
+
 ### ▸ Follow-ons, none blocking
 
-- **A brush size for placement** — owner's next ask, same evening: 1 / 2 / 3 /
-  5 square, on any single-tile placement, and especially on the terrain tools
-  where raising a hill one tile at a time is the tedious part.
 - The rim is terrain-only by design. An object standing on a back edge covers
   it, which is correct — it is a contour of the GROUND.
+- The **ground painter's drag** DOES take the brush — it was written down as a
+  gap first, then checked, and the claim was false. `doPlace` is called per tile
+  as the pointer crosses, so a wide brush leaves a wide trail. There is now a
+  test that drags rather than clicks, because a test that only clicked would
+  have agreed with the wrong sentence.
 
 ## 4n · THE IMAGE PACK AND THE COMPASS (2026-08-02)
 

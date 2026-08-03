@@ -297,3 +297,161 @@ test('the connector rule and the flat-footprint rule are what the ghost enforces
   assert.match(uneven.reason, /level/i);
   r.input.destroy();
 });
+
+// --- the brush -------------------------------------------------------------
+//
+// The owner: *"it would be nice if you could change the size of your selection
+// like changing the size of your brush in a painting application, 1 square, 2
+// square, 3 square, 5 square. this is especially useful for hills."*
+//
+// The mechanism is one sentence — THE BRUSH IS THE WIDTH OF THE STROKE — and
+// these hold it to the three things that sentence promises: it covers n x n,
+// it anchors where every other footprint anchors, and it is still ONE undo.
+
+/** A rig whose ui.js reports a fixed brush, the way the real one would. */
+function brushRig(n, opts = {}) {
+  const r = rig(opts);
+  r.ui.brush = () => n;
+  return r;
+}
+
+test('THE BRUSH COVERS n x n: one click raises a square, not a tile', () => {
+  for (const [n, want] of [[1, 1], [2, 4], [3, 9], [5, 25]]) {
+    const r = brushRig(n);
+    r.S.tool = 'raise';
+    r.drag([8, 8], [8, 8]);
+    let raised = 0;
+    for (let y = 0; y < r.world.h; y++) {
+      for (let x = 0; x < r.world.w; x++) if (r.world.levelAt(x, y) > 0) raised++;
+    }
+    assert.equal(raised, want, `a ${n}-brush raised ${raised} tiles, wanted ${want}`);
+    r.input.destroy();
+  }
+});
+
+test('THE BRUSH ANCHORS AT THE CURSOR and grows toward +tx/+ty', () => {
+  // The same corner every multi-tile placeable already anchors at. Growing from
+  // the centre would be a second anchoring rule, and the 2x2 path under the
+  // cursor would sit somewhere the 3x3 brush did not.
+  const r = brushRig(3);
+  r.S.tool = 'raise';
+  r.drag([8, 8], [8, 8]);
+  assert.equal(r.world.levelAt(8, 8), 1, 'the anchor tile itself was not raised');
+  assert.equal(r.world.levelAt(10, 10), 1, 'the far corner of the square was not raised');
+  assert.equal(r.world.levelAt(7, 8), 0, 'the brush reached backwards along tx');
+  assert.equal(r.world.levelAt(8, 7), 0, 'the brush reached backwards along ty');
+  assert.equal(r.world.levelAt(11, 8), 0, 'the brush reached one tile too far');
+  r.input.destroy();
+});
+
+test('A WIDE DRAG IS A THICK STROKE, not a second rectangle', () => {
+  // Dragging 8,8 -> 12,8 with a 3-brush paints 7 x 3, which is the stroke a
+  // 3-wide brush leaves. This is the whole reason the brush grows the region
+  // rather than repeating a square at each end.
+  const r = brushRig(3);
+  r.S.tool = 'raise';
+  r.drag([8, 8], [12, 8]);
+  let raised = 0;
+  for (let y = 0; y < r.world.h; y++) {
+    for (let x = 0; x < r.world.w; x++) if (r.world.levelAt(x, y) > 0) raised++;
+  }
+  assert.equal(raised, 7 * 3, `a 3-brush dragged five tiles painted ${raised}, wanted 21`);
+  r.input.destroy();
+});
+
+test('A BRUSH STROKE IS STILL ONE UNDO STEP', () => {
+  // The property the terrain drag already had, and the one a brush is most
+  // likely to break: applying per tile would fill a 64-step stack with one hill.
+  const r = brushRig(5);
+  r.S.tool = 'raise';
+  r.drag([8, 8], [8, 8]);
+  assert.equal(r.world.levelAt(10, 10), 1);
+  r.world.undo();
+  let left = 0;
+  for (let y = 0; y < r.world.h; y++) {
+    for (let x = 0; x < r.world.w; x++) if (r.world.levelAt(x, y) > 0) left++;
+  }
+  assert.equal(left, 0, `one undo left ${left} tiles raised — the stroke was ${left ? 'many' : 'one'} edits`);
+  r.input.destroy();
+});
+
+test('THE PREVIEW IS THE BRUSH: the ghost is the size the click will be', () => {
+  // A size the player cannot see before they click is a size they discover by
+  // undoing. The ghost has to be the promise the click then keeps.
+  const r = brushRig(3);
+  r.S.tool = 'raise';
+  canvas.fire('pointermove', r.at(8, 8));
+  const g = r.ghosts[r.ghosts.length - 1];
+  assert.ok(g, 'no ghost at all');
+  assert.deepEqual({ w: g.w, h: g.h }, { w: 3, h: 3 }, 'the terrain preview ignored the brush');
+  r.input.destroy();
+});
+
+test('THE BRUSH STOPS AT THE MAP EDGE rather than reaching off it', () => {
+  const r = brushRig(5);
+  r.S.tool = 'raise';
+  const edge = r.world.w - 2;
+  r.drag([edge, edge], [edge, edge]);
+  let raised = 0;
+  for (let y = 0; y < r.world.h; y++) {
+    for (let x = 0; x < r.world.w; x++) if (r.world.levelAt(x, y) > 0) raised++;
+  }
+  assert.equal(raised, 4, `a 5-brush at the corner raised ${raised} tiles, wanted the 2x2 that fits`);
+  r.input.destroy();
+});
+
+test('THE BRUSH PAINTS PLACEMENTS TOO, one-tile ones', async () => {
+  // The owner scoped it himself: *"the easiest way to implement it is to make
+  // it work on any one tile placements."*
+  const cat = await import('../js/catalog.js');
+  const one = cat.CATALOG.find((p) => p.id === 'mossy-ground');
+  assert.ok(one, 'the catalogue no longer has mossy-ground');
+  const r = brushRig(3);
+  r.S.tool = 'place';
+  r.S.selection = one;
+  canvas.fire('pointermove', r.at(8, 8));
+  const g = r.ghosts[r.ghosts.length - 1];
+  assert.deepEqual({ w: g.w, h: g.h }, { w: 3, h: 3 }, 'the placement preview ignored the brush');
+  r.input.destroy();
+});
+
+test('A MULTI-TILE PLACEABLE IGNORES THE BRUSH', async () => {
+  // A 2x2 path repeated on a 3x3 brush would overlap itself six ways, and the
+  // player could not predict which nine of the sixteen tiles they were about to
+  // cover. The brush is for one-tile things; the footprint wins.
+  const cat = await import('../js/catalog.js');
+  const big = cat.CATALOG.find((p) => p.id === 'meadow-turf');
+  assert.deepEqual(big.footprint, [2, 2], 'meadow-turf is no longer 2x2');
+  const r = brushRig(5);
+  r.S.tool = 'place';
+  r.S.selection = big;
+  canvas.fire('pointermove', r.at(8, 8));
+  const g = r.ghosts[r.ghosts.length - 1];
+  assert.deepEqual({ w: g.w, h: g.h }, { w: 2, h: 2 }, 'a 2x2 placeable was stretched to the brush');
+  r.input.destroy();
+});
+
+test('THE GROUND PAINTER DRAG LEAVES A WIDE TRAIL, not a one-tile line', () => {
+  // Written to CHECK a claim rather than to state one. Ground painters are the
+  // only placeable that drags, and it was not obvious whether the brush reached
+  // that path — doPlace is called per tile as the pointer crosses. It does, and
+  // the result is what a wide brush should leave: a trail as wide as the brush.
+  const r = brushRig(3);
+  r.S.tool = 'place';
+  r.S.selection = { id: 'mossy-ground', ground: 'moss', group: 'ground', footprint: [1, 1] };
+  const placed = [];
+  r.input.destroy();
+  const r2 = brushRig(3, { on: { place: (id, tx, ty) => { placed.push([tx, ty]); return true; } } });
+  r2.S.tool = 'place';
+  r2.S.selection = r.S.selection;
+  r2.drag([8, 8], [12, 8]);
+  assert.ok(placed.length >= 9, `a 3-brush drag placed only ${placed.length} tiles`);
+  const xs = placed.map(([x]) => x);
+  const ys = placed.map(([, y]) => y);
+  // The trail is three tiles WIDE across the whole drag — that is the claim,
+  // and asserting only the click would not have tested it.
+  assert.deepEqual([Math.min(...ys), Math.max(...ys)], [8, 10], 'the trail is not as wide as the brush');
+  assert.equal(Math.min(...xs), 8, 'the trail does not start at the press');
+  assert.ok(Math.max(...xs) >= 12, `the trail stopped at ${Math.max(...xs)}, short of the release`);
+  r2.input.destroy();
+});

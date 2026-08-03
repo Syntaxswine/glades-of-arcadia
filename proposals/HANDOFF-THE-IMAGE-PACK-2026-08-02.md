@@ -659,15 +659,77 @@ That is the third instrument in two days that was blind when it was written.
 The pattern is now unmistakable: **an assertion about a picture that was never
 compared to a wrong picture is an assertion you are trusting on its own word.**
 
+### The brush — `1 / 2 / 3 / 5`, and hills stop being forty clicks
+
+> *"it would be nice if you could change the size of your selection like
+> changing the size of your brush in a painting application, 1 square, 2 square,
+> 3 square, 5 square. this is especially useful for hills. the easiest way to
+> implement it is to make it work on any one tile placements."*
+
+**THE BRUSH IS THE WIDTH OF THE STROKE**, and that is the whole mechanism.
+
+The terrain tools already dragged a rectangle, so a brush of n is not a second
+concept bolted alongside — it THICKENS that rectangle by n-1, which is exactly
+what a wide brush does to a stroke in any paint program. A press with no drag is
+then an n x n square **for free**, and that is the case the owner asked for. A
+five-brush dragged five tiles paints a 7 x 5 terrace in one gesture.
+
+**It grows toward +tx / +ty**, the same corner every multi-tile placeable in the
+catalogue already anchors at. A brush that grew from its centre would be a
+SECOND anchoring rule, and the 2x2 path under the cursor would sit somewhere
+the 3x3 brush did not.
+
+**Sizes are 1, 2, 3, 5 — not 4.** The useful sizes in a paint program are the
+ones you can tell apart at a glance; 4 reads as 3-or-5 and doubles the wheel's
+travel for nothing. Past 5 it stops being a brush and starts being a fill.
+
+| where | what |
+|---|---|
+| `ui.js` | `BRUSHES`, `btnBrush`, `syncBrush`, `cycleBrush`; `on.brush` pushes the change |
+| `input.js` | `brushSize` / `brushable` / `brushTiles` / `withBrush`; `placeOne` and `removeOne` split out |
+| `main.js` | `on.brush` → `input.refreshGhost` (a late read — input.js is built after ui.js) |
+| keys | `[` smaller, `]` bigger — what every painting application binds |
+
+**ONE CHOKE POINT, and it matters.** `doTerrain` applies the brush, so every
+caller — the drag, the `+`/`-` nudge, the keyboard tool — arrives with a centre
+line and leaves with a stroke. `terrainRegion` thickens the PREVIEW by the same
+rule, and its output never reaches `doTerrain`, so the two cannot double up.
+Verified by grep before it was written: `terrainRegion` has exactly one caller.
+
+**A stroke does not refuse itself because one tile is occupied.** Each tile is
+asked separately and the ones that say no are simply not painted — a brush that
+only works on perfectly empty squares is a brush you cannot use twice in the
+same place. The reason is spoken only when NOTHING took, which is the one case
+the player is owed an explanation. The ghost uses the same any-tile rule, so the
+preview cannot promise what the click refuses.
+
+**A multi-tile placeable ignores the brush**, per the owner's own scoping. A 2x2
+path repeated on a 3x3 brush overlaps itself six ways and the player cannot
+predict which nine of the sixteen tiles they are about to cover.
+
+**The ground painter's drag takes it too**, and that is worth recording because
+it was nearly written down as a gap. `doPlace` is called per tile as the pointer
+crosses, so a wide brush leaves a wide trail — but that was a guess until it was
+tested, and the first draft of the backlog said the opposite. The test DRAGS
+rather than clicks, because a test that only clicked would have agreed with the
+wrong sentence. Same disease as everything else in this handoff: a claim about
+the code that nobody made the code answer.
+
+**A brush stroke is still ONE undo step** — the property the terrain drag
+already had, and the one a brush is likeliest to break. Measured live: a
+5-brush drag plus a 3-brush click made 48 raised tiles; one undo left 9, the
+second left 0.
+
 ### Where it stands after these two
 
 | | |
 |---|---|
-| tests | **422** (was 409) — 8 for the clock, 5 for the rim |
+| tests | **430** (was 409) — 8 for the clock, 5 for the rim, 8 for the brush |
 | playtest | 49 / 49 |
 | `iso-audit --strict` | 1 of 311 — `balustrade`, unchanged |
 | elevation probe | clean; palette purity 0 offending colours |
 | verified | in the running game, in a NAMED garden — never the owner's default |
+| the hill | a two-level terrace in TWO gestures, its back edges drawn |
 
 ## Maker's mark
 

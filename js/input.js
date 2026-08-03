@@ -644,10 +644,73 @@ export function createInput(opts = {}) {
   }
 
   /** The rectangle a live terrain drag covers, or the single hovered tile. */
+  // -------------------------------------------------------------- the brush --
+  //
+  // The owner: *"it would be nice if you could change the size of your
+  // selection like changing the size of your brush in a painting application
+  // ... this is especially useful for hills."*
+  //
+  // ui.js owns the number (see its §THE BRUSH); this file is what makes a
+  // number mean something. The whole mechanism is one idea:
+  //
+  //   THE BRUSH IS THE WIDTH OF THE STROKE.
+  //
+  // The terrain tools already drag a rectangle, so a brush of n does not add a
+  // second concept — it thickens that rectangle by n-1, which is exactly what
+  // a wide brush does to a stroke in any paint program. A press with no drag
+  // is then an n x n square for free, and that is the case the owner asked for.
+  //
+  // IT GROWS TOWARD +tx / +ty, which is down-right and down-left on screen —
+  // the same corner every multi-tile placeable in the catalogue already anchors
+  // at. A brush that grew from the centre would be a SECOND anchoring rule, and
+  // the 2x2 path under the cursor would sit somewhere the 3x3 brush did not.
+
+  /** Tiles a side. ui.js is the owner; a host without one gets a single tile. */
+  function brushSize() {
+    const n = ui && typeof ui.brush === 'function' ? ui.brush() : 1;
+    return Number.isFinite(n) && n >= 1 ? Math.min(9, Math.round(n)) : 1;
+  }
+
+  /**
+   * Does the brush apply to this placeable? Only to one-tile ones, which is the
+   * owner's own scoping — *"the easiest way to implement it is to make it work
+   * on any one tile placements"* — and it is also the right line. A 2x2 path
+   * repeated on a 3x3 brush would overlap itself six ways and the player could
+   * not predict which nine of the sixteen tiles they were about to cover.
+   */
+  function brushable(item) {
+    const f = footprintOf(item);
+    return f.w === 1 && f.h === 1;
+  }
+
+  /** Every tile a brush of `n` covers from an anchor, in painter's order. */
+  function brushTiles(tx, ty, n) {
+    const out = [];
+    for (let dy = 0; dy < n; dy++) {
+      for (let dx = 0; dx < n; dx++) {
+        if (inBounds(tx + dx, ty + dy)) out.push([tx + dx, ty + dy]);
+      }
+    }
+    return out;
+  }
+
+  /** A region thickened by the brush — the stroke, rather than its centre line. */
+  function withBrush(r) {
+    const n = brushSize();
+    if (n <= 1) return r;
+    return {
+      ...r,
+      x0: Math.min(r.x0, r.x1),
+      y0: Math.min(r.y0, r.y1),
+      x1: Math.min(map.w - 1, Math.max(r.x0, r.x1) + n - 1),
+      y1: Math.min(map.h - 1, Math.max(r.y0, r.y1) + n - 1),
+    };
+  }
+
   function terrainRegion(tx, ty) {
     const t = state.terrain;
-    if (!t) return { op: null, x0: tx, y0: ty, x1: tx, y1: ty };
-    return { op: t.op, x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1 };
+    if (!t) return withBrush({ op: null, x0: tx, y0: ty, x1: tx, y1: ty });
+    return withBrush({ op: t.op, x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1 });
   }
 
   // ------------------------------------------------------------------ facing --
@@ -739,7 +802,12 @@ export function createInput(opts = {}) {
     }
 
     if (tool === 'raze') {
-      ui.setGhost({ mode: 'raze', tx, ty, w: 1, h: 1, legal: hasSomething(tx, ty) });
+      const n = brushSize();
+      // Legal if there is anything at all under the stroke. Asking for ALL of
+      // it would grey out the ordinary case of clearing a patch with one thing
+      // in it, which is the case the brush is for.
+      const any = brushTiles(tx, ty, n).some(([x, y]) => hasSomething(x, y));
+      ui.setGhost({ mode: 'raze', tx, ty, w: n, h: n, legal: any });
       return;
     }
     const item = (ui.selection && ui.selection()) || null;
@@ -748,16 +816,24 @@ export function createInput(opts = {}) {
       return;
     }
     const f = footprintOf(item);
+    const n = brushSize();
+    const wide = n > 1 && brushable(item);
     const l = legality(item, tx, ty);
+    // A wide stroke is legal if ANY tile under it will take the thing — the
+    // same rule the placement itself uses, so the preview cannot promise
+    // something the click then refuses, or refuse something it would have done.
+    const anywhere = wide
+      ? brushTiles(tx, ty, n).some(([x, y]) => legality(item, x, y).ok)
+      : l.ok;
     ui.setGhost({
       mode: 'place',
       id: item.id,
       tx,
       ty,
-      w: f.w,
-      h: f.h,
-      legal: l.ok,
-      reason: l.reason,
+      w: wide ? n : f.w,
+      h: wide ? n : f.h,
+      legal: anywhere,
+      reason: anywhere ? null : l.reason,
       facing: facingFor(item),
     });
   }
@@ -776,15 +852,43 @@ export function createInput(opts = {}) {
   function doPlace(tx, ty) {
     const item = (ui && ui.selection && ui.selection()) || null;
     if (!item) return false;
+
+    // THE BRUSH, for placement. A stroke lays the same thing on every tile it
+    // covers, and it does NOT refuse the whole stroke because one tile in it is
+    // occupied — a brush that only works on perfectly empty squares is a brush
+    // you cannot use twice in the same place. Each tile is asked separately and
+    // the ones that say no are simply not painted, which is what every paint
+    // program does at the edge of a mask.
+    const n = brushSize();
+    if (n > 1 && brushable(item)) {
+      const tiles = brushTiles(tx, ty, n);
+      let laid = 0;
+      let refused = null;
+      for (const [x, y] of tiles) {
+        const ok = placeOne(item, x, y, true);
+        if (ok) laid++;
+        else if (!refused) refused = ok;
+      }
+      // Silence on a partial stroke; the reason only when NOTHING took, which
+      // is the only case where the player is owed an explanation.
+      if (!laid) explain(legality(item, tx, ty).reason);
+      else state.lastSaid = null;
+      return laid > 0;
+    }
+    return placeOne(item, tx, ty, false);
+  }
+
+  /** One tile of a placement. `quiet` is true for every tile of a brush. */
+  function placeOne(item, tx, ty, quiet) {
     const l = legality(item, tx, ty);
     // A refusal that says nothing is a refusal the player has to guess at. The
     // reason comes from world.js and is already a warm plain-language fragment,
     // so it can go straight to the status line.
     if (!l.ok) {
-      explain(l.reason);
+      if (!quiet) explain(l.reason);
       return false;
     }
-    state.lastSaid = null;
+    if (!quiet) state.lastSaid = null;
     const facing = facingFor(item);
     let ok;
     if (typeof on.place === 'function') ok = on.place(item.id, tx, ty, item, { facing }) !== false;
@@ -837,7 +941,13 @@ export function createInput(opts = {}) {
    * Commit a terrain op. ONE call, ONE undo step, however big the drag was.
    * Free and reversible — there is no cost here and there is nowhere to put one.
    */
-  function doTerrain(op, r) {
+  function doTerrain(op, rect) {
+    // THE ONE PLACE the brush reaches the world for terrain. Every caller —
+    // the drag, the `+`/`-` nudge, the keyboard tool — arrives here with a
+    // centre-line rectangle and leaves with a stroke. `terrainRegion` thickens
+    // the PREVIEW by the same rule and its output never reaches this function,
+    // so the two cannot double up.
+    const r = withBrush(rect);
     let res;
     if (typeof on.terrain === 'function') res = on.terrain(op, r);
     else if (world && typeof world.applyTerrain === 'function') {
@@ -866,6 +976,19 @@ export function createInput(opts = {}) {
   }
 
   function doRemove(tx, ty) {
+    // Clearing is a one-tile tool like any other, and it is the one you most
+    // want wide — undoing a five-square planting one square at a time is the
+    // tedium the brush exists to remove.
+    const n = brushSize();
+    if (n > 1) {
+      let cleared = 0;
+      for (const [x, y] of brushTiles(tx, ty, n)) if (removeOne(x, y)) cleared++;
+      return cleared > 0;
+    }
+    return removeOne(tx, ty);
+  }
+
+  function removeOne(tx, ty) {
     if (!inBounds(tx, ty)) return false;
     let ok;
     if (typeof on.remove === 'function') ok = on.remove(tx, ty) !== false;
@@ -1322,6 +1445,17 @@ export function createInput(opts = {}) {
       case '>':
         ev.preventDefault();
         if (ui && ui.cycleSpeed) ui.cycleSpeed(k === ',' || k === '<' ? -1 : 1);
+        return;
+      // BRUSH SIZE. `[` and `]` are what every painting application binds, and
+      // this control was asked for in exactly those terms. They clamp, like the
+      // speed keys and for the same reason.
+      case '[':
+      case '{':
+      case ']':
+      case '}':
+        ev.preventDefault();
+        if (ui && ui.cycleBrush) ui.cycleBrush(k === '[' || k === '{' ? -1 : 1);
+        refreshGhost();
         return;
       case ' ':
         ev.preventDefault();

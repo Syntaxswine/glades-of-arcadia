@@ -1202,6 +1202,31 @@ export function createUI(opts = {}) {
   const btnSpeed = btn('bar-btn is-narrow', '1x', () => cycleSpeed(), 'How fast time runs (, and .)');
   btnSpeed.setAttribute('aria-label', 'Speed of time');
 
+  /**
+   * THE BRUSH, and it is a painting tool because the owner named one.
+   *
+   * > *"it would be nice if you could change the size of your selection like
+   * > changing the size of your brush in a painting application, 1 square, 2
+   * > square, 3 square, 5 square. this is especially useful for hills."*
+   *
+   * Hills are the case that proves it: raising a shoulder one tile at a time is
+   * forty clicks of the same click. The terrain tools already drag a rectangle,
+   * so the brush is not a new idea bolted on — it is the WIDTH OF THE STROKE
+   * that dragging always implied and never had.
+   *
+   * 1, 2, 3, 5. Not 4: the useful sizes in a paint program are the ones you can
+   * tell apart at a glance, and 4 reads as 3-or-5 and doubles the wheel's
+   * travel for nothing. 5 is a fat brush for a hillside; anything larger stops
+   * being a brush and starts being a fill.
+   *
+   * It lives with the TOOLS, unlike the clock lever, because it modifies what
+   * a click does rather than what the world does while you watch.
+   */
+  const BRUSHES = Object.freeze([1, 2, 3, 5]);
+  S.brush = 1;
+  const btnBrush = btn('bar-btn is-narrow', '1', () => cycleBrush(), 'Brush size ([ and ])');
+  btnBrush.setAttribute('aria-label', 'Brush size: 1 tile');
+
   const btnJournal = btn('bar-btn', 'Journal', () => toggleJournal(), 'Journal (J)');
   btnJournal.setAttribute('aria-haspopup', 'dialog');
   const btnField = btn('bar-btn', 'Field', () => cycleOverlay(1), 'Field overlay (Tab)');
@@ -1250,7 +1275,7 @@ export function createUI(opts = {}) {
   btnMove.setAttribute('aria-pressed', 'false');
   btnMove.setAttribute('aria-label', 'Move the map');
 
-  barRight.append(btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
+  barRight.append(btnBrush, btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
   bar.append(timeOut, btnSpeed, overlayName, barRight);
 
   // --------------------------------------------------------------- speed --
@@ -1302,6 +1327,39 @@ export function createUI(opts = {}) {
   }
 
   syncSpeed();
+
+  // ---------------------------------------------------------------- brush --
+
+  function syncBrush() {
+    btnBrush.textContent = String(S.brush);
+    btnBrush.classList.toggle('is-on', S.brush !== 1);
+    btnBrush.setAttribute(
+      'aria-label',
+      S.brush === 1 ? 'Brush size: 1 tile' : `Brush size: ${S.brush} by ${S.brush} tiles`
+    );
+  }
+
+  /**
+   * `d` is +1 bigger, -1 smaller; a bare call means bigger, and 5 wraps to 1.
+   * Same split as the clock lever, for the same reason: the button has one
+   * direction and must wrap or go dead, the keys have two and must clamp.
+   */
+  function cycleBrush(d) {
+    const at = Math.max(0, BRUSHES.indexOf(S.brush));
+    S.brush =
+      d === undefined
+        ? BRUSHES[(at + 1) % BRUSHES.length]
+        : BRUSHES[Math.max(0, Math.min(BRUSHES.length - 1, at + d))];
+    syncBrush();
+    say(S.brush === 1 ? 'One tile at a time.' : `A ${S.brush} by ${S.brush} brush.`, 2200);
+    // The preview belongs to input.js and is the brush MADE VISIBLE — a size
+    // the player cannot see before they click is a size they discover by
+    // undoing. So the change is pushed, not waited for.
+    if (typeof on.brush === 'function') on.brush(S.brush);
+    return S.brush;
+  }
+
+  syncBrush();
 
   function doUndo() {
     let r;
@@ -2866,6 +2924,10 @@ export function createUI(opts = {}) {
 
     cycleSpeed,
     speed: () => (speedHost() ? speedHost().speed || 1 : 1),
+
+    /** The brush, in tiles a side. input.js asks every time it draws or acts. */
+    brush: () => S.brush || 1,
+    cycleBrush,
 
     tool: () => S.tool,
     toggleTool,
