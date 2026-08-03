@@ -776,6 +776,54 @@ already in the drawing; anchors' real job is the LANE across the tile.
 **Do not build:** the contact-shadow argument (0 px on a connector tile,
 measured), a smoothing/slip term, or a gate on the depth fix.
 
+### ▸ GOAL-BASED WANDERING — proposed, not built (2026-08-03)
+
+Full document: **`PROPOSAL-GOAL-BASED-WANDERING-2026-08-03.md`**. Owner's ask;
+nothing implemented.
+
+Three of the four pieces already exist: the **ladder** names 24 tags with sign
+per species (a desirability function, authored and already guarded by
+checkTagContract — 91 of 137 entries carry one), **fields.js** is the context
+term (a bench scores 0 alone, 4.86 in a thicket for the SATYR ONLY, 4.06 among
+lily pools for the unicorn and naiad — which species a neutral object belongs to
+is decided by where the player put it), and the **head-shake** is ~20 lines
+because every species already isolates its head as a layer.
+
+**ORDER OF OPERATIONS IS THE INVARIANT:** desirability = tagBase + context
+(additive, MAY promote a neutral), chosen = desirability x (1 + staleness)
+(multiplicative, CANNOT). Selection is by |desirability| — salience decides
+where it walks, valence decides whether it admires or refuses — because the
+head-shake requires opposites to stay pathable.
+
+**THE INVARIANT WAS TESTED AND BROKE.** Staleness off: 100% of Pan's attention
+on his ladder. Staleness on: **25% on a neoclassical courtyard** he has no
+requirement for. The bonus was not the culprit — the BASE was, having gated on
+affinity seams instead of the ladder. **LAW: the gate is the ladder, not the
+field.**
+
+**SHIP FIRST, ALONE: per-facing idle art.** ~12 lines, no new art, no sim
+change. Idle has no facings today, so without it the creature turns TO the urn
+and then visibly turns AWAY from it — anti-rendered, worse than today.
+
+**Do not build dwell == score:** measured 0.15 s of spread against a 5.37 s
+travel confound, narrower than the random hold already in the code.
+
+**Do not use a strict argmax:** converges to an exact period-8, 72-second limit
+cycle, seen twice in two minutes.
+
+Retires the DESTINATION half of the stair proposal's pathing prerequisite (a
+connector is not a goal). Not the transit half — and `connector` is not the
+whole set: level-bridge scores 0.500 for the centaur via `timber`.
+
+### ▸ catalog.js authors three RETIRED axes — 256 dead values
+
+`wildness`, `order`, `moisture` are non-zero on 91 / 113 / 52 entries and read
+by nothing (fields.js:111 RETIRED_AXES; `add()` reads only CONDITIONS), while
+the import validator still DEMANDS all five. Every new placeable is asked for
+three numbers nobody will ever read. Either the axes come back or the authoring
+goes. Also `fields.js:230-235` says a dual affinity claims to ~2.6 tiles; it is
+**2.35**.
+
 ### ▸ Follow-ons, none blocking
 
 - The rim is terrain-only by design. An object standing on a back edge covers
