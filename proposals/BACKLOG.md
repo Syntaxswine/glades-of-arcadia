@@ -747,6 +747,35 @@ the near flight is nearly all end wall and dressed masonry has none of the rock
 scramble's texture to carry that. **It wants an authored drawing, not a flag.**
 Nothing regressed — both turn two ways as they always did.
 
+### ▸ STAIR CLIMBING — proposed, not built (2026-08-03)
+
+Full document: **`PROPOSAL-STAIR-CLIMBING-2026-08-03.md`**. Owner asked for it;
+nothing is implemented.
+
+Headline: a creature does not climb a ramp, it pops a whole level in one sim
+step (16 px, 9x a walking frame) — **and for ~40% of the crossing it is drawn
+INSIDE the ramp** (72% of its pixels destroyed at the worst position). The
+occlusion is the real defect; the pop is its punctuation.
+
+**IT IS NOT A BUG, IT IS A WRITTEN DECISION.** js/main.js:1430 states "there are
+no half heights ... so a creature walking a ramp steps up a level at the top",
+and docs/ELEVATION.md:203 lists half-level terrain under what this does NOT
+include. Both must be amended by whatever falsifies them.
+
+**THE BLOCKER: pathing lands first.** 391 of 607 measured connector crossings
+never change level — creatures wander across ramps sideways and idle on them
+(4,973 idle sim steps in one run). Today that is flat and correct; give the tile
+a sub-tile height and every one becomes a NEW pop at a cross edge. The naive fix
+is net-negative on the majority case.
+
+**THE KEYSTONE:** decor.js's `s` and render.js's `fx` are the same number —
+identical to 0.0 across all 1024 tile pixels. The height a creature should stand
+at is the expression its sprite was drawn with. The owner's "anchor points" are
+already in the drawing; anchors' real job is the LANE across the tile.
+
+**Do not build:** the contact-shadow argument (0 px on a connector tile,
+measured), a smoothing/slip term, or a gate on the depth fix.
+
 ### ▸ Follow-ons, none blocking
 
 - The rim is terrain-only by design. An object standing on a back edge covers
