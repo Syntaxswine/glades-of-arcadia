@@ -751,6 +751,26 @@ the same transition all along it*; a dither is one surface shuffled) and
 29, 35, 36, 39, 44 flags. Both failure modes are now controls.
 **The audit is a ranking, not a verdict, and it has now been blind twice.**
 
+### ▸ GATES — shipped for three walls (2026-08-02, same evening)
+
+Owner: *"i was trying to use the pergola as a gate. what i think we really need
+are separate gates / archways for the various walls."*
+
+`joins` is a GROUP NAME defaulting to the id, and a gate overrides it:
+`hedge-arch` → `tall-hedge`, `palisade-gate` → `palisade-fence`,
+`drystone-gateway` → `dry-stone-wall`. The walls either side reach for it, so a
+gateway is a hole in one continuous wall. `axialJoins` (whole drawing, two
+states) rather than `linearJoins` (arms), because half an arch is rubble.
+
+**Without one yet:** `clipped-hedge` (you step over it) and `balustrade` (not
+joined — see above). **`pergola-arch` and `ruined-archway` are two more dead
+arch sprites in decor.js**, both front elevations: redraw one as the
+neoclassical garden arch and hang it in a hedge run, or delete them.
+
+The **`gate` tag** is new, and the pair `enclosure`/`gate` is the
+barrier-and-its-doorway symmetry this design has now learned three times —
+hedge/arch, cliff/ramp, wall/gate.
+
 ### ▸ THE ELEVATION LIST — `iso-audit --elev --catalog`
 
 Reported, never voted; the table ranks and a human looks. After the bench

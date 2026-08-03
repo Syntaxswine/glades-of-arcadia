@@ -1775,7 +1775,80 @@ while seeing a fault it was blind to. Both mistakes are now controls in
 picture could show.** The audit is a ranking, not a verdict, and the reason it
 must never become a gate is that it has been demonstrably blind twice.
 
+
+### Gates — the ask that the group name was already waiting for
+
+> *"in the original picture i was trying to use the pergola as a gate. what i
+> think we really need are separate gates / archways for the various walls."*
+
+`joins` in js/catalog.js is a GROUP NAME defaulting to the id, so nothing
+connects to anything it is not — **and a gate overrides it.** `hedge-arch`
+declares `joins: 'tall-hedge'`, the hedges either side reach for it and it
+reaches back, and a gateway set into a hedge becomes one continuous object with
+a hole in it rather than an ornament standing where a hedge is missing.
+
+It is a **catalogue** decision, not an art one, and deliberately: an artist who
+draws an archway should not have to know which wall a designer will hang it in.
+
+| wall | its gate | |
+|---|---|---|
+| `tall-hedge` | `hedge-arch` | art already existed; only the group was missing |
+| `palisade-fence` | `palisade-gate` | new |
+| `dry-stone-wall` | `drystone-gateway` | new |
+
+**`axialJoins`, not `linearJoins`.** `linearJoins` cuts a bar at its hub and
+recombines the halves — right for a wall, fatal for a doorway, because half an
+arch is a post and a piece of lintel and two of those from different directions
+is rubble. A gate is drawn WHOLE; every mask resolves through `joinAxis` to
+itself or its mirror.
+
+#### Two things the art had to learn
+
+**A GATEWAY HAS TO ANNOUNCE ITSELF.** A drystone wall is thirteen pixels high,
+and carving a doorway into it gave a dark smudge invisible at 1x — correctly,
+because a hole in a knee-high wall is a gap you step over. The hedge arch had
+already solved this by standing four pixels proud of its hedge (a uniform rise
+at every column, measured; not a ragged seam). So the piers build UP and a
+lintel bridges them.
+
+**A PIER IS MASONRY.** Drawn as bare four-pixel strokes they came out as a wire
+bracket hovering over the stones. The wall's own cap-and-face painting is now
+`column(x, far, foot)` and the piers are built with it: if a pier does not get
+the same treatment as the wall it stands in, it is not the same wall.
+
+#### The tests guard the sharing
+
+`every entry declares which run it belongs to` used to assert all join groups
+were DISTINCT, which is now deliberately false. It splits: a group with more
+than one member must be a wall plus pieces tagged `gate`, the wall must be the
+one whose id names the group, and no gate may join only itself. **It caught
+`hedge-arch` immediately**, sharing tall-hedge's run without being tagged.
+
+The `gate` tag is new. The pair `enclosure`/`gate` is the barrier-and-its-
+doorway symmetry this design has now learned three times — hedge/arch,
+cliff/ramp, wall/gate.
+
+#### Still without a gate
+
+`clipped-hedge` (you step over a knee-high hedge — a gate would be odd) and
+`balustrade` (not joined yet; see its note above). `pergola-arch` and
+`ruined-archway` are two more DEAD arch sprites in decor.js, both drawn as
+front elevations — either redraw one as the neoclassical garden arch and hang
+it in a hedge run, or delete them.
+
+#### And a warning about how this was nearly lost
+
+The drystone gateway went in by string-replacing a block whose pattern —
+`for (let x = 0; x < len; x++) { const far = y0 + x / 2;` — also matched a
+DIFFERENT generator in the same file that happens to share those four variable
+names. It spliced the wall's helper into the hedge screen and broke props.js.
+`git diff --stat` showed 101 insertions against 115 deletions on a change that
+should have been additive, which is the tell; `git checkout` cost nothing
+because the pergola work was already committed. **Commit before surgery, and
+read the stat line before the error message.**
+
 ## Maker's mark, second sitting
+
 
 Three commits, three faults, and all three were **a sentence in the source that
 was not true of the code beneath it**. The bench's blurb described art it was
