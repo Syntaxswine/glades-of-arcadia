@@ -1,6 +1,6 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever, the back rim, the brush and the scramble)
+Reconciled 2026-08-03 (NINTH pass, §4o — the clock lever, the back rim, the brush, the scramble, and the perception layer)
 against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** §8, which is now the
 keystone for anything about which way an object faces or how two pieces meet.
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
@@ -746,6 +746,40 @@ camera came out a grey lid with a pale wedge: almost no tread reads, because
 the near flight is nearly all end wall and dressed masonry has none of the rock
 scramble's texture to carry that. **It wants an authored drawing, not a flag.**
 Nothing regressed — both turn two ways as they always did.
+
+### ▸ THE PERCEPTION LAYER ✅ SHIPPED (2026-08-03)
+
+Owner's steer after two proposals landed and no game did: *"per-facing idle +
+occlusion before deeper path logic. Those are perception-layer fixes."*
+
+**Per-facing idle.** A creature that stops now keeps the heading it walked.
+`this.facing` was always written and always handed to `creatureFrameAt`; idle
+was the only cycle throwing it away. NO NEW ART — the back flag and
+`mirrorRelit` were already there, so idle and walk are built by one loop.
+Census 134 → 194; `docs/shots/idle-facings.png`.
+**It is a PREREQUISITE, not polish:** without it the goal-based loop is
+ANTI-rendered — the creature turns TO the thing and then visibly AWAY from it.
+
+**A mover's height.** `_liftDrawList` floored a coordinate that is drawn at
++0.5, so a mover took its level from the tile BEHIND it for half of every tile.
+
+**Two more one-subject instruments fixed:** `allCreatureSprites` and
+`tools/poseshot.mjs` both named `walk` as the pose that turns, so the lint pass
+threw and the shot tool could not photograph the change. Fourth and fifth of the
+arc.
+
+### ▸ THE OCCLUSION DEFECT — measured, NOT fixed, and that is deliberate
+
+A creature climbing a ramp is drawn INSIDE it: 0% of its pixels destroyed at
+tx 7.4, **21% at 6.5, 41% at 6.2, 72% at 5.8**. Mechanism exact — a mover at
+(5.8, 6) keys 83.6 against the ramp tile's 84, because a mover's FRACTIONAL
+tx+ty falls below the tile's INTEGER as it climbs.
+
+**Do not reach for the obvious fix.** Pinning a riding mover's key to its tile
+moves the key 3.5 — half a diagonal band — at the exact boundary the fractional
+key exists to smooth, and iso.js's header names that pop as the bug it was
+written to kill. It needs enumeration over facing x tread position x neighbour
+level across BOTH adjacent diagonal rows. Spec in PROPOSAL-STAIR-CLIMBING §2.
 
 ### ▸ STAIR CLIMBING — proposed, not built (2026-08-03)
 

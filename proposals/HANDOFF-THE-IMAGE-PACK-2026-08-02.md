@@ -799,6 +799,101 @@ they simply cannot yet be climbed from the camera's side.
 | verified | in the running game, in a NAMED garden — never the owner's default |
 | the hill | a two-level terrace in TWO gestures, its back edges drawn |
 
+## 9 · THE PERCEPTION LAYER — 2026-08-03, later
+
+Two proposals were written and then the ratio was called out, correctly: **the
+plan had grown faster than the game.** The owner's steer, and it is a good rule
+to inherit —
+
+> *"per-facing idle + occlusion before deeper path logic. Those are
+> perception-layer fixes: they make today's satyr readable before asking the
+> player to notice tomorrow's intent."*
+
+### 9a · A creature that stops keeps the way it was going ✅
+
+**Idle had no facings.** `this.facing` is written by `_leg` and `js/main.js:1413`
+has ALWAYS resolved it to one of the four art names and handed it to
+`creatureFrameAt` for every pose. Idle was the only cycle that threw it away, so
+a creature that walked north-west and halted snapped round to face the camera at
+the end of every leg, and had done since the day it was drawn.
+
+**No new art.** `spec.layers(kind, i, back)` already took the back flag for every
+kind and `mirrorRelit` already re-lit a mirrored frame, so idle and walk are now
+built by the same loop — they were always the same problem. Measured, all five
+creatures: four distinct drawings. The mirror is the big change (satyr 276 px,
+centaur 1000, unicorn 1011); the head turning away is the small one (51, 53, 25).
+Census 134 → 194. Sheet: `docs/shots/idle-facings.png`.
+
+> ### WHY THIS IS A PREREQUISITE AND NOT A POLISH ITEM
+> Everything in `PROPOSAL-GOAL-BASED-WANDERING` rests on "the creature is
+> looking at that". Without facings the loop is not half-rendered, it is
+> **ANTI-rendered**: the creature walks to the urn, turns to face it, and then
+> visibly turns away to stand front-on. It says the opposite of what it means.
+
+**And the same fault twice more, in the things that WATCH it.** Both
+`allCreatureSprites` and `tools/poseshot.mjs` named `walk` as *the* pose that
+turns, so the lint pass — the only consumer that sees every frame — threw
+instead of counting, and the instrument could not photograph the change it
+exists to photograph. Both ask the pose its shape now. **Fourth and fifth
+one-subject instrument of the arc.**
+
+### 9b · A mover takes its height from the tile it is over ✅
+
+`_liftDrawList` read a mover's level at `Math.floor(tx)`, but a mover is DRAWN at
+`(tx + 0.5, ty + 0.5)` — so the tile it stands over is `Math.round(tx)`. It took
+its height from the tile BEHIND it for the whole second half of every tile.
+Invisible on flat ground; a whole level on a terrace edge.
+
+The test asserts the SHAPE — the height must change exactly once crossing one
+step, and at the half-tile — so it fails on the bug rather than merely agreeing
+with the fix.
+
+### 9c · THE OCCLUSION DEFECT — measured, characterised, DELIBERATELY NOT FIXED
+
+A creature climbing a ramp is drawn INSIDE it. Verified by first-hand
+measurement, not taken on an agent's report:
+
+| creature x, walking uphill | pixels destroyed |
+|---|---|
+| 7.4 | 0% |
+| 6.8 | 0% |
+| 6.5 | **21%** |
+| 6.2 | **41%** |
+| 5.8 | **72%** |
+
+**The mechanism is exact.** A mover at `(5.8, 6)` keys `(5.8+6)*7 + 1 = 83.6`;
+the ramp tile at `(6,6)` keys `12*7 + 0 = 84`. The ramp draws last and paints
+over him. **A mover's FRACTIONAL `tx+ty` falls below the tile's INTEGER as it
+climbs**, and the level term does not cover the gap.
+
+**Why it did not ship.** The obvious fix — pin a riding mover's key to the tile
+it rides — moves the key by up to **3.5, half a diagonal band**, at exactly the
+boundary the fractional key exists to smooth. `iso.js`'s own header names that
+pop as the bug it was written to kill. Certifying it needs enumeration over
+facing x tread position x neighbour level 0..6 across BOTH adjacent diagonal
+rows. **A screenshot cannot certify it, so it was specified rather than guessed
+at.** See `PROPOSAL-STAIR-CLIMBING-2026-08-03.md` §2.
+
+### The two proposals, and what they are for
+
+| document | the finding that justifies it |
+|---|---|
+| `PROPOSAL-STAIR-CLIMBING-2026-08-03.md` | the pop is a WRITTEN DECISION (`main.js:1430`), not a bug; and 391 of 607 connector crossings never change level, so pathing must land first |
+| `PROPOSAL-GOAL-BASED-WANDERING-2026-08-03.md` | the ladder is already a desirability function; and the owner's invariant BROKE under test — 25% of Pan's attention went to a courtyard he has no requirement for |
+
+**Neither is started.** Both are ordered, both name what must land first, and
+both record what NOT to build.
+
+### Where it stands at the close
+
+| | |
+|---|---|
+| tests | **436** |
+| playtest | 49 / 49 |
+| `iso-audit --strict` | 1 of 312 — `balustrade`, unchanged all arc |
+| elevation probe | clean; palette purity 0 |
+| commits this arc | 22, `503ff57` → `28fa7dc` |
+
 ## Maker's mark
 
 Fourteen commits, and the thing worth handing on is not any of the features.
