@@ -3020,7 +3020,19 @@ class Renderer {
       e.fw = fw;
       e.fh = fh;
       e.footprint = o.footprint;
-      e.level = o.level != null ? clampLevel(o.level) : this._levelAt(Math.floor(e.tx), Math.floor(e.ty));
+      // ROUND, NOT FLOOR — a mover is drawn at (tx + 0.5, ty + 0.5).
+      //
+      // `footprintCentreAt(e.tx, e.ty, 1, 1, ...)` adds half a tile, so the tile
+      // a creature is standing over is `Math.round(tx)`, not `Math.floor(tx)`.
+      // Flooring took its height from the tile BEHIND it for the whole second
+      // half of every tile: a creature at x = 5.8 is drawn over tile 6 and was
+      // given tile 5's level. On flat ground that is invisible, which is why it
+      // survived; on a terrace edge it is a whole level, and it is half a tile
+      // out for half of every crossing.
+      //
+      // Objects are unaffected — they carry an explicit integer `level` and
+      // take the first branch. This only ever moves a MOVER.
+      e.level = o.level != null ? clampLevel(o.level) : this._levelAt(Math.round(e.tx), Math.round(e.ty));
       out.push(e);
     };
     for (let i = 0; i < objects.length; i++) push(objects[i]);

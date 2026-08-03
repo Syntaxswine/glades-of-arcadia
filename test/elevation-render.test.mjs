@@ -539,3 +539,33 @@ test('THE RIM IS CONTINUOUS: a 2:1 line is two pixels per row, not one', () => {
     assert.ok(Math.abs(y1 - y0) <= 1, `the brow jumps ${Math.abs(y1 - y0)} rows at column ${x1}`);
   }
 });
+
+test('A MOVER TAKES ITS HEIGHT FROM THE TILE IT IS OVER, not the one behind', () => {
+  // A mover is drawn at (tx + 0.5, ty + 0.5) — `footprintCentreAt` adds half a
+  // tile for a 1x1 — so the tile under a creature at x = 5.8 is tile 6, not
+  // tile 5. `_liftDrawList` floored it, and therefore read the level of the
+  // tile BEHIND the creature for the whole second half of every tile.
+  //
+  // Invisible on flat ground, which is why it survived. On a terrace edge it is
+  // a whole level, applied for half of every crossing.
+  const r = makeRenderer(makeScene({ fill: ({ levels, at }) => {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) levels[at(x, y)] = x >= 6 ? 1 : 0;
+  } })).r;
+  const lift = (tx) => r._liftDrawList([], [{ tx, ty: 8, footprint: [1, 1] }])[0].level;
+
+  // The step is between tile 5 (level 0) and tile 6 (level 1). A creature is
+  // over tile 6 from x = 5.5 upward, so that is where its height must change.
+  assert.equal(lift(5.2), 0, 'over tile 5, which is the low side');
+  assert.equal(lift(5.8), 1, 'over tile 6 and still standing a level too low');
+  assert.equal(lift(6.4), 1, 'over tile 6');
+
+  // ...and the change happens ONCE, at the half-tile, not at the integer.
+  const flips = [];
+  for (let x = 4.9; x < 7.0; x += 0.1) {
+    const a = lift(+x.toFixed(2));
+    const b = lift(+(x + 0.1).toFixed(2));
+    if (a !== b) flips.push(+(x + 0.05).toFixed(2));
+  }
+  assert.equal(flips.length, 1, `height changed ${flips.length} times crossing one step: ${flips}`);
+  assert.ok(flips[0] > 5.4 && flips[0] < 5.7, `the change is at x=${flips[0]}, not at the half-tile`);
+});
