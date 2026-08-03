@@ -302,14 +302,54 @@ are the edges left showing.
 - Nothing backdates the planting, so the proving ground opens on a field of
   sprouts — unlike the opening glade, which is deliberately old. Worth copying.
 
-## 4i · MOBILE MODE — the owner's plan, not yet started (2026-08-01)
+## 4i · MOBILE MODE — ✅ SHIPPED (2026-08-03)
 
-**Owner's words: "my plan is to have a mobile mode on the title screen. Same
-game just different. That's kind of low on the priority list, but it should be on
-our todo."** Recorded here so it survives the session that heard it.
+**Owner's words, 2026-08-01: "my plan is to have a mobile mode on the title
+screen. Same game just different. That's kind of low on the priority list, but it
+should be on our todo."** — and 2026-08-03, which is what started it: *"create a
+new game option on the title screen specifically designed to play this game on
+mobile. some menus will have to be redesigned, and the movement button will be
+much more important for playing the game."*
 
-It is **low priority and deliberately so** — do not start it because it is
-written down. But when it is started, this is the ground it has to stand on:
+**What shipped.** `?mode=mobile` — a 360 × 640 logical screen picked from a
+`MODES` table in js/iso.js at import, with `ui.LAYOUT` derived through a pure
+`layoutFor(mode)`. The title screen carries a **Play on a phone** switch, which
+*navigates* (like New Game) so the player sees the phone frame before committing
+to it, and which can never carry `new=1`. The tools leave the 14px topbar — where
+seven of them would need 266 of 360 pixels, at the one end of a phone a thumb
+cannot reach — and become a **22px-tall cluster at the top of the panel**, Move
+first and half again as wide as its neighbours. Tabs scroll and keep the selected
+one in view; the grid drops to five columns; the info line moves under the grid.
+**Map rectangle: 478 tall against the desktop's 286** — a phone shows more garden
+than a monitor, which is the one place this trade pays, and a seams test now
+fails if a future edit takes that away.
+
+**Three things worth carrying forward:**
+
+- **The old `@media (max-width: 640px)` fallback was a FIFTH copy of the logical
+  screen**, in the one place a custom property cannot reach. A 375px phone
+  running the 360px screen fits exactly, and the query still fired: the stage
+  stopped centring for no reason. It is now `[data-cramped]`, set by JS from the
+  mode's own dimensions, and exact in any future third mode.
+- **The touch-target fault was found by MEASURING, not by looking.** An audit of
+  the built chrome for controls under 20 × 14 returned the speed lever and the
+  brush at 26 × 10 — laid out correctly, labelled correctly, and about a
+  millimetre and a half of glass. That is why the mobile topbar is 22 and not 14.
+  A screenshot shows you two buttons that look small on purpose.
+- **Two probes lied before they told the truth.** The camera is applied on the
+  next frame, so a synchronous read after a synthetic drag says "nothing moved";
+  and a group-selection sweep passed with `allVisible: true` while silently
+  never changing group, because the ids I fed it were the LABELS. Both were
+  caught by checking that the instrument could distinguish its own outcomes.
+
+**Still open on the phone, deliberately:** no pinch, no two-finger pan, no
+long-press-as-right-click (right-click means *remove*, and a long press that
+razes is a trap). The move tool covers navigation and was verified doing it;
+gestures are the next rung if the owner wants them.
+
+---
+
+The original plan, kept because the ground it named is the ground this stands on:
 
 **The problem it exists to solve.** The game does not fit a phone in portrait.
 `pickScale` floors to an integer and clamps to a minimum of 1, so on a 390 px

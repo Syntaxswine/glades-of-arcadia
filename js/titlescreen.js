@@ -22,6 +22,7 @@
 
 import { TITLE } from './art/title.js';
 import { resolve as pal } from './palette.js';
+import { MODE, MODES, DEFAULT_MODE, IS_MOBILE } from './iso.js';
 import {
   listGardens, mostRecent, recover, playHref, newHref, residentLine,
   cleanName, defaultStorage, DEFAULT_NAME,
@@ -74,6 +75,47 @@ export function newGameHref(search) {
   params.set('new', '1');
   params.set('play', '1');
   return '?' + params.toString();
+}
+
+/**
+ * The URL that puts the title screen back up in a different mode.
+ *
+ * IT DELIBERATELY DOES NOT CARRY `play`. Switching mode is a navigation — it
+ * has to be, because `iso.MODE` is decided once at import and every layout
+ * constant in the game is derived from it (see iso.js §MODE) — and since we
+ * are reloading anyway, we reload to the TITLE rather than into the garden.
+ *
+ * That is not a limitation dressed up as a feature. It means the player sees
+ * the phone frame, the letterbox and the wordmark at the size they will
+ * actually be, BEFORE committing to a mode. A choice you can see the result
+ * of is not really a choice about a checkbox any more.
+ *
+ * `new` is dropped for the obvious reason: a mode switch must never be able to
+ * wipe a garden.
+ */
+export function modeHref(mode, search) {
+  const s = typeof search === 'string' ? search : (typeof location !== 'undefined' && location.search) || '';
+  const params = new URLSearchParams(s);
+  params.delete('play');
+  params.delete('new');
+  if (mode === DEFAULT_MODE) params.delete('mode');
+  else params.set('mode', mode);
+  const q = params.toString();
+  return q ? '?' + q : '?';
+}
+
+/**
+ * Does this look like a phone that has landed on the desktop layout?
+ *
+ * Used only to put a NOTE under the switch, never to redirect. An automatic
+ * redirect would be the wrong call twice over: it would take the choice away
+ * from someone who deliberately asked for the desktop on a tablet, and a
+ * narrow window on a monitor is not a phone. The player is told; the player
+ * decides.
+ */
+export function looksLikePhone(width) {
+  const w = typeof width === 'number' ? width : (typeof window !== 'undefined' && window.innerWidth) || 0;
+  return w > 0 && w < MODES.desktop.w;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +302,33 @@ export function showTitle(stage, opts = {}) {
       more.type = 'button';
       more.addEventListener('click', () => c.buildGardens(host, { ...c, now: Date.now() }));
       host.appendChild(more);
+    }
+
+    // THE MODE SWITCH — BACKLOG §4i, the owner's "same game just different".
+    //
+    // It sits BELOW Continue and New game and above the credit, because it is
+    // not a way to start the game: it is a statement about the shape of the
+    // screen, and it applies to whichever of the two you then press. Putting it
+    // level with them would offer the player three doors when there are two.
+    //
+    // The label names the DESTINATION, not the current state. "Play on a phone"
+    // is a thing you can do; "Desktop mode: on" is a thing you have to decode.
+    const other = IS_MOBILE ? DEFAULT_MODE : 'mobile';
+    const swap = el(
+      'button',
+      'title-btn title-btn-small title-mode',
+      IS_MOBILE ? 'Play on a computer' : 'Play on a phone'
+    );
+    swap.type = 'button';
+    swap.addEventListener('click', () => c.onStart(modeHref(other, c.search)));
+    host.appendChild(swap);
+
+    // The nudge, and only a nudge. See `looksLikePhone` for why this never
+    // redirects on its own.
+    if (!IS_MOBILE && looksLikePhone()) {
+      host.appendChild(el('p', 'title-note', 'This screen is narrower than the garden. The phone layout will fit it.'));
+    } else if (IS_MOBILE) {
+      host.appendChild(el('p', 'title-note', 'Taller, narrower, and the tools are under your thumb.'));
     }
 
     // The music is the owner's own track, made with Suno, and licensed

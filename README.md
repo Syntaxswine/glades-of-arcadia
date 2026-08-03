@@ -139,6 +139,33 @@ the old opening glade** — the small wild hollow the game used to start you in,
 kept because the research behind it is sound and it is the fastest way to watch
 a satyr arrive.
 
+### On a phone
+
+The title screen has a **Play on a phone** button, and `?mode=mobile` is what it
+sets. It is the *same game* — same simulation, same catalogue, same save slots —
+laid out on a **360 × 640** logical screen instead of 640 × 400.
+
+Why a second screen size rather than a smaller scale: the game scales by whole
+numbers only (SPEC §2), so on a 390px phone a 640-wide canvas cannot be shrunk
+to fit without smearing every pixel of the art. 360 is the floor of the modern
+phone field and 360 × 640 is exactly 9:16. `js/iso.js` `MODES` is the only place
+either number is written.
+
+What is different, and it is only the chrome:
+
+- **The tools move to the bottom**, into a cluster at the top of the panel,
+  because a thumb cannot reach the top of a phone. **Move is first and widest.**
+- **The topbar is 22 rather than 14**, which is what it takes to make the speed
+  lever and the brush big enough to hit.
+- The category tabs scroll and keep the selected one in view; the palette drops
+  to five columns; the info line sits under it rather than beside it.
+- **The map rectangle is 478 tall against the desktop's 286.** A phone shows
+  more garden than a monitor does.
+
+Switching modes is a navigation back to the title screen, so you see the frame
+before you commit to it, and it can never wipe a garden. Everything else — every
+keyboard binding, every URL above — works unchanged in both.
+
 To get one file you can mail to somebody:
 
 ```

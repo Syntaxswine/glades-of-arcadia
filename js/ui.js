@@ -51,7 +51,7 @@
 import { RAMPS, ACCENT, resolve as paletteResolve } from './palette.js';
 import { rasterise } from './art/format.js';
 import { TILE_W, TILE_H, tileToScreen } from './input.js';
-import { VIEW_W, VIEW_H, TOPBAR_H, PANEL_H, VIEW_H_MAP } from './iso.js';
+import { VIEW_W, VIEW_H, TOPBAR_H, PANEL_H, VIEW_H_MAP, MODE, IS_MOBILE } from './iso.js';
 import { AXES as FIELD_AXES } from './fields.js';
 // docs/TOMBS.md. Imported rather than injected, on the same grounds as
 // fields.js's AXES above: these are DATA and RULES, not a sibling module's
@@ -84,11 +84,24 @@ export const MAX_SCALE = 3; // SPEC §2: 1x, 2x, 3x.
  * of leaving four hand-written rects disagreeing with it. The two band heights
  * are the design decision; the VIEW is simply what is left over.
  */
-export const LAYOUT = {
-  TOPBAR: { x: 0, y: 0, w: LOGICAL_W, h: TOPBAR_H },
-  VIEW: { x: 0, y: TOPBAR_H, w: LOGICAL_W, h: VIEW_H_MAP },
-  PANEL: { x: 0, y: TOPBAR_H + VIEW_H_MAP, w: LOGICAL_W, h: PANEL_H },
-};
+export function layoutFor(mode) {
+  const m = mode || { w: LOGICAL_W, h: LOGICAL_H, topbar: TOPBAR_H, panel: PANEL_H };
+  const map = m.h - m.topbar - m.panel;
+  return {
+    TOPBAR: { x: 0, y: 0, w: m.w, h: m.topbar },
+    VIEW: { x: 0, y: m.topbar, w: m.w, h: map },
+    PANEL: { x: 0, y: m.topbar + map, w: m.w, h: m.panel },
+  };
+}
+
+export const LAYOUT = layoutFor(MODE);
+
+/**
+ * Re-exported so the chrome can ask "am I on a phone?" without every module
+ * importing iso.js for one boolean. It is a CONSTANT — see iso.js §MODE for
+ * why switching is a navigation and not a setting.
+ */
+export const MOBILE = IS_MOBILE;
 
 /**
  * The channels Tab cycles. Taken from fields.js rather than re-typed, because
@@ -220,6 +233,35 @@ export function syncUnit(app, canvas, fallbackScale) {
   const px = u + 'px';
   if (app.style.getPropertyValue('--u') !== px) app.style.setProperty('--u', px);
   app.dataset.scale = String(Math.round(u));
+
+  // THE SCREEN SIZE, HANDED TO THE STYLESHEET.
+  //
+  // `css/style.css` used to write `calc(640 * var(--u))` in four rules, which
+  // is the same four-copies fault that iso.js §VIEW_W exists to have fixed —
+  // just spelled in a language the tests cannot import. These two properties
+  // are how the stylesheet asks iso.js instead of remembering.
+  //
+  // `data-mode` is the hook for the handful of rules that are genuinely a
+  // different DESIGN rather than a different size: the tool cluster's position,
+  // the number of grid columns, where the info line goes. Everything that is
+  // merely proportional reads --sw/--sh and needs no branch at all.
+  app.style.setProperty('--sw', String(LOGICAL_W));
+  app.style.setProperty('--sh', String(LOGICAL_H));
+  app.style.setProperty('--panel-y', String(LAYOUT.PANEL.y));
+  app.style.setProperty('--panel-h', String(LAYOUT.PANEL.h));
+  app.style.setProperty('--topbar-h', String(LAYOUT.TOPBAR.h));
+  if (app.dataset.mode !== MODE.id) app.dataset.mode = MODE.id;
+
+  // "Smaller than the screen we are drawing", which is what the old
+  // `@media (max-width: 640px)` was always trying to say and could not, since
+  // a media query cannot read a custom property. See the `[data-cramped]` rule
+  // in css/style.css for the full account.
+  const cramped =
+    typeof window !== 'undefined' &&
+    (window.innerWidth < LOGICAL_W || window.innerHeight < LOGICAL_H)
+      ? '1'
+      : '0';
+  if (app.dataset.cramped !== cramped) app.dataset.cramped = cramped;
   return u;
 }
 
@@ -1275,8 +1317,41 @@ export function createUI(opts = {}) {
   btnMove.setAttribute('aria-pressed', 'false');
   btnMove.setAttribute('aria-label', 'Move the map');
 
-  barRight.append(btnBrush, btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
-  bar.append(timeOut, btnSpeed, overlayName, barRight);
+  /**
+   * WHERE THE TOOLS LIVE, and it is the one place the two modes really differ.
+   *
+   * On the desktop they are seven small buttons at the right of a 640-wide bar,
+   * which is the period-correct position and works because a mouse can reach
+   * the top of the screen as cheaply as the bottom.
+   *
+   * ON A PHONE BOTH HALVES OF THAT ARE FALSE. Seven 38px buttons need 266 of
+   * 360 logical pixels and would leave no room for the clock; and the top of a
+   * phone is the one place a thumb cannot go. So on mobile the tools come OUT
+   * of the bar and go into a cluster at the bottom of the panel — the nearest
+   * edge to the hand — and they are drawn big enough to hit.
+   *
+   * The BUTTONS THEMSELVES ARE THE SAME OBJECTS in both modes. Only their
+   * parent changes. That is deliberate: every handler, every `syncTool` call
+   * and every aria-pressed update below addresses them by variable, so a second
+   * layout cannot fork the behaviour — which is exactly how a second layout
+   * usually rots.
+   */
+  const tools = el('div', 'tools');
+  tools.setAttribute('role', 'toolbar');
+  tools.setAttribute('aria-label', 'Tools');
+
+  if (IS_MOBILE) {
+    // THE MOVE BUTTON COMES FIRST AND IS THE WIDEST — the owner's whole
+    // instruction for this mode: *"the movement button will be much more
+    // important for playing the game."* On a 60x60 map seen through a 360px
+    // window, getting somewhere IS most of playing, and on a touch screen it
+    // is the only tool with no keyboard alternative to fall back on.
+    tools.append(btnMove, btnAsk, btnRaze, btnUndo, btnField, btnJournal);
+    bar.append(timeOut, btnSpeed, btnBrush, overlayName);
+  } else {
+    barRight.append(btnBrush, btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
+    bar.append(timeOut, btnSpeed, overlayName, barRight);
+  }
 
   // --------------------------------------------------------------- speed --
   //
@@ -1406,6 +1481,11 @@ export function createUI(opts = {}) {
   const infoBlurb = el('div', 'info-blurb', '');
   info.append(infoName, infoBlurb);
 
+  // The tool cluster is part of the PANEL on a phone and part of the BAR on a
+  // desktop, so it is appended here rather than at construction. An empty div
+  // in the desktop panel would be a rectangle that blocks pointer events for
+  // nothing, so it is not added at all.
+  if (IS_MOBILE) panel.append(tools);
   panel.append(tabs, grid, info);
 
   // --------------------------------------------------------------- journal --
@@ -2028,7 +2108,32 @@ export function createUI(opts = {}) {
     S.group = g;
     buildTabs();
     buildGrid();
+    keepTabVisible();
     if (on.group) on.group(g);
+  }
+
+  /**
+   * Scroll the chosen tab into view. A no-op on the desktop, where all eight
+   * fit across 632 pixels and the row has never scrolled.
+   *
+   * It matters on a phone because the row is 352 wide against 448 of tabs, and
+   * the tab can be chosen WITHOUT TOUCHING IT: `H` for Building, the arrow
+   * keys, or a restored save that opens on Furniture. In every one of those the
+   * grid would fill with the right things while the row still showed Ground
+   * highlighted-off-screen — the palette and its own label disagreeing, which
+   * reads as a bug in the palette rather than a scroll position.
+   *
+   * `nearest` rather than `center`, so a tab already on screen does not lurch.
+   */
+  function keepTabVisible() {
+    if (!IS_MOBILE) return;
+    const t = tabs.querySelector('[aria-selected="true"]');
+    if (!t || typeof t.scrollIntoView !== 'function') return;
+    try {
+      t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch (_) {
+      /* an older engine without the options object; the row still works */
+    }
   }
 
   function selectGroupIndex(i) {

@@ -295,12 +295,76 @@ export function levelOf(obj) {
  * portrait cannot show a 640-wide canvas at an integer scale: `pickScale`
  * floors and clamps at 1, so a 390 px screen gets 640 px of canvas and the
  * rest goes off the edge. The two ways out are a fractional scale — which
- * breaks SPEC §2 and smears the art — or a SECOND LOGICAL SCREEN SIZE. This
- * is the number that would change, and until now there was no single number
- * to change.
+ * breaks SPEC §2 and smears the art — or a SECOND LOGICAL SCREEN SIZE.
+ *
+ * THE SECOND SIZE IS HERE NOW, and this is the only place it is written.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY 360 x 640, and not a rounder number
+ * ---------------------------------------------------------------------------
+ *
+ * The width is chosen by ONE constraint and nothing else: `pickScale` floors,
+ * so the logical width must be <= the narrowest phone we mean to serve or the
+ * canvas hangs off the edge at scale 1. 360 CSS px is the floor of the modern
+ * Android field and sits under the iPhone 12/13/14's 390 and the SE's 375.
+ * 400 was the first guess and it is WRONG BY TEN PIXELS on the commonest
+ * phone in the world — the kind of miss that only shows up on a device.
+ *
+ * 360 x 640 is then exactly 9:16, so the letterbox on a modern tall phone is
+ * a band at top and bottom rather than a frame on all four sides.
+ *
+ * THE BANDS ARE NOT THE DESKTOP'S. The topbar stays 14 — it carries the clock
+ * and nothing else can be made smaller — but the panel GROWS from 100 to 140,
+ * because on a phone it has to carry the tool cluster that the topbar can no
+ * longer hold seven of at 20 px each. The map rectangle is what is left over,
+ * and it comes out 486 tall: nearly twice the desktop's 286. A phone shows
+ * MORE garden than a monitor does, which is the one place this trade pays.
  */
-export const VIEW_W = 640;
-export const VIEW_H = 400;
+export const MODES = Object.freeze({
+  desktop: Object.freeze({ id: 'desktop', w: 640, h: 400, topbar: 14, panel: 100 }),
+  // THE TOPBAR IS 22 HERE, NOT 14, and that is a touch decision rather than a
+  // taste one. The desktop bar is 14 tall and its buttons are 10, which is
+  // fine for a mouse and is roughly a millimetre and a half of glass at 1x on
+  // a phone. Measuring the built chrome caught the speed lever and the brush
+  // at 26x10 — present, correct, and impossible to hit. Eight extra pixels of
+  // bar buys 18-pixel buttons and costs the map 8 of 486.
+  mobile: Object.freeze({ id: 'mobile', w: 360, h: 640, topbar: 22, panel: 140 }),
+});
+
+/** The default when nothing asks for anything. */
+export const DEFAULT_MODE = 'desktop';
+
+/**
+ * Which mode a query string asks for. PURE — hand it a string and it answers,
+ * which is what lets both shapes be tested in Node where there is no location.
+ *
+ * Anything unrecognised is the desktop, deliberately: a mangled URL should
+ * land you in the game you already know rather than in a layout you did not
+ * choose. This is the same reasoning as `wantsPlay` in titlescreen.js.
+ */
+export function modeFrom(search) {
+  const s = typeof search === 'string' ? search : '';
+  const m = /(?:^|[?&])mode=([a-z]+)(?:&|$)/.exec(s);
+  const id = m && m[1];
+  return id && Object.prototype.hasOwnProperty.call(MODES, id) ? id : DEFAULT_MODE;
+}
+
+/**
+ * The mode this document is running in, decided ONCE at import.
+ *
+ * It is read at module scope on purpose. Everything downstream — `ui.LAYOUT`,
+ * `render.BACKING_W`, `input.LOGICAL_W` — is a module constant derived from
+ * these, and a mode that could change after boot would leave those constants
+ * describing a screen that no longer exists. Switching modes is a NAVIGATION,
+ * exactly like New Game, and for exactly the same reason: a fresh document
+ * cannot inherit a stale layout because there is nothing there to inherit.
+ */
+const SEARCH = typeof location !== 'undefined' && location.search ? location.search : '';
+export const MODE = MODES[modeFrom(SEARCH)];
+export const IS_MOBILE = MODE.id === 'mobile';
+
+export const VIEW_W = MODE.w;
+export const VIEW_H = MODE.h;
 
 /**
  * The chrome's own bands, in logical pixels, and the map rectangle left over.
@@ -309,9 +373,9 @@ export const VIEW_H = 400;
  * or narrower screen moves the map rectangle without anybody editing four
  * rects by hand. The two band heights are the design; the VIEW is what remains.
  */
-export const TOPBAR_H = 14;
-export const PANEL_H = 100;
-export const VIEW_H_MAP = VIEW_H - TOPBAR_H - PANEL_H; // 286
+export const TOPBAR_H = MODE.topbar;
+export const PANEL_H = MODE.panel;
+export const VIEW_H_MAP = VIEW_H - TOPBAR_H - PANEL_H; // 286 desktop / 486 mobile
 
 /**
  * THE MAP SIZE, defined here and nowhere else.

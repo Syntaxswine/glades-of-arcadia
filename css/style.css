@@ -20,6 +20,17 @@
 :root {
   --u: 1px;
 
+  /* THE LOGICAL SCREEN, and the panel band cut out of it. Written here as the
+   * DESKTOP defaults only so that this file renders sanely before ui.js runs;
+   * `syncUnit()` overwrites all four on #app from js/iso.js MODE, which is the
+   * single owner (iso.js §VIEW_W). Do not hand-edit these to change a layout —
+   * change the mode table, or you have made a fifth copy of 640. */
+  --sw: 640;
+  --sh: 400;
+  --panel-y: 300;
+  --panel-h: 100;
+  --topbar-h: 14;
+
   /* rock ramp — the panel itself */
   --deep: #2c2823; /* rock 0 */
   --face-lo: #474138; /* rock 1 — bottom-right bevel, sunken faces */
@@ -88,8 +99,8 @@ body {
 
 #stage {
   position: relative;
-  width: calc(640 * var(--u));
-  height: calc(400 * var(--u));
+  width: calc(var(--sw) * var(--u));
+  height: calc(var(--sh) * var(--u));
   /* A hard stone frame around the letterboxed picture. */
   box-shadow:
     0 0 0 calc(1 * var(--u)) var(--deep),
@@ -99,8 +110,8 @@ body {
 
 #screen {
   display: block;
-  width: calc(640 * var(--u));
-  height: calc(400 * var(--u));
+  width: calc(var(--sw) * var(--u));
+  height: calc(var(--sh) * var(--u));
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #123a46; /* water 0 — something warm-dark before the first draw */
@@ -209,8 +220,8 @@ button:disabled {
   position: absolute;
   left: 0;
   top: 0;
-  width: calc(640 * var(--u));
-  height: calc(14 * var(--u));
+  width: calc(var(--sw) * var(--u));
+  height: calc(var(--topbar-h) * var(--u));
   display: flex;
   align-items: center;
   gap: calc(6 * var(--u));
@@ -256,9 +267,9 @@ button:disabled {
 .panel {
   position: absolute;
   left: 0;
-  top: calc(300 * var(--u));
-  width: calc(640 * var(--u));
-  height: calc(100 * var(--u));
+  top: calc(var(--panel-y) * var(--u));
+  width: calc(var(--sw) * var(--u));
+  height: calc(var(--panel-h) * var(--u));
 }
 
 .tabs {
@@ -379,10 +390,15 @@ button:disabled {
 
 /* ----------------------------------------------------------------- legend -- */
 
+/* It sits 46 logical pixels above the panel, which is what `254` always meant
+ * on the desktop — and ui.js `blocks()` already reserves exactly that rect by
+ * the same arithmetic (`LAYOUT.PANEL.y - 46`). Spelling it the same way here
+ * means the hit rectangle and the drawn rectangle cannot come apart when the
+ * panel moves, which is precisely what mobile mode does to it. */
 .legend {
   position: absolute;
   left: calc(6 * var(--u));
-  top: calc(254 * var(--u));
+  top: calc((var(--panel-y) - 46) * var(--u));
   width: calc(126 * var(--u));
   height: calc(40 * var(--u));
   padding: calc(4 * var(--u)) calc(5 * var(--u));
@@ -676,13 +692,25 @@ button:disabled {
 }
 
 /* A window too small for even 1x still shows the picture rather than clipping
- * it out of reach; nothing is ever hidden from the player. */
-@media (max-width: 640px), (max-height: 400px) {
-  #app {
-    align-items: flex-start;
-    justify-content: flex-start;
-    overflow: auto;
-  }
+ * it out of reach; nothing is ever hidden from the player.
+ *
+ * THIS USED TO BE `@media (max-width: 640px), (max-height: 400px)`, and that
+ * was the FIFTH copy of the logical screen — in the one place a custom
+ * property cannot reach, because a media query cannot read `var(--sw)`.
+ *
+ * Mobile mode is what exposed it. A 375px phone running the 360px screen FITS,
+ * exactly and at 1x, and yet 375 is under 640 — so the query fired, the stage
+ * stopped centring and the whole game jammed itself against the top-left of a
+ * screen it had room to sit in the middle of. The condition was never really
+ * "is the window under 640", it was "is the window smaller than the screen we
+ * are drawing", and only JS knows the second number.
+ *
+ * `syncUnit()` sets `data-cramped` from the mode's own dimensions, so this is
+ * now exact in both modes and stays exact in any third. */
+#app[data-cramped="1"] {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
 }
 
 /* ---------------------------------------------------------------------------
@@ -921,4 +949,168 @@ button:disabled {
   opacity: 0.45;
   letter-spacing: 0.06em;
   pointer-events: none;
+}
+
+/* ============================================================================
+ * MOBILE MODE — the phone layout (360 x 640). proposals/BACKLOG.md §4i.
+ * ============================================================================
+ *
+ * EVERYTHING ABOVE THIS LINE IS UNTOUCHED BY THIS MODE and must stay that way.
+ * The desktop is the shape every sprite, screenshot and doc in the project was
+ * drawn against; a "small tidy" to a shared rule up there is a change to the
+ * game the owner has been playing for months, made invisibly, to fix a phone.
+ * So this is an ADDITIVE block gated on `#app[data-mode="mobile"]`, and the
+ * only shared edits made for it were the four that turned a hard-coded 640 into
+ * `var(--sw)` — a redundancy removed, not a design changed.
+ *
+ * THE THREE THINGS THAT ARE A DIFFERENT DESIGN, not a different size:
+ *
+ *   1. THE TOOLS MOVE TO THE BOTTOM. A thumb cannot reach the top of a phone.
+ *      They come out of the 14px bar (where seven of them need 266 of 360
+ *      logical pixels) and become a cluster at the top of the panel, which is
+ *      the nearest edge to the hand.
+ *   2. THE GRID LOSES A COLUMN — six 60px chips need 368 and there are 352.
+ *      Five, and the panel grew 40px to give it two full rows.
+ *   3. THE INFO LINE GOES UNDER THE GRID instead of beside it. At 640 there is
+ *      room for a 252px reading column next to the palette; at 360 there is
+ *      not, and a two-line blurb below beats a one-word column beside.
+ *
+ * Sizes here are still whole logical pixels times --u. The pixel grid law
+ * (SPEC §2) does not get a phone exemption.
+ */
+
+/* ---------------------------------------------------------------- the bar -- */
+
+/* Four things, not eleven: the clock, the speed lever, the brush, and the name
+ * of whatever overlay is up. Everything else went to the cluster below. */
+#app[data-mode="mobile"] .bar {
+  gap: calc(4 * var(--u));
+}
+
+/* THE BAR IS 22 TALL HERE, and these are the buttons that needed it.
+ *
+ * FOUND BY MEASURING, not by looking. The built chrome was audited for controls
+ * under 20x14 logical pixels and the speed lever and the brush came back at
+ * 26x10 — laid out correctly, labelled correctly, and about a millimetre and a
+ * half of glass on a real phone. A screenshot does not show you that; it shows
+ * you two buttons that look small on purpose.
+ *
+ * 34x18 is a compromise and worth naming as one: still under the ~9mm anybody
+ * would recommend, but these are the two LEAST-used controls in the game and
+ * they both keep their keyboard bindings. The tools that matter got the big
+ * cluster at the bottom instead. */
+#app[data-mode="mobile"] .bar .bar-btn {
+  height: calc(18 * var(--u));
+  line-height: calc(18 * var(--u));
+  min-width: calc(34 * var(--u));
+}
+
+/* ------------------------------------------------------- the tool cluster -- */
+
+#app[data-mode="mobile"] .tools {
+  position: absolute;
+  left: calc(4 * var(--u));
+  top: calc(3 * var(--u));
+  width: calc(352 * var(--u));
+  height: calc(22 * var(--u));
+  display: flex;
+  gap: calc(3 * var(--u));
+}
+
+/* 22 logical pixels is ~7mm at a phone's pixel density: past the bottom of the
+ * usual 9mm touch-target guidance, but this is a scaled canvas game and 22 is
+ * what the panel can afford. The WIDTH is where the reachability is bought. */
+#app[data-mode="mobile"] .tools .bar-btn {
+  height: calc(22 * var(--u));
+  line-height: calc(22 * var(--u));
+  min-width: calc(52 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  flex: 1 1 0;
+}
+
+/* THE MOVE BUTTON, half again as wide as its neighbours.
+ *
+ * The owner's instruction for this whole mode was that *"the movement button
+ * will be much more important for playing the game"*, and this is the line that
+ * says so. It is not decoration: a 60x60 map seen through a 360px window is
+ * mostly somewhere you are not, and move is the one tool on a phone with no
+ * keyboard fallback behind it. */
+#app[data-mode="mobile"] .tools .bar-btn.has-icon {
+  flex: 1.5 1 0;
+}
+
+/* ------------------------------------------------------------- the palette -- */
+
+#app[data-mode="mobile"] .tabs {
+  left: calc(4 * var(--u));
+  top: calc(28 * var(--u));
+  width: calc(352 * var(--u));
+  height: calc(16 * var(--u));
+  /* Eight categories will not fit across 352px at any legible width, so the
+   * row SCROLLS rather than shrinking the labels into initials. A tab you can
+   * read and have to reach for beats a tab you can reach and cannot read. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+#app[data-mode="mobile"] .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+#app[data-mode="mobile"] .tab {
+  height: calc(16 * var(--u));
+  min-width: calc(54 * var(--u));
+  flex: 0 0 auto;
+  line-height: calc(16 * var(--u));
+}
+
+#app[data-mode="mobile"] .grid {
+  left: calc(4 * var(--u));
+  top: calc(46 * var(--u));
+  width: calc(352 * var(--u));
+  height: calc(72 * var(--u));
+  grid-template-columns: repeat(5, calc(60 * var(--u)));
+  justify-content: space-between;
+}
+
+/* Under the grid, full width, two lines of it. See note 3 at the top. */
+#app[data-mode="mobile"] .info {
+  left: calc(4 * var(--u));
+  top: calc(120 * var(--u));
+  width: calc(352 * var(--u));
+  height: calc(17 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  display: flex;
+  gap: calc(5 * var(--u));
+  align-items: baseline;
+}
+
+#app[data-mode="mobile"] .info-name {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
+/* One line, clipped. The full blurb is still reachable through the `?` tool,
+ * which is why clipping here is a compression and not a loss. */
+#app[data-mode="mobile"] .info-blurb {
+  white-space: nowrap;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------ the floating parts -- */
+
+#app[data-mode="mobile"] .toast {
+  max-width: calc(340 * var(--u));
+}
+
+/* The journal was 560 x 264 inset in a 640 x 400 screen. Here it is very nearly
+ * the whole screen, because on a phone a dialog that is not almost fullscreen
+ * is a dialog you read through a letterbox. */
+#app[data-mode="mobile"] .journal {
+  left: calc(8 * var(--u));
+  top: calc(20 * var(--u));
+  width: calc(344 * var(--u));
+  height: calc(470 * var(--u));
 }

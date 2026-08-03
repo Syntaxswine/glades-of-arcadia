@@ -556,9 +556,71 @@ test('the chrome layout is DERIVED from it, not hand-written beside it', () => {
 test('the layout still comes out at the numbers the art was drawn against', () => {
   // A derivation is only an improvement if it produces the same answer. Every
   // sprite, every panel and every screenshot in docs/ assumes these exact four.
+  //
+  // Node has no `location`, so the imported MODE is always the desktop — which
+  // is what pins this assertion to the shape the art was drawn against even
+  // now that a second shape exists.
+  assert.equal(iso.MODE.id, 'desktop', 'a Node import must land on the desktop mode');
   assert.deepEqual(ui.LAYOUT, {
     TOPBAR: { x: 0, y: 0, w: 640, h: 14 },
     VIEW: { x: 0, y: 14, w: 640, h: 286 },
     PANEL: { x: 0, y: 300, w: 640, h: 100 },
   });
+});
+
+// ---------------------------------------------------------------------------
+// THE SECOND LOGICAL SCREEN — mobile mode (BACKLOG §4i)
+//
+// The whole reason `layoutFor` is a pure function of a mode rather than four
+// module constants: the shape a phone runs at has to be assertable from Node,
+// where there is no location to put `?mode=mobile` into.
+
+test('the mode is read from the query string, and anything odd is the desktop', () => {
+  assert.equal(iso.modeFrom('?mode=mobile'), 'mobile');
+  assert.equal(iso.modeFrom('?play=1&mode=mobile'), 'mobile');
+  assert.equal(iso.modeFrom('?mode=mobile&play=1'), 'mobile');
+  assert.equal(iso.modeFrom('?mode=desktop'), 'desktop');
+  // A mangled or hostile mode lands you in the game you already know.
+  assert.equal(iso.modeFrom('?mode=phone'), 'desktop');
+  assert.equal(iso.modeFrom('?mode=__proto__'), 'desktop');
+  assert.equal(iso.modeFrom('?play=1'), 'desktop');
+  assert.equal(iso.modeFrom(''), 'desktop');
+  assert.equal(iso.modeFrom(null), 'desktop');
+  // `?submode=mobile` must not match — the boundary is part of the pattern.
+  assert.equal(iso.modeFrom('?submode=mobile'), 'desktop');
+});
+
+test('the mobile screen fits the phone it was chosen for', () => {
+  const m = iso.MODES.mobile;
+  // THE ONE CONSTRAINT. `pickScale` floors, so a logical width wider than the
+  // device is a canvas hanging off the edge at scale 1. 360 is the floor of
+  // the modern Android field; 390 is the iPhone 12/13/14; 375 is the SE.
+  for (const device of [360, 375, 390, 393, 414, 430]) {
+    assert.ok(m.w <= device, `the mobile screen (${m.w}) overflows a ${device}px phone`);
+  }
+  assert.equal(m.w / m.h, 9 / 16, 'the mobile screen is not 9:16');
+});
+
+test('both modes derive a layout that fills the screen exactly', () => {
+  for (const mode of Object.values(iso.MODES)) {
+    const { TOPBAR, VIEW, PANEL } = ui.layoutFor(mode);
+    for (const band of [TOPBAR, VIEW, PANEL]) {
+      assert.equal(band.w, mode.w, `${mode.id}: a band is not full width`);
+      assert.ok(band.h > 0, `${mode.id}: a band has no height`);
+    }
+    assert.equal(TOPBAR.y, 0, `${mode.id}: the topbar does not start at the top`);
+    assert.equal(VIEW.y, TOPBAR.h, `${mode.id}: the map does not start where the topbar ends`);
+    assert.equal(PANEL.y, TOPBAR.h + VIEW.h, `${mode.id}: the panel does not start where the map ends`);
+    assert.equal(TOPBAR.h + VIEW.h + PANEL.h, mode.h, `${mode.id}: the bands do not fill the screen`);
+  }
+});
+
+test('the phone shows MORE garden than the monitor, not less', () => {
+  // The trade mobile mode makes is a narrower screen for a much taller one.
+  // If a future edit grows the panel until this stops being true, the mode has
+  // lost the only thing it gains over the desktop and should be reconsidered
+  // rather than quietly shipped.
+  const desk = ui.layoutFor(iso.MODES.desktop).VIEW;
+  const phone = ui.layoutFor(iso.MODES.mobile).VIEW;
+  assert.ok(phone.h > desk.h, `the phone's map (${phone.h}) is not taller than the desktop's (${desk.h})`);
 });
