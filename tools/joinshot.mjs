@@ -70,6 +70,12 @@ const FLAT = has('--flat');
 // Draw each occupied tile's ground diamond in red under the art. The frame
 // that answers "is the ANCHOR right?" for a 1x1, which anchor-audit skips.
 const GRID = has('--grid');
+// A GATE SET INTO THE RUN. `--gate <id>` swaps the middle piece of every
+// configuration for another sprite — which is the only frame that answers the
+// question a gateway actually raises: does it BUTT into the wall it belongs
+// to, or stand where a piece of wall is missing? Everything else this tool
+// draws is one object repeated; a gate is the case where two must agree.
+const GATE = arg('--gate', '');
 const OUT = resolve(arg('--out', 'docs/shots/join.png'));
 // Which configurations. Default is the run, because it is the one that has
 // already caught two faults; the others are asked for.
@@ -81,6 +87,10 @@ const WANT = [
 
 if (!IDS.length) {
   console.error('usage: node tools/joinshot.mjs --ids <name>[,<name>...] [--n 4] [--corner] [--cross] [--all]');
+  process.exit(2);
+}
+if (GATE && !ART[GATE]) {
+  console.error('MISSING GATE: ' + GATE);
   process.exit(2);
 }
 const missing = IDS.filter((n) => !ART[n]);
@@ -137,14 +147,43 @@ function layout(kind, n) {
  * fixed. `--flat` keeps every piece at its base drawing, which is the picture
  * the game drew before joining existed.
  */
-function pieceFor(sp, tiles, tx, ty) {
-  if (!sp.joins || FLAT) return null;
+function pieceFor(sp, tiles, tx, ty, isGate) {
+  const src = isGate && ART[GATE] ? ART[GATE] : sp;
+  if (!src.joins || FLAT) return isGate ? src : null;
+  sp = src;
   const here = new Set(tiles.map(([a, b]) => `${a},${b}`));
   let mask = 0;
   for (const [dtx, dty, bit] of JOIN_DIRS) {
     if (here.has(`${tx + dtx},${ty + dty}`)) mask |= bit;
   }
-  return mask ? sp.joins[mask] || null : null;
+  return mask ? sp.joins[mask] || null : isGate ? sp : null;
+}
+
+/**
+ * Where the gates go: the MIDDLE OF EVERY LEG, not one gate per picture.
+ *
+ * A leg is a maximal stretch of tiles sharing a tile coordinate — which is
+ * exactly what `layout` builds, and grouping by it rather than by index means
+ * the +ty run gets a gate too. The first draft put one gate at
+ * `tiles[len/2]`, which for the two-leg `run` layout landed on the first tile
+ * of the second leg: an END piece, at the far edge of the frame, where a gate
+ * proves nothing.
+ */
+function gateTiles(tiles) {
+  if (!GATE || !tiles.length) return new Set();
+  const legs = new Map();
+  for (const [tx, ty] of tiles) {
+    const key = tiles.filter(([a]) => a === tx).length > 1 ? `x${tx}` : `y${ty}`;
+    if (!legs.has(key)) legs.set(key, []);
+    legs.get(key).push([tx, ty]);
+  }
+  const out = new Set();
+  for (const leg of legs.values()) {
+    if (leg.length < 3) continue; // a gate needs a wall either side of it
+    const [tx, ty] = leg[Math.floor(leg.length / 2)];
+    out.add(`${tx},${ty}`);
+  }
+  return out;
 }
 
 /**
@@ -211,8 +250,9 @@ for (const id of IDS) {
     // Screen bounds of the whole arrangement, sprite extents included.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const mir = mirrored(sp);
+    const gk = gateTiles(tiles);
     for (const [tx, ty, f] of tiles) {
-      const j = pieceFor(sp, tiles, tx, ty);
+      const j = pieceFor(sp, tiles, tx, ty, gk.has(`${tx},${ty}`));
       const a = j || (f ? mir : sp);
       const px = sx(tx, ty) - a.anchor[0];
       const py = sy(tx, ty) - a.anchor[1];
@@ -272,8 +312,9 @@ panels.forEach((p, i) => {
 
   // Then the pieces, back to front: painter's order in iso is tx+ty ascending.
   const order = p.tiles.slice().sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
+  const gk = gateTiles(p.tiles);
   for (const [tx, ty, f] of order) {
-    const j = pieceFor(p.sp, p.tiles, tx, ty);
+    const j = pieceFor(p.sp, p.tiles, tx, ty, gk.has(`${tx},${ty}`));
     const a = j || (f ? p.mir : p.sp);
     blit(c, a, ox + sx(tx, ty) - a.anchor[0], oy + sy(tx, ty) - a.anchor[1]);
   }

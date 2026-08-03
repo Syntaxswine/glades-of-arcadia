@@ -20,7 +20,7 @@
 //
 // DOM-free. Imports cleanly in Node.
 
-import { defineSprite, foot, LINE_W, LINE_DROP } from './format.js';
+import { defineSprite, foot, LINE_W, LINE_DROP, axialJoins } from './format.js';
 import { JOIN_DIRS, JOIN_MASKS, joinAxis } from '../iso.js';
 
 /** The marble ramp's keys, darkest first — the same letters props.js uses. */
@@ -229,6 +229,105 @@ export const PALISADE_FENCE = defineSprite({
 export { PALISADE_JOINS };
 
 // ===========================================================================
+// FIELD GATE — the way THROUGH a palisade.
+//
+// The owner, having fenced a lawn and stood a pergola in the middle of it:
+// *"i was trying to use the pergola as a gate. what i think we really need are
+// separate gates / archways for the various walls."*
+//
+// Which is exactly right, and it is a stronger request than it sounds. A gate
+// is not an ornament placed where a fence is missing — it is A PIECE OF THE
+// FENCE, and everything about how it is built follows from that:
+//
+//   IT STANDS ON THE FENCE'S OWN GEOMETRY. Same `armStep`, same `CX`/`CY`, so
+//   its hanging post lands exactly where the neighbouring piece's arm arrives.
+//   Nothing here is tuned; if the fence's pitch ever changed, the gate would
+//   follow it, because they are the same three numbers.
+//   IT JOINS. `joins: 'palisade-fence'` in the catalogue puts it in that
+//   wall's group, so the fences either side reach for it and it reaches back.
+//   IT IS DRAWN WHOLE, via `axialJoins` rather than `linearJoins`: half a gate
+//   is a post and a piece of rail, and two of those from different directions
+//   is a woodpile. Two drawings, itself and its mirror, and every mask
+//   resolves to one of them.
+//
+// THE LEAF IS LOW AND THE HEAD IS HIGH, which is the whole readability trick.
+// A gate drawn closed at full height is a wall with a line in it; a gate drawn
+// as a bare gap is a hole where the fence broke. Two tall posts with a head
+// rail across the top says GATEWAY, and a waist-high leaf hung between them
+// says GATE — and you can still see the garden through the gap above it,
+// which is what tells a player this is a way in.
+// ===========================================================================
+
+const GATE_POST_H = STAKE_H + 9; // the posts stand proud of the palings
+const GATE_AT = HALF - 3; // ...at the arm ends, where the neighbours arrive
+
+function fieldGateRows() {
+  const g = Array.from({ length: FENCE_H + 9 }, () => new Array(FENCE_W).fill('.'));
+  const DY = 9; // the extra headroom, pushed onto the top of the grid
+  const put = (x, y, k) => {
+    if (x >= 0 && x < FENCE_W && y >= 0 && y < FENCE_H + 9) g[y][x] = k;
+  };
+  const at = (i) => {
+    const p = armStep(1, 0, i);
+    return { x: p.x, y: p.y + DY };
+  };
+
+  // The two gateposts, on the run's own axis at the arm ends.
+  for (const s of [-1, 1]) {
+    const p = at(s * GATE_AT);
+    for (let y = p.y - GATE_POST_H; y <= p.y; y++) {
+      put(p.x - 1, y, 't'); // lit face, upper left
+      put(p.x, y, 's');
+      put(p.x + 1, y, 'r');
+      put(p.x + 2, y, 'q');
+    }
+    for (let k = -1; k <= 2; k++) put(p.x + k, p.y + 1, 'q'); // planted
+  }
+
+  // The head rail across the top, and the leaf hung below it. Both follow the
+  // run's pitch, so the gateway lies in the world rather than across the
+  // screen — which is the entire point of the exercise.
+  const rail = (drop, keys) => {
+    for (let i = -GATE_AT; i <= GATE_AT; i++) {
+      const p = at(i);
+      put(p.x, p.y - drop, keys[0]);
+      put(p.x, p.y - drop + 1, keys[1]);
+    }
+  };
+  rail(GATE_POST_H - 1, ['t', 'r']); // the head
+  rail(9, ['t', 'r']); // the leaf's top bar
+  rail(4, ['s', 'q']); // ...and its lower one
+
+  // One diagonal brace, rising from the hanging post — the detail that says
+  // "a gate that swings" rather than "two bars nailed across a gap". It runs
+  // in SCREEN space on purpose: a brace is a piece of timber lying against the
+  // gate's own plane, not along a ground axis.
+  for (let i = -GATE_AT; i <= GATE_AT; i++) {
+    const p = at(i);
+    const t = (i + GATE_AT) / (2 * GATE_AT);
+    const y = p.y - 4 - Math.round(t * 5);
+    put(p.x, y, 's');
+    put(p.x, y + 1, 'q');
+  }
+
+  return g.map((r) => r.join(''));
+}
+
+export const PALISADE_GATE = axialJoins(
+  defineSprite({
+    name: 'palisade-gate',
+    // The hub, exactly where the fence puts it — plus the headroom the posts
+    // needed, which is added to the TOP of the grid so the ground line does
+    // not move. A gate whose anchor drifted from its fence's would butt
+    // half a pixel out and read as a repair.
+    anchor: [CX, CY + 9],
+    rows: fieldGateRows(),
+    footprint: [1, 1],
+    tags: ['structure', 'enclosure', 'timber', 'gate'],
+  })
+);
+
+// ===========================================================================
 // SEATED MAIDEN
 //
 // A small votive kore, seated on her own block, hands in her lap. Read against
@@ -305,6 +404,7 @@ export const SEATED_MAIDEN = sprite(
 
 export const EXTRAS = Object.freeze({
   'palisade-fence': PALISADE_FENCE,
+  'palisade-gate': PALISADE_GATE,
   'seated-maiden': SEATED_MAIDEN,
 });
 

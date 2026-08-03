@@ -215,6 +215,11 @@ export const TAGS = Object.freeze({
   // The character of the place. This family is where the design thesis lives.
   character: Object.freeze([
     'wild', 'tended', 'tilled', 'straight-edge', 'enclosure',
+    // A WAY THROUGH one. The pair `enclosure`/`gate` is the same symmetry the
+    // design already learned twice — barrier and its doorway, cliff and its
+    // ramp — arriving a third time, and a tag makes it findable: a player who
+    // has built a wall can be shown the ways through it.
+    'gate',
     'open-ground', 'greensward', 'quiet', 'traffic',
     'nullifier', 'archaic', 'neoclassical', 'ruin', 'dressed-stone',
   ]),
@@ -1685,6 +1690,24 @@ const STRUCTURE = [
     blurb: 'Field stone stacked without mortar, patient work and very solid — and every gap in it full of ferns and small living things within a season. Walls are exactly what the Cyclopes\' hill famously had none of.',
   },
   {
+    id: 'drystone-gateway',
+    name: 'Wall gateway',
+    group: 'structure',
+    footprint: [1, 1],
+    art: sprite('drystone-gateway'),
+    // Not a different object — THIS wall with a hole through it, carved from
+    // the same courses and the same lattice, so the masonry can never drift
+    // from the wall it stands in. See js/art/props.js.
+    joins: 'dry-stone-wall',
+    zone: NONE,
+    register: 'archaic',
+    blocks: { gap: true, axis: 'x' },
+    deposits: dep({ order: 2, seclusion: 1, maturity: 1 }),
+    tags: ['enclosure', 'stone', 'gate', 'archaic', 'straight-edge'],
+    unlockedBy: null,
+    blurb: 'A gap left in the wall with a long stone laid over it. Whoever built this had to find one flat slab wide enough, and you can see they went looking.',
+  },
+  {
     id: 'clipped-hedge',
     name: 'Low clipped hedge',
     group: 'structure',
@@ -1720,6 +1743,23 @@ const STRUCTURE = [
     group: 'structure',
     footprint: [1, 1],
     art: sprite('hedge-arch'),
+    // ------------------------------------------------------------------
+    // A GATE IS PART OF ITS WALL'S RUN.
+    //
+    // The owner, having built a fence and stood a pergola in the middle of
+    // it: *"i was trying to use the pergola as a gate. what i think we
+    // really need are separate gates / archways for the various walls."*
+    //
+    // This is what `joins` being a GROUP NAME rather than an id is for. The
+    // arch declares itself part of `tall-hedge`'s run, so the hedges either
+    // side of it reach for it and it reaches back, and a gateway set into a
+    // hedge is one continuous object with a hole in it instead of an
+    // ornament standing where a hedge is missing.
+    //
+    // It is a catalogue decision and not an art one, deliberately: an artist
+    // who draws an archway should not have to know which wall a designer
+    // will hang it in, and the same drawing could serve two.
+    joins: 'tall-hedge',
     zone: NULLIFIER,
     register: 'neoclassical',
     // The doorway faces down-right, which is the 'x' axis in this projection —
@@ -1731,7 +1771,7 @@ const STRUCTURE = [
     designNote:
       'A hedge with a DOORWAY: blocks influence except through the opening, so a gateway leaks. The occluder pass in js/fields.js is currently per-tile boolean, and "blocked except along one axis" needs either a directional occluder (which way is the gap facing?) or a two-tile piece with one solid half. Ships as a full blocker, so today the gap is decorative.',
     deposits: dep({ order: 3, seclusion: 1, maturity: 1 }),
-    tags: ['hedge', 'yew', 'clipped', 'arch', 'enclosure', 'nullifier', 'neoclassical', 'traffic'],
+    tags: ['hedge', 'yew', 'clipped', 'arch', 'gate', 'enclosure', 'nullifier', 'neoclassical', 'traffic'],
     unlockedBy: null,
     blurb: 'A tall hedge with a clipped doorway cut through it. The most interesting thing here: it is meant to let two zones touch through one controlled opening, so you can join what you divided without knocking the hedge down.',
   },
@@ -1761,6 +1801,30 @@ const STRUCTURE = [
     tags: ['enclosure', 'straight-edge', 'timber', 'tended'],
     unlockedBy: null,
     blurb: 'Split stakes woven low, more a statement than an obstacle. It is the hortus conclusus of the last tapestry — and the thing a centaur most dislikes seeing across a slope.',
+  },
+  {
+    id: 'palisade-gate',
+    name: 'Field gate',
+    group: 'structure',
+    footprint: [1, 1],
+    art: sprite('palisade-gate'),
+    // A PIECE OF THE FENCE, not an ornament standing where one is missing.
+    // See `hedge-arch` above for the argument; this is the same move for the
+    // timber run, and it is the one the owner actually reached for when they
+    // put a pergola in the middle of a fence.
+    joins: 'palisade-fence',
+    zone: NONE,
+    register: 'archaic',
+    // The gap LEAKS, exactly as the hedge arch's does: `js/fields.js` still
+    // treats an occluder as a per-tile boolean, so a directional block is
+    // declared here and honoured nowhere. Shipped as a piece that does not
+    // block at all, which is the honest half of that pair — a gateway that
+    // stopped influence would be a fence with a picture of a gate on it.
+    blocks: { gap: true, axis: 'x' },
+    deposits: dep({ order: 2, seclusion: 1 }),
+    tags: ['enclosure', 'timber', 'gate', 'archaic', 'tended'],
+    unlockedBy: null,
+    blurb: 'Two stout posts, a head rail and a low leaf hung between them. You can see straight over it, which is the point: a gate says the ground beyond is somebody’s without pretending you cannot get there.',
   },
   {
     id: 'balustrade',

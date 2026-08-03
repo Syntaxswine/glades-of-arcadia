@@ -29,7 +29,7 @@
 // the cheap period trick: the same rows drawn through a shifted ramp gives you
 // an autumn tree, a moonlit statue, or a dead shrub for free.
 
-import { GROUND_ELLIPSE, JOIN_DIRS, JOIN_MASKS } from '../iso.js';
+import { GROUND_ELLIPSE, JOIN_DIRS, JOIN_MASKS, joinAxis } from '../iso.js';
 
 const TRANSPARENT = '.';
 
@@ -505,6 +505,50 @@ function joinedPiece(name, arms, mask, ay, opts) {
     footprint: [1, 1],
     tags: opts.tags || [],
   });
+}
+
+/**
+ * A GATE. Sixteen states, but only two drawings: this one and its mirror.
+ *
+ * ---------------------------------------------------------------------------
+ * The owner, having built a fence and put a pergola in the middle of it:
+ * *"i was trying to use the pergola as a gate. what i think we really need are
+ * separate gates / archways for the various walls."*
+ *
+ * A gate is a piece of the WALL, not an ornament standing near one. It has to
+ * butt into the run at both ends and it has to have a hole you walk through,
+ * and those two facts are the whole design:
+ *
+ *   IT JOINS. `joins` in js/catalog.js is a GROUP NAME, defaulting to the id —
+ *   which is what lets `hedge-arch` declare `joins: 'tall-hedge'` and take its
+ *   place in a hedge's run rather than sitting beside it looking similar. The
+ *   hedges either side see it as a neighbour and reach for it; it sees them.
+ *   IT IS NOT COMPOSED FROM ARMS. `linearJoins` cuts a bar at its hub and
+ *   recombines the halves, which is right for a wall and would destroy a
+ *   doorway — half an arch is a post and a piece of lintel, and two of those
+ *   from different directions is rubble. A gate is drawn WHOLE.
+ *
+ * So every mask resolves through `joinAxis` to one of two pictures: as drawn,
+ * or mirrored. A gate on a corner is not a thing anybody builds; it falls back
+ * to the axis it has most of, which is the least surprising answer available
+ * and beats drawing nothing.
+ * ---------------------------------------------------------------------------
+ */
+export function axialJoins(art) {
+  const mirrored = defineSprite({
+    ...art,
+    name: `${art.name}@ty`,
+    rows: art.rows.map((r) => r.split('').reverse().join('')),
+    // The anchor moves with the mirror: the pixel at `ax` lands at `w-1-ax`.
+    // Getting this wrong shifts the gate sideways by twice its anchor offset,
+    // which on a centred sprite is invisible and on any other one is not.
+    anchor: [art.w - 1 - art.anchor[0], art.anchor[1]],
+    joins: null,
+  });
+  const joins = Object.freeze(
+    Array.from({ length: JOIN_MASKS }, (_, m) => (joinAxis(m) === 'ty' ? mirrored : art))
+  );
+  return defineSprite({ ...art, joins });
 }
 
 /** A linear piece and all sixteen of its connection states. */

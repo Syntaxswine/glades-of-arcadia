@@ -51,7 +51,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, groundFoot, linearJoins } from './format.js';
+import { defineSprite, padToAnchor, groundFoot, linearJoins, axialJoins } from './format.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -3255,7 +3255,7 @@ export const HEDGE_ARCH = hedgeRun('hedge-arch', {
  * its own shaded flank. A wall shaded as one slab is a plank; a wall drawn as
  * even courses is brickwork, which is the wrong register entirely.
  */
-export const DRYSTONE_WALL = (() => {
+function drystoneGrid(gate = false) {
   const len = 65, deep = 8, high = 13, y0 = 3;
   const g = G(len, Math.ceil(y0 + len / 2 + deep + high + 8));
   // Stone id from a coarse, deliberately irregular lattice.
@@ -3265,10 +3265,17 @@ export const DRYSTONE_WALL = (() => {
     const col = Math.floor((x + row * 5) / w);
     return { row, col, edgeX: (x + row * 5) % w === 0, key: col * 31 + row * 7 };
   };
-  for (let x = 0; x < len; x++) {
-    const far = y0 + x / 2;
+  const footAt = (x) => Math.round(y0 + x / 2 + deep + high + nz(x * 0.4, 3) * 2);
+  /**
+   * ONE COLUMN of wall — the cap course along the top, then the near face down
+   * to the foot. Factored out because THE GATEWAY'S PIERS ARE THIS WALL, built
+   * higher: a first attempt drew them as bare four-pixel strokes with no cap
+   * and no depth and they came out as a wire bracket hovering over the stones.
+   * A pier is masonry. If it does not get the same treatment as the wall it
+   * stands in, it is not the same wall.
+   */
+  const column = (x, far, foot) => {
     const near = far + deep;
-    const foot = Math.round(near + high + nz(x * 0.4, 3) * 2);
     // Cap course along the top: the lit face of the wall.
     for (let y = Math.round(far); y <= Math.round(near); y++) {
       const st = stoneAt(x, y * 3);
@@ -3287,7 +3294,59 @@ export const DRYSTONE_WALL = (() => {
       if (t > 0.82) i -= 1;
       put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
     }
+  };
+
+  for (let x = 0; x < len; x++) column(x, y0 + x / 2, footAt(x));
+
+  // ------------------------------------------------------------------------
+  // THE GATEWAY, built out of the wall it stands in.
+  //
+  // The owner: *"what i think we really need are separate gates / archways for
+  // the various walls."* A gateway in a drystone wall is not a different
+  // object — it is this wall with a hole through it and two piers carrying a
+  // lintel over the hole, drawn from the same courses and the same lattice, so
+  // the masonry can never drift from the wall either side of it.
+  //
+  // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH, which is the whole difficulty. A
+  // first attempt carved a doorway INTO it and produced a dark smudge that was
+  // invisible at 1x — correctly, because a hole in a knee-high wall is a gap
+  // you step over rather than a way through. A gateway has to ANNOUNCE ITSELF:
+  // the hedge arch does it by standing four pixels proud of its hedge, and
+  // real gateposts do it by being the tallest thing in the field. So the piers
+  // are built UP and the lintel bridges them.
+  // ------------------------------------------------------------------------
+  if (gate) {
+    const CX = len / 2;
+    const HALF_GAP = 10; // the clear opening, in run pixels
+    const PIER = 6; // ...and the jamb either side of it
+    const RISE = 12; // how far the piers stand proud of the wall's cap
+    for (let x = 0; x < len; x++) {
+      const d = Math.abs(x - CX);
+      if (d > HALF_GAP + PIER) continue;
+      const far = y0 + x / 2;
+      const foot = footAt(x);
+      for (let y = Math.round(far - RISE); y <= foot; y++) put(g, x, y, '.');
+      if (d <= HALF_GAP) {
+        // The passage. A hole cut in a wall that shows the GRASS behind it
+        // reads as damage — decor.js's lesson on the hedge arch, in stone — so
+        // the opening is filled with the dark of the way through.
+        for (let y = Math.round(far + deep) - 1; y <= foot; y++) {
+          put(g, x, y, nz(x, y) > 0.84 ? STONE[1] : STONE[0]);
+        }
+        // The lintel: one long stone laid over the opening, drawn as a short
+        // section of wall so it is the same masonry rather than a bar.
+        column(x, far - RISE, Math.round(far - RISE) + deep + 3);
+      } else {
+        column(x, far - RISE, foot); // the pier: this wall, built higher
+      }
+    }
   }
+
+  return { g, ay: Math.round(y0 + 16 + deep + high) };
+}
+
+export const DRYSTONE_WALL = (() => {
+  const { g, ay } = drystoneGrid(false);
   // ALL SIXTEEN CONNECTION STATES, for one line — js/art/format.js §JOINING.
   // The wall was already drawn as a full-tile bar running down-right from an
   // anchor at its exact midpoint (x = 32 of 65), which is the only thing
@@ -3302,8 +3361,28 @@ export const DRYSTONE_WALL = (() => {
   // each other and stuck a spur out past the turn.
   return linearJoins(
     'drystone-wall',
-    { g, ax: 32, ay: Math.round(y0 + 16 + deep + high) },
+    { g, ax: 32, ay },
     { tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'] }
+  );
+})();
+
+/**
+ * ...AND THE WAY THROUGH IT.
+ *
+ * `axialJoins`, not `linearJoins`: half a gateway is a pier and a piece of
+ * lintel, and two of those arriving from different directions is a rockfall.
+ * A gate is drawn WHOLE and every mask resolves to it or its mirror.
+ *
+ * The catalogue puts it in the wall's group (`joins: 'dry-stone-wall'`), which
+ * is what makes the walls either side reach for it — so a gateway is a hole in
+ * one continuous wall rather than an arch standing where a wall is missing.
+ */
+export const DRYSTONE_GATEWAY = (() => {
+  const { g, ay } = drystoneGrid(true);
+  return axialJoins(
+    composed('drystone-gateway', g, [32, ay], {
+      tags: ['structure', 'rock', 'order', 'enclosure', 'gate'],
+    })
   );
 })();
 
@@ -4300,6 +4379,7 @@ export const PROPS = {
   'grotto-mouth': GROTTO_MOUTH,
   'cave-mouth': CAVE_MOUTH,
   'drystone-wall': DRYSTONE_WALL,
+  'drystone-gateway': DRYSTONE_GATEWAY,
   bench: BENCH,
   pergola: PERGOLA,
   bridge: BRIDGE,

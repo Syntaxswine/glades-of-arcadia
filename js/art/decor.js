@@ -60,7 +60,7 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP, linearJoins } from './format.js';
+import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP, linearJoins, axialJoins } from './format.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -1877,7 +1877,17 @@ function hedgeArchGrid() {
     tags: ['decor', 'hedge', 'plant', 'nullifier', 'gate', 'neoclassical'],
   });
 }
-export const HEDGE_ARCH = HARCH;
+/**
+ * A GATE IN THE HEDGE'S RUN, not an ornament beside one.
+ *
+ * `axialJoins` gives it the sixteen connection states as two drawings — itself
+ * and its mirror — so the hedges either side reach for it and it reaches back.
+ * The catalogue does the other half: `joins: 'tall-hedge'` puts it in that
+ * wall's group. Nothing about the ART says which wall it belongs to, which is
+ * right: a gateway is a catalogue decision, and an artist who draws one should
+ * not have to know what the designer will hang it in.
+ */
+export const HEDGE_ARCH = axialJoins(HARCH);
 
 /** Topiary cone — clipped box, a true cone, with the same speckle as the ball. */
 function topiaryConeGrid() {

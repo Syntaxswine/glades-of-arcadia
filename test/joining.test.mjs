@@ -191,12 +191,49 @@ test('every entry declares which run it belongs to', () => {
     assert.equal(typeof d.joins, 'string', `${d.id} has no join group`);
   }
   assert.equal(byId('palisade-fence').joins, 'palisade-fence');
-  // Same group means "these connect". Defaulting to the id means nothing
-  // connects to anything it is not, which is the answer that cannot surprise
-  // a player — a low hedge cornering into a tall one is a design decision and
-  // this is not where it gets made by accident.
-  const groups = new Set(CATALOG.map((d) => d.joins));
-  assert.equal(groups.size, CATALOG.length, 'two entries share a join group by default');
+});
+
+test('a gate belongs to its wall, and only a gate shares a group', () => {
+  // ------------------------------------------------------------------------
+  // The owner: *"i was trying to use the pergola as a gate. what i think we
+  // really need are separate gates / archways for the various walls."*
+  //
+  // Same group means "these connect", and defaulting to the id means nothing
+  // connects to anything it is not. Sharing one is therefore a DECISION, and
+  // this test is where it has to be made on purpose: a hedge arch declaring
+  // itself part of the tall hedge's run is the whole gate mechanic, and two
+  // unrelated pieces sharing a group by accident would have them reaching for
+  // each other across a garden.
+  // ------------------------------------------------------------------------
+  const shared = new Map();
+  for (const d of CATALOG) {
+    if (!shared.has(d.joins)) shared.set(d.joins, []);
+    shared.get(d.joins).push(d.id);
+  }
+  const pairs = [...shared].filter(([, ids]) => ids.length > 1);
+
+  // Every group with more than one member is a wall and its gates, and the
+  // wall is the one whose id names the group.
+  for (const [group, ids] of pairs) {
+    assert.ok(ids.includes(group), `join group '${group}' has no wall of that name: ${ids}`);
+    for (const id of ids) {
+      if (id === group) continue;
+      assert.ok(
+        byId(id).tags.includes('gate'),
+        `${id} shares ${group}'s run but is not tagged a gate — a piece that ` +
+          `joins a wall it is not a way through will reach for its neighbours ` +
+          `and butt into them as if it were more wall`
+      );
+    }
+  }
+
+  // ...and the gates that exist are in a wall's run, not in their own.
+  const gates = CATALOG.filter((d) => d.tags.includes('gate'));
+  assert.ok(gates.length >= 2, 'the gate family lost members');
+  for (const g of gates) {
+    assert.notEqual(g.joins, g.id, `${g.id} is a gate to nowhere — it joins only itself`);
+    assert.ok(byId(g.joins), `${g.id} joins '${g.joins}', which is not a placeable`);
+  }
 });
 
 // ---------------------------------------------------------------------------
