@@ -2420,7 +2420,7 @@ const TURNS = new Set([
  * A name here without a `back` on its art would be a wheel position that draws
  * the same picture twice, so the self-check below refuses that.
  */
-const TURNS_FOUR = new Set(['earth-ramp']);
+const TURNS_FOUR = new Set(['earth-ramp', 'rock-scramble']);
 
 function normalise(raw) {
   const z = raw.zone || NONE;

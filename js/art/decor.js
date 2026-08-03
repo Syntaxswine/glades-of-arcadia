@@ -2880,8 +2880,20 @@ function scrambleCell(x, y) {
   return jx * 7 + gy * 3;
 }
 
-/** Rock scramble — informal, satyr-leaning. Not steps: boulders you climb. */
-function rockScrambleGrid() {
+/**
+ * Rock scramble — informal, satyr-leaning. Not steps: boulders you climb.
+ *
+ * FOUR WAYS ROUND, like the earth ramp and for the same reason. The owner:
+ * *"rock scramble does not rotate properly like the other stairs."* It did not
+ * rotate at ALL — it was never in catalog.js's `TURNS`, so the wheel passed
+ * straight over it and a scramble could only ever climb toward -tx.
+ *
+ * `near` is `rampSurface`'s own flag and is the whole of the second drawing:
+ * `s` instead of `1 - s` turns the height field round, which is the 180-degree
+ * twin the mirror cannot reach (a vertical flip is forbidden — light is always
+ * upper-left). See §THE CONNECTOR'S PLAN and the earth ramp above.
+ */
+function rockScrambleGrid(near = false) {
   const { g, H } = rampSurface(
     (x, y) => {
       // Blocky and IRREGULAR: no two boulders share a top, which is the whole
@@ -2894,8 +2906,28 @@ function rockScrambleGrid() {
       else if (m > 0.86) v += 1;
       return ROCK[clamp(v, 1, 3)];
     },
-    (x, y, k) => (k > 2 ? 'v' : hash(x, y + k, 73) > 0.5 ? 'w' : 'v'),
-    { step: 3 }
+    (x, y, k, lift) => {
+      // THE NEAR DRAWING IS NEARLY ALL END WALL — the earth ramp's finding,
+      // arriving again unchanged. Its high end is the edge closest to the
+      // camera, so what the player sees is a 16 px wall with a sliver of
+      // boulder above it, and 16 px in one value reads as a HOLE in the ground
+      // rather than as a heap of blocks. The two lower edges of a diamond face
+      // opposite ways: the left one is turned toward the light, the right away.
+      // GATED ON `near` — `lift` reaches 16 on the away drawing too, at its
+      // back edge, and an ungated branch silently repaints a drawing that was
+      // already right. See the stone stair, where it did exactly that.
+      if (near && lift > 3 && k > 1) {
+        return x < TILE_W / 2
+          ? hash(x, y + k, 76) > 0.55
+            ? 'x'
+            : 'w'
+          : hash(x, y + k, 77) > 0.55
+            ? 'w'
+            : 'v';
+      }
+      return k > 2 ? 'v' : hash(x, y + k, 73) > 0.5 ? 'w' : 'v';
+    },
+    { step: 3, near }
   );
   // Deep joints between the boulders, and moss where the light does not reach.
   for (let y = 0; y < H; y++) {
@@ -2916,13 +2948,20 @@ function rockScrambleGrid() {
   return { g, H };
 }
 {
+  const near = rockScrambleGrid(true);
   const r = rockScrambleGrid();
+  // eslint-disable-next-line no-var
+  var SCRAM_NEAR = spriteAt('rock-scramble-near', [32, LEVEL_H + 16], near.g, {
+    tags: ['decor', 'connector', 'rock', 'archaic', 'ramp'],
+  });
   // eslint-disable-next-line no-var
   var SCRAM = spriteAt('rock-scramble', [32, LEVEL_H + 16], r.g, {
     tags: ['decor', 'connector', 'rock', 'archaic', 'ramp'],
+    back: SCRAM_NEAR,
   });
 }
 export const ROCK_SCRAMBLE = SCRAM;
+export const ROCK_SCRAMBLE_NEAR = SCRAM_NEAR;
 
 /**
  * Stepped terrace wall — a retaining wall with the steps built into it. The
@@ -3654,6 +3693,10 @@ export const DECOR = Object.freeze({
   'earth-ramp-near': EARTH_RAMP_NEAR,
   'stone-stair': STONE_STAIR,
   'rock-scramble': ROCK_SCRAMBLE,
+  // Its uphill-toward-the-viewer twin, reachable through ROCK_SCRAMBLE.back and
+  // registered here for the same reason `earth-ramp-near` is: so the shot tools
+  // and the sprite lab can look at a drawing the catalogue never names.
+  'rock-scramble-near': ROCK_SCRAMBLE_NEAR,
   'terrace-wall-stepped': TERRACE_WALL_STEPPED,
   // the archaic landscape pieces
   'rock-outcrop': ROCK_OUTCROP,

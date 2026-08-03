@@ -167,18 +167,46 @@ test('every other facing is a mirror, and every pair shares a drawing', () => {
 // upper left. So they are a second drawing.
 // ---------------------------------------------------------------------------
 
+// EVERY four-facing connector, not one of them by name. These two tests were
+// written against `EARTH_RAMP` because it was the only piece with a second
+// drawing — and when the rock scramble got one, neither test noticed it
+// existed. Same fault as the elevation probe's `ramps` scene, which had the
+// earth ramp hard-coded into it: AN INSTRUMENT BUILT AROUND ONE SUBJECT
+// CERTIFIES THAT SUBJECT AND NOTHING ELSE. The list is derived now, so the next
+// connector is covered by authoring the art and doing nothing else.
+
+/** Every four-facing sprite the catalogue can reach, as [id, art]. */
+async function fourFacingArt() {
+  const decor = await import('../js/art/decor.js');
+  const props = await import('../js/art/props.js');
+  const extras = await import('../js/art/extras.js');
+  const reg = new Map();
+  for (const table of [decor.DECOR, props.PROPS, extras.EXTRAS]) {
+    for (const [k, v] of Object.entries(table || {})) if (v && v.rows) reg.set(k, v);
+  }
+  const out = [];
+  for (const d of CATALOG) {
+    if (facingsOf(d) < 4 || !d.art || d.art.kind !== 'sprite') continue;
+    const s = reg.get(d.art.wanted) || reg.get(d.art.sprite);
+    if (s) out.push([d.id, s]);
+  }
+  return out;
+}
+
 test('a connector has a second drawing, and it is a different picture', async () => {
-  const { EARTH_RAMP, EARTH_RAMP_NEAR } = await import('../js/art/decor.js');
-  assert.equal(EARTH_RAMP.back, EARTH_RAMP_NEAR, 'earth-ramp lost its back drawing');
-  assert.notEqual(EARTH_RAMP.rows.join('\n'), EARTH_RAMP_NEAR.rows.join('\n'));
-  // ...and NOT merely its mirror, which is the whole point: if the second
-  // drawing were reachable by flipping the first, it would not need to exist.
-  const flipped = EARTH_RAMP.rows.map((r) => r.split('').reverse().join('')).join('\n');
-  assert.notEqual(flipped, EARTH_RAMP_NEAR.rows.join('\n'));
+  const all = await fourFacingArt();
+  assert.ok(all.length >= 2, `only ${all.length} four-facing connectors — the list stopped deriving`);
+  for (const [id, art] of all) {
+    assert.ok(art.back, `${id} lost its back drawing`);
+    assert.notEqual(art.rows.join('|'), art.back.rows.join('|'), `${id}'s back is the same picture`);
+    // ...and NOT merely its mirror, which is the whole point: if the second
+    // drawing were reachable by flipping the first, it would not need to exist.
+    const flipped = art.rows.map((r) => r.split('').reverse().join('')).join('|');
+    assert.notEqual(flipped, art.back.rows.join('|'), `${id}'s back is only its mirror`);
+  }
 });
 
 test('the two drawings tilt opposite ways', async () => {
-  const { EARTH_RAMP, EARTH_RAMP_NEAR } = await import('../js/art/decor.js');
   // The top of the silhouette per column. `square()` puts s = 0 on the N-W
   // edge of the tile and s = 1 on the S-E one, so the away drawing lifts the
   // LEFT of the sprite and the near drawing lifts the RIGHT. Lower y is
@@ -188,10 +216,26 @@ test('the two drawings tilt opposite ways', async () => {
     while (y < s.h && s.rows[y][x] === '.') y++;
     return y;
   };
-  const away = { l: topAt(EARTH_RAMP, 6), r: topAt(EARTH_RAMP, 57) };
-  const near = { l: topAt(EARTH_RAMP_NEAR, 6), r: topAt(EARTH_RAMP_NEAR, 57) };
-  assert.ok(away.l < away.r, `away ramp should be high on the left: ${JSON.stringify(away)}`);
-  assert.ok(near.r < near.l, `near ramp should be high on the right: ${JSON.stringify(near)}`);
+  for (const [id, art] of await fourFacingArt()) {
+    const away = { l: topAt(art, 6), r: topAt(art, 57) };
+    const near = { l: topAt(art.back, 6), r: topAt(art.back, 57) };
+    assert.ok(away.l < away.r, `${id} away should be high on the left: ${JSON.stringify(away)}`);
+    assert.ok(near.r < near.l, `${id} near should be high on the right: ${JSON.stringify(near)}`);
+  }
+});
+
+test('EVERY CONNECTOR TURNS — a way up you cannot aim is half a way up', () => {
+  // THE GUARD THAT WAS MISSING, and the reason the owner had to report this.
+  // `rock-scramble` sat at facings 1 for the entire life of the facing wheel:
+  // it was simply never added to catalog.js's `TURNS`, and nothing anywhere
+  // asked. A connector that cannot be turned is a way up the hill that exists
+  // on one of its four sides, with no reason given.
+  const stuck = CATALOG.filter((d) => d.tags.includes('connector') && facingsOf(d) < 2);
+  assert.deepEqual(
+    stuck.map((d) => d.id),
+    [],
+    'a connector that cannot be turned — add it to TURNS, or to TURNS_FOUR with a back drawing'
+  );
 });
 
 test('four facings means two drawings — nothing claims four with one', async () => {

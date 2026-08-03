@@ -1,6 +1,6 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever, the back rim and the brush)
+Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever, the back rim, the brush and the scramble)
 against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** §8, which is now the
 keystone for anything about which way an object faces or how two pieces meet.
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
@@ -668,7 +668,7 @@ undoable and deliberately untaught.
 
 ---
 
-## 4o · THE CLOCK LEVER, THE BACK RIM AND THE BRUSH ✅ SHIPPED (2026-08-03)
+## 4o · THE CLOCK LEVER, THE BACK RIM, THE BRUSH AND THE SCRAMBLE (2026-08-03)
 
 Full write-up: **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md` §8.** Both were owner
 asks on the same day, and they are the same ask twice: a garden is something you
@@ -718,6 +718,34 @@ and never feeds `doTerrain`, so they cannot double up. Partial strokes are
 allowed and silent — a brush that only works on empty squares cannot be used
 twice in the same place. Multi-tile placeables ignore it, per the owner's own
 scoping. Still one undo step.
+
+### ▸ The rock scramble turns — it was at facings 1, not turning at all
+
+Owner: *"rock scramble does not rotate properly like the other stairs."* It was
+never added to `TURNS` when the wheel was built and nothing asked. Fixed with
+the earth ramp's own mechanism (`rampSurface`'s `near`, a `back` drawing,
+`TURNS_FOUR`), plus the guard that was missing: **`EVERY CONNECTOR TURNS`**
+refuses any `connector`-tagged entry with fewer than two facings.
+
+**`near` must be GATED.** `lift` reaches 16 on the away drawing too, so an
+ungated wall branch repaints a drawing that was already right. A `back` must
+not change the front — verified by rendering both against `git show HEAD:` in a
+throwaway worktree: byte-identical.
+
+**Two instruments were certifying one sprite** and both are fixed: the
+elevation probe's `ramps` scene had `EARTH_RAMP` hard-coded (now
+`connectorScene(artName)`), and facing.test.mjs's two connector tests
+destructured `EARTH_RAMP` by name, so they never saw the scramble's new
+drawing. Both derive from the catalogue now.
+
+### ▸ STILL OPEN: `stone-stair` and `stepped-terrace-wall` turn only TWO ways
+
+Tried in the same pass and **reverted deliberately.** The mechanism takes
+`near` as readily as the others, but a flight of dressed steps coming at the
+camera came out a grey lid with a pale wedge: almost no tread reads, because
+the near flight is nearly all end wall and dressed masonry has none of the rock
+scramble's texture to carry that. **It wants an authored drawing, not a flag.**
+Nothing regressed — both turn two ways as they always did.
 
 ### ▸ Follow-ons, none blocking
 

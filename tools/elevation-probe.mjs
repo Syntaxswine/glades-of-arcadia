@@ -169,7 +169,20 @@ const SCENES = {
   // near-facing drawing reads as a box; against the terrace it climbs, it
   // reads as a ramp. Same lesson as tools/joinshot.mjs, one axis over.
   // ------------------------------------------------------------------------
-  ramps: () => {
+  ramps: () => connectorScene('EARTH_RAMP'),
+
+  // THE SAME SCENE, THE OTHER CONNECTOR. The owner: *"rock scramble does not
+  // rotate properly like the other stairs."* It did not rotate at all — it was
+  // never in catalog.js's `TURNS`. Once it gained a `back` drawing it needed
+  // the same four-sided look the earth ramp got, so the scene stopped being
+  // about ONE sprite: a hard-coded subject is how an instrument ends up
+  // certifying the piece it was built for and nothing else.
+  scramble: () => connectorScene('ROCK_SCRAMBLE'),
+};
+
+/** A square terrace with one connector on each of its four sides. */
+function connectorScene(artName) {
+  {
     const sc = scene(13, 13, (s) => {
       for (let y = 0; y < s.mapH; y++) {
         for (let x = 0; x < s.mapW; x++) {
@@ -180,7 +193,7 @@ const SCENES = {
         }
       }
     });
-    const art = decor && decor.EARTH_RAMP;
+    const art = decor && decor[artName];
     if (art) {
       // One per side of the terrace, each on the LOW ground with the step it
       // climbs immediately beside it. facing 0 climbs toward -tx, 1 toward
@@ -197,8 +210,10 @@ const SCENES = {
       ];
     }
     return sc;
-  },
+  }
+}
 
+const MORE_SCENES = {
   // Everything at once, which is what the game looks like and therefore the
   // one to judge: terraces, a pinnacle, a fall, four grass types, contest.
   glade: () =>
@@ -221,6 +236,11 @@ const SCENES = {
     }),
 };
 
+// `connectorScene` has to be a function declaration between them (it is the
+// scene both connector entries call), so the rest of the list is folded back in
+// here rather than the list being split into two things a reader must track.
+Object.assign(SCENES, MORE_SCENES);
+
 // Where to point the camera for each scene. Framing matters: centred on the
 // map, a hillside puts all its cliffs off the top of the viewport and the shot
 // shows nothing but the plateau you happen to be standing on.
@@ -230,6 +250,7 @@ const FRAMING = {
   zoning: [9.5, 9.5],
   glade: [6.5, 6.5],
   ramps: [6, 6],
+  scramble: [6, 6],
 };
 
 function draw(name, opts = {}) {
@@ -270,9 +291,12 @@ for (const name of Object.keys(SCENES)) {
 // ...and the ramps close up, because the whole question about them is what
 // happens in the eight pixels where the slope meets the step it climbs, and
 // at 1x that is eight pixels.
+for (const [name, file] of [['ramps', 'elev-ramps-close.png'], ['scramble', 'elev-scramble-close.png']]) {
+  if (!made[name]) continue;
+  writeFileSync(join(OUT, file), encodePNG(crop(made[name].cv, 190, 110, 260, 180, 3)));
+  log(`wrote ${file}`);
+}
 if (made.ramps) {
-  writeFileSync(join(OUT, 'elev-ramps-close.png'), encodePNG(crop(made.ramps.cv, 190, 110, 260, 180, 3)));
-  log('wrote elev-ramps-close.png');
 }
 
 // PLANTED TERRACES — the shot that tests the depth sort with height. Trees on

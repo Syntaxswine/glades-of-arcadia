@@ -720,11 +720,79 @@ already had, and the one a brush is likeliest to break. Measured live: a
 5-brush drag plus a 3-brush click made 48 raised tiles; one undo left 9, the
 second left 0.
 
-### Where it stands after these two
+### The rock scramble — it was not turning BADLY, it was not turning AT ALL
+
+> *"rock scramble does not rotate properly like the other stairs."*
+
+`rock-scramble` sat at **facings 1**. It was never added to catalog.js's
+`TURNS` when the facing wheel was built, and **nothing anywhere asked** — so
+the one connector a satyr garden actually wants could only ever climb toward
+-tx, and a player who terraced a hill and wanted up from another side was given
+no reason why.
+
+The fix is the earth ramp's, unchanged: `rampSurface` already takes `near`, and
+`s` instead of `1 - s` turns the height field round — the 180-degree twin the
+mirror cannot reach, because a vertical flip is forbidden here (light is always
+upper-left). `ROCK_SCRAMBLE.back = ROCK_SCRAMBLE_NEAR`, and `TURNS_FOUR` gains
+one name.
+
+**The near drawing needed the wall treatment, for the third time.** Its high end
+is the edge closest to the camera, so what the player sees is a 16 px face with
+a sliver of boulder above it, and 16 px in one value reads as a HOLE in the
+ground. Split by side — the left lower edge is turned toward the light, the
+right away.
+
+#### `near` HAD TO BE GATED, and that is the part worth reading
+
+The first version keyed the wall branch on `lift > 3` alone. But `lift` reaches
+16 on the AWAY drawing too — at its back edge, where the face is a hairline
+nobody sees — so the branch fired on a drawing that was already right and
+repainted it. On the stone stair (tried at the same time) the treads stopped
+reading; on the scramble it was subtler and might have shipped.
+
+**A `back` drawing must not change the front.** That is now checked the only way
+it can be: render both connectors' away drawings and compare them against
+`git show HEAD:` in a throwaway worktree. All three came back BYTE-IDENTICAL.
+
+#### Two instruments were certifying one sprite
+
+Fixing the scramble exposed the same shape of fault in the tools twice:
+
+- `elevation-probe.mjs`'s `ramps` scene had `EARTH_RAMP` **hard-coded**, so the
+  four-sided look could only ever be taken of the earth ramp. It is
+  `connectorScene(artName)` now, with a `scramble` scene beside `ramps`.
+- `test/facing.test.mjs`'s two connector tests — *"a second drawing, and it is a
+  different picture"* and *"the two drawings tilt opposite ways"* — both
+  destructured `EARTH_RAMP` by name. When the scramble gained a second drawing,
+  **neither test noticed it existed.** Both derive their list from the catalogue
+  now, so the next connector is covered by authoring art and nothing else.
+
+**AN INSTRUMENT BUILT AROUND ONE SUBJECT CERTIFIES THAT SUBJECT AND NOTHING
+ELSE.** Fourth blind instrument in three days.
+
+#### The guard that was actually missing
+
+`EVERY CONNECTOR TURNS` — a new test refusing any entry tagged `connector` with
+fewer than two facings. That is the check that would have caught this without
+the owner having to notice, and there was none.
+
+#### NOT DONE: the stone stair still only turns two ways
+
+It was tried in the same pass and **reverted, deliberately.** The mechanism
+works — it takes `near` as readily as the others — but a flight of dressed steps
+coming at the camera came out a grey lid with a pale wedge on it: almost no
+tread reads, because the near flight is nearly all end wall and dressed masonry
+has none of the rock scramble's texture to carry that. It wants an authored
+drawing, not a flag. `stepped-terrace-wall` is in the same position.
+
+Both still turn TWO ways, which is what they did before, so nothing regressed —
+they simply cannot yet be climbed from the camera's side.
+
+### Where it stands after these four
 
 | | |
 |---|---|
-| tests | **430** (was 409) — 8 for the clock, 5 for the rim, 8 for the brush |
+| tests | **432** (was 409) — 8 clock, 5 rim, 8 brush, 1 connector guard |
 | playtest | 49 / 49 |
 | `iso-audit --strict` | 1 of 311 — `balustrade`, unchanged |
 | elevation probe | clean; palette purity 0 offending colours |
