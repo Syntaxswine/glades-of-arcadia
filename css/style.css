@@ -244,6 +244,13 @@ button:disabled {
   color: var(--gold-hi);
 }
 
+/* The speed lever: a two-character label does not need a 38px button, and the
+   bar is 640 wide with six buttons already on it. */
+.bar-btn.is-narrow {
+  min-width: calc(26 * var(--u));
+  padding: 0 calc(2 * var(--u));
+}
+
 /* ------------------------------------------------------------------ panel -- */
 
 .panel {

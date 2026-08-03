@@ -1308,6 +1308,21 @@ export function createInput(opts = {}) {
         if (ui && ui.toggleTool) ui.toggleTool('move');
         refreshGhost();
         return;
+      // HOW FAST TIME RUNS. Punctuation rather than letters, because every
+      // letter this game has is spoken for — eight of them name the categories
+      // (GROUP_KEY in ui.js) and the rest are tools — and because `,` and `.`
+      // carry `<` and `>` on the same keys, which is the only pair on the board
+      // that means slower and faster on its face. `+`/`-` are the zoom.
+      //
+      // They CLAMP, unlike the button, which wraps: a key you can hold has to
+      // have an end, or the garden stops dead when you overshoot.
+      case ',':
+      case '<':
+      case '.':
+      case '>':
+        ev.preventDefault();
+        if (ui && ui.cycleSpeed) ui.cycleSpeed(k === ',' || k === '<' ? -1 : 1);
+        return;
       case ' ':
         ev.preventDefault();
         keys.add(' ');

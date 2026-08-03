@@ -51,6 +51,58 @@ const SIM_DT = 1 / SIM_HZ; // garden seconds per simulation step
 const MAX_FRAME_DT = 0.25; // clamp both ends — a slept tab must not fast-forward
 const MAX_CATCHUP = 5; // spiral-of-death guard
 
+/**
+ * THE SPEED CONTROL, and the one law it must not break.
+ *
+ * A garden is a thing you wait for. That is the point of it — and it is also
+ * the reason a builder of this kind has always had a clock you can lean on:
+ * you plant a walk of cypress and you would like to SEE it be a walk of
+ * cypress. Every game in the lineage has this control, in the same corner.
+ *
+ * **THE STEP IS NEVER SCALED. ONLY THE NUMBER OF STEPS.**
+ *
+ * The simulation is fixed-timestep on purpose (see the loop, below): a 144Hz
+ * monitor and a 30Hz one grow the same garden because both advance in 1/20s
+ * increments. The lazy way to make time go faster is `sim(SIM_DT * speed)`,
+ * and it would quietly undo that: growth curves, creature legs, the field
+ * ageing and the pathing would all take bigger bites, and a garden run at 4x
+ * would not be the same garden run for four times as long. It would be a
+ * DIFFERENT garden — coarser, and in the pathing's case measurably wrong,
+ * because `_leg` integrates a position and a longer leg overshoots corners.
+ *
+ * So speed multiplies the ACCUMULATOR. At 4x, four times as many identical
+ * 1/20s steps run per frame, which is arithmetically indistinguishable from
+ * having left the tab open four times as long. Nothing downstream can tell,
+ * and nothing downstream has to be told — which is why no other file in this
+ * game knows this control exists.
+ *
+ * The catch-up guard scales with it, or the loop would hit its ceiling every
+ * frame at 4x and drop the very time the player asked for.
+ */
+export const SPEEDS = Object.freeze([1, 2, 4]);
+
+/**
+ * How many fixed steps this frame owes, and what is left over. Pure, and
+ * exported because it is the whole mechanism and the law above is worth a test
+ * rather than a comment.
+ *
+ * `dt` is REAL seconds, already clamped. The returned `steps` is capped, and
+ * `dropped` says whether the cap bit — the caller throws the debt away rather
+ * than compounding it, which is the existing spiral-of-death behaviour.
+ */
+export function simSchedule(acc, dt, speed = 1) {
+  const mult = SPEEDS.includes(speed) ? speed : 1;
+  let left = acc + dt * mult;
+  const cap = MAX_CATCHUP * mult;
+  let steps = 0;
+  while (left >= SIM_DT && steps < cap) {
+    left -= SIM_DT;
+    steps++;
+  }
+  const dropped = steps === cap;
+  return { steps, acc: dropped ? 0 : left, dropped, dt: SIM_DT };
+}
+
 const LADDER_EVERY = 4; // sim steps between event drains — 5 Hz
 const MOOD_EVERY = 10; // sim steps between audio mood pushes — 2 Hz
 const AUTOSAVE_EVERY = 4.0; // garden seconds; only writes when something changed
@@ -2381,6 +2433,25 @@ async function bootOnce(shell = {}) {
   let last = 0;
   let acc = 0;
   let running = true;
+  let speed = 1;
+
+  // The control itself. ui.js reads `game.speed` to label the button and calls
+  // `setSpeed` to turn it; input.js goes through ui.js. Nothing else knows.
+  game.speeds = SPEEDS;
+  game.speed = speed;
+  game.setSpeed = (n) => {
+    speed = SPEEDS.includes(n) ? n : 1;
+    game.speed = speed;
+    // Whatever was banked at the old rate is banked at the new one; a change of
+    // speed is not a reason to skip or replay a step.
+    return speed;
+  };
+  game.cycleSpeed = (d = 1) => {
+    const at = SPEEDS.indexOf(speed);
+    // Clamped, not wrapped: pressing "faster" at 4x should stay at 4x rather
+    // than drop the player back to 1x without their asking.
+    return game.setSpeed(SPEEDS[clamp(at + d, 0, SPEEDS.length - 1)]);
+  };
 
   const handleEvents = guard('events', (events) => {
     for (const ev of events) {
@@ -2593,14 +2664,11 @@ async function bootOnce(shell = {}) {
     if (!(dt > 0)) dt = 0;
     if (dt > MAX_FRAME_DT) dt = MAX_FRAME_DT;
 
-    acc += dt;
-    let n = 0;
-    while (acc >= SIM_DT && n < MAX_CATCHUP) {
-      acc -= SIM_DT;
-      n++;
-      sim(SIM_DT);
-    }
-    if (n === MAX_CATCHUP) acc = 0; // drop the debt rather than compound it
+    // `simSchedule` owns the arithmetic and the speed multiplier; the step it
+    // hands back is ALWAYS SIM_DT. See its note above.
+    const due = simSchedule(acc, dt, speed);
+    acc = due.acc;
+    for (let n = 0; n < due.steps; n++) sim(due.dt);
 
     stepInput(dt);
     stepUI(dt);

@@ -1185,6 +1185,23 @@ export function createUI(opts = {}) {
   const overlayName = el('span', 'bar-overlay', '');
   const barRight = el('div', 'bar-right');
 
+  /**
+   * THE CLOCK LEVER, and it lives beside the clock rather than with the tools.
+   *
+   * Every button to its right does something to the GARDEN — plants, clears,
+   * undoes, asks. This one does something to the WATCHING, and the topbar
+   * already has a place for that: `day 3 · afternoon`, two pixels to its left.
+   * Reading "day 3 · afternoon  2x" as one sentence is the whole argument for
+   * the position.
+   *
+   * It CYCLES rather than offering three buttons. Three would be the
+   * period-correct answer and they will not fit: the bar is 640 logical pixels
+   * and already carries six. One button that says what it is currently doing
+   * costs 26 of them.
+   */
+  const btnSpeed = btn('bar-btn is-narrow', '1x', () => cycleSpeed(), 'How fast time runs (, and .)');
+  btnSpeed.setAttribute('aria-label', 'Speed of time');
+
   const btnJournal = btn('bar-btn', 'Journal', () => toggleJournal(), 'Journal (J)');
   btnJournal.setAttribute('aria-haspopup', 'dialog');
   const btnField = btn('bar-btn', 'Field', () => cycleOverlay(1), 'Field overlay (Tab)');
@@ -1234,7 +1251,57 @@ export function createUI(opts = {}) {
   btnMove.setAttribute('aria-label', 'Move the map');
 
   barRight.append(btnMove, btnAsk, btnJournal, btnField, btnRaze, btnUndo);
-  bar.append(timeOut, overlayName, barRight);
+  bar.append(timeOut, btnSpeed, overlayName, barRight);
+
+  // --------------------------------------------------------------- speed --
+  //
+  // main.js owns the number; this is a readout and a nudge. The host may not
+  // offer the control at all (a shell that swapped main.js out), in which case
+  // the button says so by not being there — better than a lever wired to
+  // nothing, which is the failure this codebase has already had twice.
+
+  function speedHost() {
+    const g = S.game || game;
+    return g && typeof g.setSpeed === 'function' ? g : null;
+  }
+
+  function syncSpeed() {
+    const g = speedHost();
+    if (!g) {
+      btnSpeed.hidden = true;
+      return;
+    }
+    btnSpeed.hidden = false;
+    const n = g.speed || 1;
+    btnSpeed.textContent = `${n}x`;
+    // The pressed state means "not at rest", so the eye can find a garden that
+    // has been left running fast.
+    btnSpeed.classList.toggle('is-on', n !== 1);
+    btnSpeed.setAttribute('aria-label', `Speed of time: ${n} times`);
+  }
+
+  /** `d` is +1 faster, -1 slower; a bare call means faster, and 4x wraps to 1x. */
+  function cycleSpeed(d) {
+    const g = speedHost();
+    if (!g) return null;
+    const list = Array.isArray(g.speeds) && g.speeds.length ? g.speeds : [1];
+    let n;
+    if (d === undefined) {
+      // THE BUTTON, which has only one direction and therefore must wrap —
+      // otherwise it goes dead at 4x and the player has no way back.
+      n = list[(Math.max(0, list.indexOf(g.speed || 1)) + 1) % list.length];
+      g.setSpeed(n);
+    } else {
+      // THE KEYS, which have two directions and therefore clamp.
+      n = typeof g.cycleSpeed === 'function' ? g.cycleSpeed(d) : g.setSpeed(g.speed || 1);
+    }
+    syncSpeed();
+    const now = speedHost().speed || 1;
+    say(now === 1 ? 'Time runs at its own pace.' : `Time runs ${now} times faster.`, 2200);
+    return now;
+  }
+
+  syncSpeed();
 
   function doUndo() {
     let r;
@@ -2684,6 +2751,10 @@ export function createUI(opts = {}) {
         tombTick(g);
         refreshCards(false);
         if (g && typeof g.time === 'number') setTime(g.time);
+        // main.js is the owner; a save that restored a speed, or a host that
+        // set one, shows up here rather than only on a click.
+        if (g && g !== S.game) S.game = g;
+        syncSpeed();
         const unlocked = g && (g.unlocked || (g.world && g.world.unlocked));
         if (unlocked && unlocked !== S.unlocked) {
           S.unlocked = unlocked;
@@ -2792,6 +2863,9 @@ export function createUI(opts = {}) {
     selectGroupByKey,
     selectItemIndex,
     groupKeys: () => ({ ...GROUP_KEY }),
+
+    cycleSpeed,
+    speed: () => (speedHost() ? speedHost().speed || 1 : 1),
 
     tool: () => S.tool,
     toggleTool,

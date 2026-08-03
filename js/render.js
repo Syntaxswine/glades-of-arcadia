@@ -152,6 +152,8 @@ import {
   clampLevel,
   FRONT_SIDES,
   frontNeighbour,
+  BACK_SIDES,
+  backNeighbour,
   toScreen,
   toScreenAt,
   footprintCentreAt,
@@ -1119,6 +1121,84 @@ function cliffFace(kind, side, rise, variant) {
   faceCache.set(key, cv);
   return cv;
 }
+
+// ---------------------------------------------------------------------------
+// THE BACK RIM — one pixel, and without it a hill has no back.
+// ---------------------------------------------------------------------------
+//
+// A tile standing above the neighbour BEHIND it exposes a face that points
+// away from the camera, so nothing is drawn there. Correct — and the
+// consequence is that the far edge of a plateau is grass meeting grass with no
+// mark between them. A terraced hillside reads as flat meadow until you find
+// the front of it. `iso.js §BACK_SIDES` owns which edges those are; this is
+// the mark itself.
+//
+// WHY THE COLOUR IS SOIL. It is the same colour, to the byte, as the cap at
+// the top of every visible cliff face — `contactShadow(GROUND_DEFAULT)`, the
+// ground ramp darkened two steps, which is palette.js's own rule and NOT a
+// translucent black. That is not a coincidence dressed up as one: the far edge
+// of a plateau IS the top of a cliff, and the player is looking at the single
+// line of it that clears the brow. Front and back agree without anyone having
+// to match them by eye, and there is no new colour in the palette.
+//
+// WHY IT IS DRAWN FROM THE MASK. This is a painted line in a pixel game, so it
+// walks the 2:1 stair like everything else. Taking it from `tileMask()` rather
+// than re-deriving the diamond means it cannot land a pixel off the shape it
+// belongs to, and cannot bleed onto the neighbour — the two failures that a
+// hand-stepped line has, and that look like a lighting artefact rather than a
+// mistake.
+
+const rimCache = new Map();
+
+/** The silhouette of one back edge, as a HALF_W x HALF_H stamp. */
+function backRim(side) {
+  const hit = rimCache.get(side);
+  if (hit) return hit;
+
+  const m = tileMask();
+  const cv = makeCanvas(HALF_W, HALF_H);
+  const ctx = ctxOf(cv);
+  const img = ctx.createImageData(HALF_W, HALF_H);
+  const d = img.data;
+  const [r, g, b] = hexToRGB(PALETTE.get(contactShadow(GROUND_DEFAULT)) || RAMPS.earth.hex[1]);
+
+  // BY COLUMN, NOT BY ROW — and this is the whole difference between a line
+  // and a dotted line.
+  //
+  // A 2:1 edge moves two pixels across for every one down. Walking the SIXTEEN
+  // ROWS and marking the outermost pixel of each puts those pixels two apart,
+  // touching only at their corners: at 1x it reads as a dashed rule laid over
+  // the grass, which is worse than nothing because it looks like a UI overlay.
+  // Walking the THIRTY-TWO COLUMNS and marking the topmost pixel of each gives
+  // two pixels per row — the solid stair every other 1-in-2 line in this game
+  // is drawn with (`LINE_DROP` in art/format.js is the same rule: iterate x,
+  // drop y by x >> 1).
+  //
+  // Only the TOP half of the diamond has back edges; the bottom half is the
+  // two front ones, which are drawn as actual faces.
+  const from = side === 'nw' ? 0 : HALF_W;
+  for (let cx = 0; cx < HALF_W; cx++) {
+    const lx = from + cx;
+    let ly = -1;
+    for (let y = 0; y < HALF_H && ly < 0; y++) if (m[y * TILE_W + lx]) ly = y;
+    if (ly < 0) continue;
+    const o = (ly * HALF_W + cx) * 4;
+    d[o] = r;
+    d[o + 1] = g;
+    d[o + 2] = b;
+    d[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  rimCache.set(side, cv);
+  return cv;
+}
+
+/**
+ * The rim stamp, for the test that holds it inside its own diamond. Exported
+ * rather than re-derived there: a test that rebuilds the thing it is checking
+ * checks its own copy.
+ */
+export const _backRimStamp = backRim;
 
 // ===========================================================================
 // WATERFALLS (docs/ELEVATION.md, "Water")
@@ -2431,7 +2511,20 @@ class Renderer {
       else ctx.drawImage(grassTile(tx, ty), nx - HALF_W, ny);
     }
 
-    // --- 3. foam, from a fall landing here ----------------------------------
+    // --- 3. the back rim ----------------------------------------------------
+    // Where this tile stands above the ground BEHIND it, the drop is hidden
+    // and the edge would otherwise not exist. One pixel of soil gives it a
+    // brow. See §THE BACK RIM above; `iso.js` owns which sides those are.
+    //
+    // Drawn AFTER the top, because it is the top's own outermost pixel, and
+    // before the foam, which is wetter than any edge.
+    for (const side of BACK_SIDES) {
+      const n = backNeighbour(tx, ty, side);
+      if (this._levelAt(n.tx, n.ty) >= h) continue;
+      ctx.drawImage(backRim(side), side === 'nw' ? nx - HALF_W : nx, ny);
+    }
+
+    // --- 4. foam, from a fall landing here ----------------------------------
     // Drawn with the LOWER tile, not the upper one: the lower tile's top face
     // is painted after the upper tile's column and would bury it otherwise.
     const phase = Math.max(0, this._waterPhase);

@@ -1,7 +1,7 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-02 (SEVENTH pass, end of the image-pack and compass day —
-§4n) against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`**, which is now the
+Reconciled 2026-08-03 (EIGHTH pass, §4o — the clock lever and the back rim)
+against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** §8, which is now the
 keystone for anything about which way an object faces or how two pieces meet.
 `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
 arc, the palette laws and the traps.
@@ -665,6 +665,53 @@ on `_cohere` in `js/world.js`, and a section in `docs/ELEVATION.md`. Kept
 undoable and deliberately untaught.
 
 ---
+
+---
+
+## 4o · THE CLOCK LEVER AND THE BACK RIM ✅ SHIPPED (2026-08-03)
+
+Full write-up: **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md` §8.** Both were owner
+asks on the same day, and they are the same ask twice: a garden is something you
+WAIT for and something you LOOK at.
+
+### ▸ Speed of time — `1x / 2x / 4x`, beside the clock
+
+**THE LAW: the step is never scaled, only the number of steps.** Speed
+multiplies the accumulator, so 4x runs four times as many identical 1/20s steps
+and is arithmetically the same as leaving the tab open four times as long.
+Scaling `SIM_DT` instead would work on screen and quietly coarsen the
+simulation — growth, ageing and creature legs all integrate per step.
+
+No other file knows the control exists. `MAX_CATCHUP` scales with the speed, or
+the button reads 4x while the garden runs at 2.5x. The button wraps; the keys
+(`.` and `,`) clamp. **There is deliberately no 0x** — `game.pause` already
+owns that, and two owners for one state is how the renderer once lost its
+camera.
+
+### ▸ The back rim — one pixel of soil, and a hill gets a back
+
+A tile above the neighbour BEHIND it exposes a face pointing away from the
+camera, so nothing is drawn and a terrace reads as flat meadow from behind.
+`iso.js` gained `BACK_SIDES` / `backNeighbour`; the colour is
+`contactShadow(GROUND_DEFAULT)`, which is the same byte as the cap on every
+visible cliff face, because the far edge of a plateau IS the top of a cliff.
+
+**The lesson is in the mistake.** The first version stepped by ROW, passed all
+four tests, and drew a DOTTED line — a 2:1 edge moves two across per one down.
+Stepping by COLUMN gives the solid stair. Only looking at the render caught it,
+so the look is now a test (`THE RIM IS CONTINUOUS`) that was **checked against
+the bug**: fed the old algorithm it reports 32 columns of 62 and 30 gaps.
+
+Third blind instrument in two days. **An assertion about a picture that was
+never compared to a wrong picture is one you are trusting on its own word.**
+
+### ▸ Follow-ons, none blocking
+
+- **A brush size for placement** — owner's next ask, same evening: 1 / 2 / 3 /
+  5 square, on any single-tile placement, and especially on the terrain tools
+  where raising a hill one tile at a time is the tedious part.
+- The rim is terrain-only by design. An object standing on a back edge covers
+  it, which is correct — it is a contour of the GROUND.
 
 ## 4n · THE IMAGE PACK AND THE COMPASS (2026-08-02)
 

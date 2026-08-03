@@ -529,6 +529,30 @@ export function frontNeighbour(tx, ty, side) {
   return side === 'se' ? { tx: tx + 1, ty } : { tx, ty: ty + 1 };
 }
 
+/**
+ * THE OTHER TWO SIDES, and the reason they need naming.
+ *
+ * A tile standing above the neighbour BEHIND it exposes a face the camera can
+ * never see — it points away. Nothing is drawn there, correctly, and the
+ * consequence is that the back edge of a plateau is grass meeting grass with
+ * no mark between them. A hill you are looking at from behind is invisible.
+ *
+ * That is not a rendering bug; it is what this projection does. The remedy is
+ * an OCCLUDING CONTOUR — one dark pixel along the silhouette — which every
+ * draughtsman since the Renaissance has drawn for the same reason, and which
+ * needs to know which edges those are. So they are named here, next to their
+ * opposites, rather than derived at the call site.
+ *
+ *   'nw' -> (tx-1, ty)   up-LEFT on screen
+ *   'ne' -> (tx, ty-1)   up-RIGHT on screen
+ */
+export const BACK_SIDES = Object.freeze(['nw', 'ne']);
+
+/** The neighbour a back edge looks at — the mirror of `frontNeighbour`. */
+export function backNeighbour(tx, ty, side) {
+  return side === 'nw' ? { tx: tx - 1, ty } : { tx, ty: ty - 1 };
+}
+
 /** Normalise a level source: a function, a row-major array, or a constant. */
 export function levelReader(levels, mapW = MAP_W, mapH = MAP_H, floor = 0) {
   if (typeof levels === 'function') {

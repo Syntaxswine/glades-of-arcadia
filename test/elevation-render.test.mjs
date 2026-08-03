@@ -383,3 +383,159 @@ test('a scene with nothing in it still draws a glade', () => {
   for (let i = 3; i < cv._data.length; i += 4) if (cv._data[i]) painted++;
   assert.ok(painted > 200000, 'an empty scene should still be a meadow');
 });
+
+// ---------------------------------------------------------------------------
+// THE BACK RIM (render.js §THE BACK RIM)
+// ---------------------------------------------------------------------------
+//
+// The owner, looking at a terraced hillside: *"we need a line on the back edge
+// of the grassy hill tops, otherwise they are invisible."*
+//
+// He is right, and the reason is projection rather than art: the face on the
+// far side of a plateau points away from the camera, so nothing is drawn, and
+// grass on a terrace meets grass on the floor with no mark between them. These
+// tests hold the remedy to being VISIBLE and to being CORRECT — a line that is
+// only correct is one nobody can see, which is the state this fixes.
+
+/** A single 3x3 plateau standing two levels above an otherwise flat map. */
+const PLATEAU = {
+  fill: ({ levels, grass, at }) => {
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = at(x, y);
+        levels[i] = x >= 8 && x <= 10 && y >= 8 && y <= 10 ? 2 : 0;
+        grass[i] = 0; // ONE grass type everywhere: the rim is the only mark
+      }
+    }
+  },
+};
+
+/** Cache-space pixel, as `#rrggbb`. */
+function cachePixel(r, x, y) {
+  const cv = r._terrainCv;
+  const o = (Math.round(y) * cv.width + Math.round(x)) * 4;
+  const d = cv._data;
+  const hex = (v) => v.toString(16).padStart(2, '0');
+  return `#${hex(d[o])}${hex(d[o + 1])}${hex(d[o + 2])}`.toUpperCase();
+}
+
+test('THE BACK RIM EXISTS: a plateau has a brow where its drop is hidden', () => {
+  const { r } = makeRenderer(makeScene(PLATEAU), { cx: 9, cy: 9 });
+  const b = r._world;
+  const rim = (pal.PALETTE.get(pal.contactShadow('o')) || '').toUpperCase();
+  assert.ok(rim, 'no rim colour in the palette');
+
+  // The north vertex of the plateau's back corner tile, raised two levels.
+  const n = iso.toScreenAt(8, 8, 2, null);
+  const nx = n.x - b.minX;
+  const ny = n.y - b.minY;
+
+  // Walk both back edges down the 2:1 stair from that vertex. Every row of the
+  // top half of the diamond carries exactly one rim pixel per side.
+  let nw = 0;
+  let ne = 0;
+  for (let ly = 0; ly < iso.HALF_H; ly++) {
+    if (cachePixel(r, nx - 1 - 2 * ly, ny + ly) === rim) nw++;
+    if (cachePixel(r, nx + 2 * ly, ny + ly) === rim) ne++;
+  }
+  assert.ok(nw >= 12, `only ${nw} of 16 rows carry the north-west rim`);
+  assert.ok(ne >= 12, `only ${ne} of 16 rows carry the north-east rim`);
+});
+
+test('THE BACK RIM IS VISIBLE: it does not match the grass it separates', () => {
+  // The whole complaint. A rim drawn in the ground's own colour would pass the
+  // test above and change nothing on screen — this is the one that refuses it.
+  const rim = pal.PALETTE.get(pal.contactShadow('o'));
+  const tops = ['#3B4A22', '#55672D', '#74863C', '#96A551'];
+  assert.ok(!tops.slice(1).includes(rim), `the rim is ${rim}, a grass body colour`);
+  // Darker than the mid-tone it borders, by a real margin, in every channel.
+  const v = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const a = v(rim);
+  const g = v('#74863C');
+  assert.ok(
+    a.every((c, i) => g[i] - c > 16),
+    `the rim ${rim} is not meaningfully darker than the grass beside it`
+  );
+});
+
+test('FLAT GROUND GETS NO RIM: the mark means a drop, or it means nothing', () => {
+  // A line drawn on every tile edge is a grid, not a landscape — and it would
+  // be the easy wrong version of this feature.
+  const { r } = makeRenderer(makeScene({ fill: ({ grass, at }) => {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grass[at(x, y)] = 0;
+  } }));
+  const b = r._world;
+  const rim = (pal.PALETTE.get(pal.contactShadow('o')) || '').toUpperCase();
+  const n = iso.toScreenAt(9, 9, 0, null);
+  let found = 0;
+  for (let ly = 0; ly < iso.HALF_H; ly++) {
+    if (cachePixel(r, n.x - b.minX - 1 - 2 * ly, n.y - b.minY + ly) === rim) found++;
+  }
+  // Grass speckle is authored in the dark ramp step, so a stray pixel or two is
+  // the texture, not a rim. A rim is the whole edge.
+  assert.ok(found <= 4, `flat ground drew ${found} of 16 rim pixels — that is a grid`);
+});
+
+test('THE RIM IS INSIDE ITS OWN TILE: it can never bleed onto the neighbour', () => {
+  // Taken from `tileMask()` for exactly this reason. The stamp is half a tile
+  // wide and half a tile tall, and every lit pixel in it must be inside the
+  // diamond — otherwise a rim draws over the tile behind, which in this
+  // painter's order is a tile that was already finished.
+  const m = render.tileMask();
+  for (const side of iso.BACK_SIDES) {
+    const stamp = render._backRimStamp(side);
+    for (let ly = 0; ly < iso.HALF_H; ly++) {
+      for (let lx = 0; lx < iso.HALF_W; lx++) {
+        if (!stamp._data[(ly * iso.HALF_W + lx) * 4 + 3]) continue;
+        const tx = side === 'nw' ? lx : lx + iso.HALF_W;
+        assert.equal(m[ly * iso.TILE_W + tx], 1, `${side} rim pixel (${lx},${ly}) is off the diamond`);
+      }
+    }
+  }
+});
+
+test('THE RIM IS CONTINUOUS: a 2:1 line is two pixels per row, not one', () => {
+  // THE TEST THAT WAS MISSING, and the reason it is here.
+  //
+  // The first version of the rim walked the sixteen ROWS and marked the
+  // outermost pixel of each. Every assertion above passed — the rim existed,
+  // it was the right colour, it stayed inside its diamond — and on screen it
+  // was a DOTTED line, because a 2:1 edge moves two pixels across per row and
+  // those marks touched only at their corners. It read as a UI overlay laid on
+  // the grass rather than as an edge of the ground, which is worse than the
+  // problem it was fixing.
+  //
+  // Nothing caught it but looking at the picture. This is that look, written
+  // down: count the pixels, not the rows.
+  // Both stamps laid side by side, which is how they are drawn: 'nw' over the
+  // tile's left half, 'ne' over its right. Continuity is a property of the
+  // WHOLE brow, not of either half — the two meet at the north vertex.
+  const row = new Array(iso.TILE_W).fill(-1);
+  for (const side of iso.BACK_SIDES) {
+    const stamp = render._backRimStamp(side);
+    const from = side === 'nw' ? 0 : iso.HALF_W;
+    for (let ly = 0; ly < iso.HALF_H; ly++) {
+      for (let lx = 0; lx < iso.HALF_W; lx++) {
+        if (!stamp._data[(ly * iso.HALF_W + lx) * 4 + 3]) continue;
+        assert.equal(row[from + lx], -1, `column ${from + lx} carries two rim pixels`);
+        row[from + lx] = ly;
+      }
+    }
+  }
+
+  // One pixel per column, over the full span the brow covers. The end columns
+  // are the tile's west and east vertices, which belong to the rows BELOW the
+  // top half and so are not part of it — that is the diamond, not a gap.
+  const cols = row.map((v, i) => [i, v]).filter(([, v]) => v >= 0);
+  assert.equal(cols.length, iso.TILE_W - 2, `the brow covers ${cols.length} columns of 62`);
+
+  // AND UNBROKEN: neighbouring columns are on the same row or one apart. This
+  // is the assertion the dotted version failed — it stepped two rows at a time
+  // with nothing in between.
+  for (let k = 1; k < cols.length; k++) {
+    const [x0, y0] = cols[k - 1];
+    const [x1, y1] = cols[k];
+    assert.equal(x1, x0 + 1, `a gap in the brow between columns ${x0} and ${x1}`);
+    assert.ok(Math.abs(y1 - y0) <= 1, `the brow jumps ${Math.abs(y1 - y0)} rows at column ${x1}`);
+  }
+});

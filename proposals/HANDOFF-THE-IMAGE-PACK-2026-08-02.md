@@ -551,6 +551,124 @@ should have been additive, which is the tell; `git checkout` cost nothing
 because the pergola work was already committed. **Commit before surgery, and
 read the stat line before the error message.**
 
+## 8 · THE DAY AFTER — 2026-08-03
+
+Two asks, and they are the same ask wearing different clothes: **a garden is
+something you WAIT for and something you LOOK at, and both were slightly
+broken.**
+
+### The clock lever — `1x / 2x / 4x` on the topbar
+
+> *"it might be nice to have a tool to make time advance faster up on the top
+> bar"*
+
+Every builder in this lineage has one, in this corner, and a game about growing
+things has the strongest case of any of them. It is **one cycling button** and
+not three, because the bar is 640 logical pixels wide and already carries six.
+It sits **beside the clock rather than with the tools**, and that placement is
+the argument: everything in `bar-right` does something to the GARDEN, this does
+something to the WATCHING, and `day 3 · afternoon  2x` reads as one sentence.
+
+**THE LAW, and it is the whole feature:**
+
+> **THE STEP IS NEVER SCALED. ONLY THE NUMBER OF STEPS.**
+
+The simulation is fixed-timestep on purpose — a 144Hz monitor and a 30Hz one
+grow the same garden because both advance in 1/20s increments. The obvious
+implementation is `sim(SIM_DT * speed)`, it works, and it quietly undoes that:
+growth curves, field ageing, the ladder and creature legs all integrate per
+step, so a 4x garden would be a COARSER garden, and `_leg` measurably overshoots
+corners when the leg gets longer. So speed multiplies the ACCUMULATOR. At 4x,
+four times as many identical 1/20s steps run per frame — arithmetically the
+same as having left the tab open four times as long.
+
+Which is why **no other file in the game knows this control exists.** main.js
+owns a number; ui.js reads it to label a button; input.js goes through ui.js.
+`fields.js`, `creatures.js` and `world.js` were not touched and cannot tell.
+
+| | |
+|---|---|
+| `main.js` | `SPEEDS`, `simSchedule(acc, dt, speed)` — pure, exported, tested |
+| | `game.speed` / `setSpeed` / `cycleSpeed`, and the catch-up guard scales |
+| `ui.js` | `btnSpeed`, `syncSpeed`, `cycleSpeed`; hides itself if the host has no control |
+| `input.js` | `.` `>` faster, `,` `<` slower |
+| `css` | `.bar-btn.is-narrow` |
+
+**The guard had to scale with the speed.** `MAX_CATCHUP` is a spiral-of-death
+guard, not a speed limit: left at a fixed 5, a 4x frame owing 8 steps would drop
+three of them EVERY frame, the button would read 4x and the garden would run at
+about 2.5x. There is a regression test for exactly that number.
+
+**The button WRAPS and the keys CLAMP**, deliberately. A one-direction button
+that goes dead at 4x strands the player; a key you can hold has to have an end.
+
+**Measured in the running game**, not just asserted: 2.00 / 4.00 / 8.15 garden
+seconds per two real seconds — ratios 2.00 and 4.08.
+
+**There is no 0x.** `game.pause` already stops the frame; a zero in `SPEEDS`
+would be a second, silent way to pause that keeps rendering, and two owners for
+one state is how this renderer lost its camera once already. A test refuses it.
+
+### The back rim — one pixel, and a hill gets a back
+
+> *"we need a line on the back edge of the grassy hill tops, otherwise they are
+> invisible."*
+
+He is right, and the cause is **projection, not art**. A tile standing above the
+neighbour BEHIND it exposes a face pointing away from the camera, so nothing is
+drawn — correctly — and grass on a terrace meets grass on the floor with no
+mark between them. A three-level hill reads as flat meadow until you find its
+front. This is the oldest fix in draughtsmanship: an **occluding contour**.
+
+- **`iso.js` gained `BACK_SIDES` and `backNeighbour`**, the mirror of
+  `FRONT_SIDES` / `frontNeighbour`, so which edges those are stays owned by the
+  module that owns the projection. Re-deriving it at the call site is precisely
+  how the front faces once ended up on the hidden side of the hill.
+- **The colour is soil** — `contactShadow(GROUND_DEFAULT)`, the ground ramp
+  darkened two steps, palette.js's own rule and never a translucent black. It is
+  the same colour, to the byte, as the cap at the top of every visible cliff
+  face. That is not a coincidence dressed up as one: **the far edge of a plateau
+  IS the top of a cliff**, and the player is looking at the one line of it that
+  clears the brow. Front and back agree without anyone matching them by eye, and
+  the palette gains nothing.
+- **The line is taken from `tileMask()`**, so it cannot land a pixel off the
+  diamond it belongs to and cannot bleed onto the tile behind — which, in this
+  painter's order, is a tile that was already finished.
+
+#### THE MISTAKE, and it is the one worth reading
+
+The first version walked the sixteen ROWS and marked the outermost pixel of
+each. **All four tests passed.** The rim existed, it was the right colour, it
+stayed inside its diamond, flat ground got none. And on screen it was a
+**DOTTED** line — because a 2:1 edge moves two pixels across for every one
+down, so those marks touched only at their corners. It read as a UI overlay laid
+over the grass rather than as an edge of the ground, which is worse than the
+problem it was fixing.
+
+Walking the THIRTY-TWO COLUMNS instead and marking the topmost pixel of each
+gives two pixels per row — the solid stair every other 1-in-2 line in this game
+is drawn with, and the same rule as `LINE_DROP` in art/format.js.
+
+**Nothing caught it but rendering the thing and looking at it.** So the look is
+now written down as `THE RIM IS CONTINUOUS`, which walks both stamps as one
+brow and asserts 62 columns with no gap and no jump greater than a row. Fed the
+old by-row algorithm it reports **32 columns of 62 and 30 gaps** — the test was
+checked against the bug it exists for, rather than only against the fix.
+
+That is the third instrument in two days that was blind when it was written.
+The pattern is now unmistakable: **an assertion about a picture that was never
+compared to a wrong picture is an assertion you are trusting on its own word.**
+
+### Where it stands after these two
+
+| | |
+|---|---|
+| tests | **422** (was 409) — 8 for the clock, 5 for the rim |
+| playtest | 49 / 49 |
+| `iso-audit --strict` | 1 of 311 — `balustrade`, unchanged |
+| elevation probe | clean; palette purity 0 offending colours |
+| verified | in the running game, in a NAMED garden — never the owner's default |
+
 ## Maker's mark
 
 Fourteen commits, and the thing worth handing on is not any of the features.
