@@ -470,3 +470,68 @@ test('a broadleaf canopy uses its whole ramp — no "green blob"', () => {
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// IDLE TURNS (js/art/creatures.js §buildFrames)
+// ---------------------------------------------------------------------------
+//
+// A creature that stops does not stop facing anywhere. `this.facing` is written
+// by `_leg` and js/main.js has always resolved it and handed it to
+// `creatureFrameAt` for EVERY pose — idle was the only cycle that threw it
+// away, so a creature that walked north-west and halted snapped round to face
+// the camera at the end of every leg.
+//
+// The failure mode this guards is SILENT: `raw[facing] || raw.se` falls back to
+// south-east, so a pose that lost its facings still renders, still lints, and
+// simply stops turning. Nothing throws. The only way to catch it is to assert
+// that the four drawings are four DIFFERENT drawings.
+
+test('EVERY TURNED POSE TURNS — four facings, four distinct drawings', async () => {
+  const { CREATURE_ART, CREATURE_IDS, FACINGS, creatureFrame } = await import('../js/art/creatures.js');
+  let checked = 0;
+  for (const id of CREATURE_IDS) {
+    for (const [pose, set] of Object.entries(CREATURE_ART[id].frames)) {
+      // Derived, not listed: a pose is turned if it is keyed by facing. Naming
+      // the poses here is the exact mistake that kept idle flat.
+      if (Array.isArray(set)) continue;
+      const seen = new Set(FACINGS.map((f) => creatureFrame(id, pose, f, 0).rows.join('|')));
+      assert.equal(
+        seen.size,
+        FACINGS.length,
+        `${id} ${pose}: ${seen.size} distinct drawings across ${FACINGS.length} facings — ` +
+          `a facing is silently falling back to 'se' and the creature has stopped turning`
+      );
+      checked++;
+    }
+  }
+  assert.ok(checked >= 10, `only ${checked} turned poses found — expected idle and walk on five creatures`);
+});
+
+test('IDLE IS TURNED, by name, because it is the one that regressed', async () => {
+  // The general test above would still pass if idle went flat again — a flat
+  // pose is simply skipped by it. This is the specific claim.
+  const { CREATURE_ART, CREATURE_IDS } = await import('../js/art/creatures.js');
+  for (const id of CREATURE_IDS) {
+    assert.ok(
+      !Array.isArray(CREATURE_ART[id].frames.idle),
+      `${id}'s idle is a flat cycle again — it will face the camera wherever it was walking`
+    );
+  }
+});
+
+test('the lint census counts every frame, whatever shape a pose is', async () => {
+  // `allCreatureSprites` used to name idle and beat as flat and walk as turned,
+  // so the day idle grew facings the census threw. It is the ONLY consumer that
+  // sees every frame, so a census that knows the shape of what it counts stops
+  // counting the moment the shape changes.
+  const { allCreatureSprites, CREATURE_ART, CREATURE_IDS, FACINGS } = await import('../js/art/creatures.js');
+  let expected = 0;
+  for (const id of CREATURE_IDS) {
+    for (const set of Object.values(CREATURE_ART[id].frames)) {
+      if (Array.isArray(set)) expected += set.length;
+      else for (const f of FACINGS) expected += (set[f] || []).length;
+    }
+  }
+  assert.equal(allCreatureSprites().length, expected);
+  assert.ok(expected > 150, `only ${expected} creature sprites — the census is missing a pose`);
+});

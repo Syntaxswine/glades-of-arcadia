@@ -179,7 +179,11 @@ if (!art) {
   console.error(`no creature '${id}'. have: ${CREATURE_IDS.join(', ')}`);
   process.exit(1);
 }
-const all = pose === 'walk' ? art.frames.walk[facing] : art.frames[pose];
+// SHAPE-AGNOSTIC. This named `walk` as the pose that turns, so the day idle
+// grew facings the tool could not photograph the change — it handed a
+// {se,sw,ne,nw} object to `all.map` and died. Ask the pose what shape it is.
+const raw = art.frames[pose];
+const all = Array.isArray(raw) ? raw : raw && (raw[facing] || raw.se);
 if (!all) {
   console.error(`no pose '${pose}' for ${id}. have: ${creaturePoses(id).join(', ')}`);
   process.exit(1);

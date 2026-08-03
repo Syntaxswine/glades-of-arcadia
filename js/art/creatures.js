@@ -1763,17 +1763,9 @@ export const HOLDS = Object.freeze({
 function buildFrames(id) {
   const spec = SPECS[id];
   const anchor = [spec.w >> 1, spec.h - 1];
-  const out = { idle: [], walk: {}, beat: [] };
+  const out = { idle: {}, walk: {}, beat: [] };
 
   for (let i = 0; i < 4; i++) {
-    out.idle.push(
-      defineSprite({
-        name: `${id}-idle-${i}`,
-        anchor,
-        rows: composeRows(spec.w, spec.h, spec.layers('idle', i, false)),
-        tags: ['creature', id, 'idle'],
-      })
-    );
     out.beat.push(
       defineSprite({
         name: `${id}-${spec.beat}-${i}`,
@@ -1806,19 +1798,41 @@ function buildFrames(id) {
     }
   }
 
-  for (const facing of FACINGS) {
-    out.walk[facing] = [];
-    for (let i = 0; i < 4; i++) {
-      let rows = composeRows(spec.w, spec.h, spec.layers('walk', i, BACK_FACING[facing]));
-      if (MIRROR_FACING[facing]) rows = mirrorRelit(rows);
-      out.walk[facing].push(
-        defineSprite({
-          name: `${id}-walk-${facing}-${i}`,
-          anchor,
-          rows,
-          tags: ['creature', id, 'walk', facing],
-        })
-      );
+  // WALK AND IDLE BOTH TURN, and they are built by the same loop because they
+  // are the same problem.
+  //
+  // A creature that stops does not stop FACING anywhere — `this.facing` is
+  // written by `_leg` (creatures.js) and js/main.js already resolves it to one
+  // of these four names and hands it to `creatureFrameAt` for EVERY pose. Idle
+  // was the only cycle that threw it away, so a creature that walked north-west
+  // and halted snapped round to face the camera, every time, at the end of
+  // every leg.
+  //
+  // That reads as a shrug on a random amble. It reads as a REFUSAL the moment
+  // the creature had a reason to go there: it walks to the thing, turns to look
+  // at it, and then pointedly turns away. Anything built on top of "the
+  // creature is looking at that" needs this first or it says the opposite of
+  // what it means.
+  //
+  // No new art. `spec.layers(kind, i, back)` already takes the back flag for
+  // every kind, and `mirrorRelit` already re-lights a mirrored frame so the
+  // light stays upper-left (SPEC §3) — the two tables below are the whole of
+  // the turn, and they were already written for walking.
+  for (const kind of ['idle', 'walk']) {
+    for (const facing of FACINGS) {
+      out[kind][facing] = [];
+      for (let i = 0; i < 4; i++) {
+        let rows = composeRows(spec.w, spec.h, spec.layers(kind, i, BACK_FACING[facing]));
+        if (MIRROR_FACING[facing]) rows = mirrorRelit(rows);
+        out[kind][facing].push(
+          defineSprite({
+            name: `${id}-${kind}-${facing}-${i}`,
+            anchor,
+            rows,
+            tags: ['creature', id, kind, facing],
+          })
+        );
+      }
     }
   }
   return out;
@@ -1855,7 +1869,12 @@ export const CREATURE_IDS = Object.freeze(Object.keys(SPECS));
 export function creatureFrame(id, anim = 'idle', facing = 'se', i = 0) {
   const art = CREATURE_ART[id];
   if (!art) throw new Error(`creatureFrame: no creature '${id}'`);
-  const set = anim === 'walk' ? art.frames.walk[facing] || art.frames.walk.se : art.frames[anim];
+  // A pose is EITHER a flat cycle or a set of four turned ones, and which it is
+  // belongs to the pose rather than to a list of names here. Naming 'walk'
+  // explicitly is what kept idle flat when idle grew facings — the caller was
+  // already passing the right one and this line dropped it on the floor.
+  const raw = art.frames[anim];
+  const set = Array.isArray(raw) ? raw : raw && (raw[facing] || raw.se);
   if (!set) throw new Error(`creatureFrame: no animation '${anim}' for '${id}'`);
   return set[((i % set.length) + set.length) % set.length];
 }
@@ -1902,11 +1921,16 @@ export function creatureFrameAt(id, anim, facing, ms, once = false) {
 /** Flat list — for the sprite lab and the lint pass. */
 export function allCreatureSprites() {
   const out = [];
+  // SHAPE-AGNOSTIC, and it has to be: this named `idle` and `beat` as flat
+  // cycles and `walk` as the turned one, so the day idle grew facings the lint
+  // pass stopped being able to iterate it — and the lint pass is the ONLY
+  // consumer that sees every frame. A census that knows the shape of what it is
+  // counting stops counting the moment the shape changes.
   for (const id of CREATURE_IDS) {
-    const f = CREATURE_ART[id].frames;
-    out.push(...f.idle, ...f.beat);
-    for (const facing of FACINGS) out.push(...f.walk[facing]);
-    for (const pose of Object.keys(SPECS[id].extra || {})) out.push(...f[pose]);
+    for (const set of Object.values(CREATURE_ART[id].frames)) {
+      if (Array.isArray(set)) out.push(...set);
+      else for (const facing of FACINGS) if (set[facing]) out.push(...set[facing]);
+    }
   }
   return out;
 }
