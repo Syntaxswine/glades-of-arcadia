@@ -1,7 +1,10 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-02 (SIXTH pass, after the image-pack and compass work — §4n)
-against `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`.
+Reconciled 2026-08-02 (SEVENTH pass, end of the image-pack and compass day —
+§4n) against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`**, which is now the
+keystone for anything about which way an object faces or how two pieces meet.
+`HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
+arc, the palette laws and the traps.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
 Ordered by how much each would improve the thing a player actually sees.
@@ -672,8 +675,8 @@ should also think about how we can have certain objects have different sprites
 depending on how they are rotated, so things like hedges and fences can go
 around corners and ramps can go up a hill in any direction."*
 
-Full write-up: `HANDOFF-THE-FIRST-GLADE-2026-07-31.md`, the section **THE IMAGE
-PACK AND THE COMPASS**.
+Full write-up: **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** — its own keystone as
+of the end of the day, split out when the first handoff passed 1 900 lines.
 
 ### ✅ SHIPPED
 
