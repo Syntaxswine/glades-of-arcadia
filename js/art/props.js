@@ -3285,11 +3285,37 @@ function drystoneGrid(gate = false) {
   const raised = (i) => gate && Math.abs(i - CX) <= HALF_GAP + PIER;
   const opening = (i) => gate && Math.abs(i - CX) <= HALF_GAP;
 
-  // 1 · The wall itself, at wall height, everywhere the gateway is not.
+  // 1 · THE WALL, CLOSED, at wall height — everywhere except the way through.
+  //
+  // NOT "everywhere the gateway is not", which is what this said first. The
+  // piers stand RISE above the wall, so where a pier steps back down to wall
+  // height there was a wedge with nothing drawn in it and the ground showed
+  // through the masonry. Measured on a run of five with one gateway: **192
+  // transparent pixels with stone above them and stone below them.** A plain
+  // run measured zero. The body is drawn whole and the piers cover it.
+  //
+  // THE OPENING IS THE ONE EXCEPTION and it has to be. A doorway is a hole
+  // THROUGH the wall, so the wall's cap must not be laid across it — do that
+  // and the way through fills with lit coping and the gate reads as blocked.
+  // Closed means "no accidental holes", not "no holes".
+  /**
+   * WHAT YOU SEE THROUGH THE OPENING — the dark of the way, never the lawn.
+   *
+   * The doorway is a hole through the wall's THICKNESS, so it is not one
+   * column: it is the whole parallelogram of cap the wall would have had
+   * there. Leaving that transparent let the grass show straight through the
+   * gateway — 147 px of it, which is most of what the first "draw it closed"
+   * pass still had wrong. decor.js's rule for the hedge arch is the rule here:
+   * a hole that shows what is behind it reads as damage, not as a way through.
+   */
+  const tunnel = (x, y) => (nz(x, y) > 0.84 ? STONE[1] : STONE[0]);
+
   slabBackEdge(g, X0, TOP, LINE_W, STONE[0], (i) => !raised(i));
-  slab(g, X0, TOP, LINE_W, D, (a, b) => (raised(a * 2) ? null : coping(a * 2, b)));
+  slab(g, X0, TOP, LINE_W, D, (a, b, x, y) =>
+    opening(a * 2) ? tunnel(x, y) : coping(a * 2, b)
+  );
   slabFace(g, X0, TOP, LINE_W, D, HIGH + 2, (i, k) =>
-    raised(i) || k >= faceH(i) ? null : course(i, k, TOP + LINE_DROP(i) + D + 1 + k)
+    opening(i) || k >= faceH(i) ? null : course(i, k, TOP + LINE_DROP(i) + D + 1 + k)
   );
 
   if (gate) {

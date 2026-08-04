@@ -1900,10 +1900,30 @@ function hedgeArchGrid() {
     return YEW[clamp(v, 0, n)];
   };
 
-  // 1 · The hedge, at hedge height, everywhere the crown is not.
+  // ------------------------------------------------------------------------
+  // 1 · THE WHOLE HEDGE, CLOSED, ACROSS THE ENTIRE RUN — including under the
+  // crown, where none of it will be seen.
+  //
+  // The owner: *"could we just make it so its always drawn closed and the
+  // hedges that are in front of the other edges always overlap?"* Yes, and it
+  // is the right instinct. The first version skipped the crowned run positions
+  // here, on the reasoning that the crown covers them anyway. It does not
+  // quite: the crown's top face sits RISE higher, so where it steps back down
+  // to hedge height there was a wedge with NOTHING in it, and you could see
+  // the grass through the hedge. Measured on a run of five with one arch:
+  // **97 transparent pixels with hedge above them and hedge below them.** A
+  // plain run measured zero.
+  //
+  // Drawing the body first and the crown over it costs a few hundred pixels
+  // that are immediately overwritten and removes the whole class of fault.
+  // THE PAINTER'S ALGORITHM IS THE POINT: draw every piece whole, in depth
+  // order, and let the near ones cover the far ones. A piece that draws only
+  // the parts it thinks will show has to be right about occlusion, and it is
+  // cheaper to be closed than to be right.
+  // ------------------------------------------------------------------------
   slabBackEdge(g, X0, TOP, LINE_W, YEW[0], (i) => !crowned(i));
-  slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? null : top(b, x, y)));
-  slabFace(g, X0, TOP, LINE_W, D, H, (i, k) => (crowned(i) ? null : face(i, H - 1 - k)));
+  slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => top(b, x, y));
+  slabFace(g, X0, TOP, LINE_W, D, H, (i, k) => face(i, H - 1 - k));
 
   // 2 · The crown over the doorway, RISE proud of it, carried down to the foot.
   slabBackEdge(g, X0, TOP - RISE, LINE_W, YEW[0], crowned);
