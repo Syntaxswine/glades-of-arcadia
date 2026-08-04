@@ -28,7 +28,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUDITED_MODULES, spritesIn, measure, importArt, KNOWN_FLAT_FEET,
+  AUDITED_MODULES, spritesIn, measure, importArt, KNOWN_FLAT_FEET, flatFootKnown,
 } from '../tools/isogeom.mjs';
 
 /**
@@ -85,7 +85,7 @@ test('the audit is looking at something', () => {
 
 test('no sprite has GROWN a horizontal edge at ground level', () => {
   const fresh = [...flagged.entries()]
-    .filter(([name]) => !KNOWN.has(name))
+    .filter(([name]) => !flatFootKnown(name))
     .map(([name, q]) => `${name}: ${q.flat}px level at ground, allowed ${q.min}`);
   assert.deepEqual(
     fresh,
@@ -99,7 +99,9 @@ test('no sprite has GROWN a horizontal edge at ground level', () => {
 });
 
 test('the known-offender list has not gone stale', () => {
-  const fixed = [...KNOWN].filter((name) => !flagged.has(name));
+  const fixed = [...KNOWN].filter(
+    (name) => ![...flagged.keys()].some((n) => String(n).replace(/@\d+$/, '') === name)
+  );
   assert.deepEqual(
     fixed,
     [],

@@ -1388,9 +1388,25 @@ function balustradeGrid() {
   slabBackEdge(g, X0, TOP, LINE_W, 'A');
   slab(g, X0, TOP, LINE_W, DEPTH, (a, b) => (b < 1 ? 'D' : 'E'));
   slabFace(g, X0, TOP, LINE_W, DEPTH, 3, (i, k) => (k === 2 ? 'A' : k === 0 ? 'D' : 'B'));
-  return g;
+  // THE HUB, DERIVED RATHER THAN WRITTEN DOWN. It used to be the literal
+  // `[10, 29]`, which is X0 — the FAR LEFT of the bar, not its middle — and 4 px
+  // clear of its own lowest ink. A linear piece anchors at the tile centre, at
+  // the ground, or it stands somewhere other than where the game thinks it does.
+  return { g, ax: X0 + 16 - DEPTH, ay: TOP + 15 + LINE_DROP(16) + DEPTH + 3 };
 }
-export const BALUSTRADE = spriteAt('balustrade', [10, 29], balustradeGrid(), {
+
+/**
+ * IT BENDS NOW. The owner: *"the balistrade does not bend like the other
+ * fences."*
+ *
+ * It could not: `js/catalog.js` declares `joins: 'balustrade'`, which puts it in
+ * a run group and makes its neighbours reach for it, but the ART was never put
+ * through `linearJoins` — so it carried no sixteen states and every piece drew
+ * the straight bar whatever it was standing next to. A join group is a promise
+ * made in the catalogue that only the art can keep, and nothing checked that
+ * the two agreed. `test/joining.test.mjs` now does.
+ */
+export const BALUSTRADE = linearJoins('balustrade', balustradeGrid(), {
   tags: ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'],
 });
 

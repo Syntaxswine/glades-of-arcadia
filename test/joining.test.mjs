@@ -327,6 +327,80 @@ test('every joining family keeps one hub for all sixteen states', async () => {
   }
 });
 
+test('anything the catalogue says JOINS has the art to do it', async () => {
+  // ---------------------------------------------------------------------
+  // The owner: *"the balistrade does not bend like the other fences."*
+  //
+  // It could not. js/catalog.js declared `joins: 'balustrade'` — which puts a
+  // piece in a run group and makes its neighbours reach for it — but the ART
+  // was never passed through `linearJoins`, so it carried no sixteen states
+  // and every piece drew the straight bar whatever it stood next to.
+  //
+  // A JOIN GROUP IS A PROMISE MADE IN THE CATALOGUE THAT ONLY THE ART CAN
+  // KEEP, and until now the two halves were never checked against each other.
+  // Everything else about the mechanism was tested — the masks, the mirror,
+  // the hub, the corners — on the families that HAD art. A piece that never
+  // reached the mechanism at all sailed past every one of those tests.
+  // ---------------------------------------------------------------------
+  const decor = await import('../js/art/decor.js');
+  const extras = await import('../js/art/extras.js');
+  const props = await import('../js/art/props.js');
+  const ART = { ...props.PROPS, ...(extras.EXTRAS || {}), ...(decor.DECOR || decor.default) };
+
+  // THERE IS NO DECLARATIVE "THIS IS A RUN" FLAG, which is worth knowing before
+  // reading the rest. `joins` defaults to the id on EVERY entry
+  // (`joins: raw.joins ?? raw.id`), so it cannot be the signal — a herm and a
+  // lily pool have one too. Only three entries author it explicitly, and all
+  // three are gates naming the wall they belong to. So this comes in two parts.
+
+  // PART ONE, derivable and therefore strong: if an entry names a group that is
+  // not its own id, it is a GATE, and both it and the wall it names must bend.
+  // A gate whose wall cannot turn a corner is a gate that falls out of the run.
+  const derived = [];
+  const byGroup = new Map();
+  for (const def of CATALOG) byGroup.set(def.joins, [...(byGroup.get(def.joins) || []), def]);
+  for (const def of CATALOG) {
+    if (!def.joins || def.joins === def.id) continue;
+    for (const member of byGroup.get(def.joins) || []) {
+      const sp = member.art && member.art.kind === 'sprite' ? ART[member.art.sprite] : null;
+      if (sp && !sp.joins) derived.push(`${member.id} -> ${member.art.sprite}`);
+    }
+  }
+  assert.deepEqual(derived, [], 'a gate and its wall must both carry the sixteen states');
+
+  // PART TWO, a list, because the catalogue cannot express it yet. These are the
+  // pieces a player builds in LINES and expects to turn corners. `balustrade` is
+  // here because it was the one that got away: the owner reported *"the
+  // balistrade does not bend like the other fences"*, and it had run for the
+  // whole joining arc with a join group, no join art, and a green suite —
+  // because every other test in this file starts from the art and so could only
+  // ever check the families that already had some.
+  const RUN_FAMILIES = ['balustrade', 'clipped-hedge', 'tall-hedge', 'dry-stone-wall', 'palisade-fence'];
+  // Declared a run and deliberately not built yet. Say WHY, or it is just a mute.
+  const NOT_YET = new Map([
+    [
+      'stepped-terrace-wall',
+      'a wall that CLIMBS. Its states are a function of the level change either ' +
+        'side as well as of the neighbours, so it is not sixteen drawings but ' +
+        'sixteen times the step profile — a real design question, not an oversight.',
+    ],
+  ]);
+  const missing = [];
+  for (const id of RUN_FAMILIES) {
+    if (NOT_YET.has(id)) continue;
+    const def = byId(id);
+    assert.ok(def, `${id} is not in the catalogue any more — fix this list`);
+    const sp = def.art && def.art.kind === 'sprite' ? ART[def.art.sprite] : null;
+    assert.ok(sp, `${id} names a sprite that does not exist: ${def.art && def.art.sprite}`);
+    if (!sp.joins) missing.push(`${id} -> ${def.art.sprite}`);
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    'these are built in lines and cannot bend: their sprite never went through linearJoins'
+  );
+});
+
 test('a piece of a run spans ONE tile, and does not cover its own neighbour', async () => {
   // ---------------------------------------------------------------------
   // The owner, on the drystone wall: *"its way longer than the other walls,

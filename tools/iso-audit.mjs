@@ -30,7 +30,7 @@
 //   diag     how much of the outline runs on a 2:1 slope — the positive signal.
 
 import {
-  measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt, KNOWN_FLAT_FEET,
+  measure, RUN_MIN, AUDITED_MODULES, spritesIn, importArt, KNOWN_FLAT_FEET, flatFootKnown,
   elevationScore, catalogueSprites, withBackDrawings,
 } from './isogeom.mjs';
 
@@ -165,8 +165,10 @@ console.log(
 // instrument that hides what it found is no longer an instrument. Only
 // `--strict` consults KNOWN_FLAT_FEET, and it fails in BOTH directions: a new
 // offender fails, and so does a name still listed after it has been fixed.
-const fresh = flagged.filter((r) => !KNOWN_FLAT_FEET.has(r.name));
-const stale = [...KNOWN_FLAT_FEET].filter((n) => !flagged.some((r) => r.name === n));
+const fresh = flagged.filter((r) => !flatFootKnown(r.name));
+const stale = [...KNOWN_FLAT_FEET].filter(
+  (n) => !flagged.some((r) => String(r.name).replace(/@\d+$/, '') === n)
+);
 
 if (KNOWN_FLAT_FEET.size) {
   console.log(

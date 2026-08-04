@@ -857,6 +857,22 @@ export const KNOWN_FLAT_FEET = new Set([
 ]);
 
 /**
+ * IS THIS SPRITE COVERED BY THE LIST ABOVE?
+ *
+ * A joining family's sixteen states are registered as `name@0` … `name@15`, and
+ * they are THE SAME ART reached by a different mask — so an exemption written
+ * for `balustrade` covers `balustrade@11` and always did in spirit. Nothing said
+ * so, and the moment the balustrade was given its sixteen states (the owner:
+ * *"the balistrade does not bend like the other fences"*) the audit reported
+ * fifteen brand-new faults that were one old one, seen from fifteen angles.
+ *
+ * This is NOT a widening of the exemption. Strike `balustrade` off the list and
+ * all sixteen are flagged again, together, which is the behaviour you want from
+ * a ratchet: one entry, one fault, and no way to retire it piecemeal.
+ */
+export const flatFootKnown = (name) => KNOWN_FLAT_FEET.has(String(name).replace(/@\d+$/, ''));
+
+/**
  * Import an art module, telling "not written yet" apart from "threw".
  *
  * THE CENSUS MUST NOT BE ABLE TO SHRINK QUIETLY. Five separate loaders — two
