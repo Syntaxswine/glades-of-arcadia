@@ -70,6 +70,7 @@ import {
   slab,
   slabFace,
   slabBackEdge,
+  slabBackEdgeY,
   linearJoins,
   axialJoins,
 } from './format.js';
@@ -1752,9 +1753,11 @@ function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
     return ramp[clamp(v, 0, n)];
   });
 
-  // Nicks. A clipped edge is straight but not machined; one pixel, no more.
+  // Nicks. A clipped edge is straight but not machined; one pixel, no more —
+  // and it has to come off the TOPMOST pixel, which is the back edge, or it
+  // punches out the row below and leaves that stroke floating over a hole.
   for (let i = 0; i < LINE_W; i++) {
-    if (hash(X0 + i, 0, seed + 5) < nickRate) put(g, X0 + i, TOP + LINE_DROP(i), '.');
+    if (hash(X0 + i, 0, seed + 5) < nickRate) put(g, X0 + i, slabBackEdgeY(TOP, i), '.');
     const fx = X0 + i - 2 * D;
     const fy = TOP + LINE_DROP(i) + D;
     if (hash(fx, 9, seed + 6) < nickRate * 0.7) put(g, fx, fy, ramp[n - 1]);
@@ -1898,25 +1901,23 @@ function hedgeArchGrid() {
   };
 
   // 1 · The hedge, at hedge height, everywhere the crown is not.
-  for (let i = 0; i <= LINE_W; i++) {
-    if (!crowned(i)) put(g, X0 + i, TOP + LINE_DROP(i) - 1, YEW[0]);
-  }
+  slabBackEdge(g, X0, TOP, LINE_W, YEW[0], (i) => !crowned(i));
   slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? null : top(b, x, y)));
   slabFace(g, X0, TOP, LINE_W, D, H, (i, k) => (crowned(i) ? null : face(i, H - 1 - k)));
 
   // 2 · The crown over the doorway, RISE proud of it, carried down to the foot.
-  for (let i = 0; i <= LINE_W; i++) {
-    if (crowned(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, YEW[0]);
-  }
+  slabBackEdge(g, X0, TOP - RISE, LINE_W, YEW[0], crowned);
   slab(g, X0, TOP - RISE, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? top(b, x, y) : null));
   slabFace(g, X0, TOP - RISE, LINE_W, D, H + RISE, (i, k) =>
     crowned(i) ? face(i, H + RISE - 1 - k) : null
   );
 
-  // Nicks. A clipped edge is straight but not machined; one pixel, no more.
+  // Nicks. A clipped edge is straight but not machined; one pixel, no more —
+  // and it has to come off the TOPMOST pixel, which is the back edge, or it
+  // punches out the row below and leaves that stroke floating over a hole.
   for (let i = 0; i < LINE_W; i++) {
     if (hash(X0 + i, 0, 96) < 0.1) {
-      put(g, X0 + i, TOP + LINE_DROP(i) - (crowned(i) ? RISE : 0), '.');
+      put(g, X0 + i, slabBackEdgeY(TOP - (crowned(i) ? RISE : 0), i), '.');
     }
   }
   return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + H + 1 };

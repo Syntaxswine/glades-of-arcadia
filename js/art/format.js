@@ -483,10 +483,36 @@ export function slabFace(g, x0, yTop, len, depth, thick, keyFn) {
   }
 }
 
-/** The far top edge of a slab, so it does not bleed into what is behind it. */
-export function slabBackEdge(g, x0, yTop, len, key) {
-  for (let i = 0; i <= len; i++) put(g, x0 + i, yTop + LINE_DROP(i) - 1, key);
+/**
+ * The far top edge of a slab, so it does not bleed into what is behind it.
+ *
+ * CEIL, NOT `LINE_DROP`, and the difference is a visible fault. `slab` decides
+ * membership from the exact line y = yTop + (x - x0) / 2, so the topmost pixel
+ * in a column sits at `ceil` of that; this stroke has to land one pixel above
+ * THAT, in the same column. Indexing it by run position with `LINE_DROP` —
+ * which floors — put it a further pixel up on every ODD column, and the result
+ * was a dark line hovering one pixel clear of the mass it belongs to, on half
+ * the columns of every slab in the game.
+ *
+ * Measured on `hedge-low` before the fix: 20 of its 50 columns had the top
+ * pixel detached, all of them odd. It had been visible in every render of the
+ * hedges since they were drawn and was written off as a stylistic edge.
+ *
+ * `keep(i)` lets a piece drawn at two heights — a gateway with a raised crown
+ * over its opening — take the stroke for its own stretch of the run and leave
+ * the rest to another call. It exists so nobody hand-rolls this loop again:
+ * three copies of it were written the week this was fixed and all three had
+ * the floor/ceil fault back in them within the hour.
+ */
+export function slabBackEdge(g, x0, yTop, len, key, keep) {
+  for (let i = 0; i <= len; i++) {
+    if (keep && !keep(i)) continue;
+    put(g, x0 + i, yTop + Math.ceil(i / 2) - 1, key);
+  }
 }
+
+/** Where `slabBackEdge` puts its stroke: one pixel above the slab's far edge. */
+export const slabBackEdgeY = (yTop, i) => yTop + Math.ceil(i / 2) - 1;
 
 
 // ---------------------------------------------------------------------------

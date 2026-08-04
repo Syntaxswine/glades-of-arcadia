@@ -59,6 +59,7 @@ import {
   LINE_DROP,
   slab,
   slabFace,
+  slabBackEdge,
   linearJoins,
   axialJoins,
 } from './format.js';
@@ -3285,9 +3286,7 @@ function drystoneGrid(gate = false) {
   const opening = (i) => gate && Math.abs(i - CX) <= HALF_GAP;
 
   // 1 · The wall itself, at wall height, everywhere the gateway is not.
-  for (let i = 0; i <= LINE_W; i++) {
-    if (!raised(i)) put(g, X0 + i, TOP + LINE_DROP(i) - 1, STONE[0]); // far top edge
-  }
+  slabBackEdge(g, X0, TOP, LINE_W, STONE[0], (i) => !raised(i));
   slab(g, X0, TOP, LINE_W, D, (a, b) => (raised(a * 2) ? null : coping(a * 2, b)));
   slabFace(g, X0, TOP, LINE_W, D, HIGH + 2, (i, k) =>
     raised(i) || k >= faceH(i) ? null : course(i, k, TOP + LINE_DROP(i) + D + 1 + k)
@@ -3306,9 +3305,7 @@ function drystoneGrid(gate = false) {
       for (let y = top; y <= foot; y++) put(g, fx, y, nz(fx, y) > 0.84 ? STONE[1] : STONE[0]);
     }
     // 3 · The piers: this wall, built higher, their faces carried to the foot.
-    for (let i = 0; i <= LINE_W; i++) {
-      if (raised(i) && !opening(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, STONE[0]);
-    }
+    slabBackEdge(g, X0, TOP - RISE, LINE_W, STONE[0], (i) => raised(i) && !opening(i));
     slab(g, X0, TOP - RISE, LINE_W, D, (a, b) =>
       raised(a * 2) && !opening(a * 2) ? coping(a * 2, b) : null
     );
@@ -3319,9 +3316,7 @@ function drystoneGrid(gate = false) {
     );
     // 4 · The lintel: one long stone laid over the opening, drawn as a short
     // section of wall so it is the same masonry rather than a bar.
-    for (let i = 0; i <= LINE_W; i++) {
-      if (opening(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, STONE[0]);
-    }
+    slabBackEdge(g, X0, TOP - RISE, LINE_W, STONE[0], opening);
     slab(g, X0, TOP - RISE, LINE_W, D, (a, b) => (opening(a * 2) ? coping(a * 2, b) : null));
     slabFace(g, X0, TOP - RISE, LINE_W, D, 3, (i, k) =>
       opening(i) ? course(i, k, TOP + LINE_DROP(i) - RISE + D + 1 + k) : null
