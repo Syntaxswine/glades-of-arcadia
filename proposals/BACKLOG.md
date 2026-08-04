@@ -521,6 +521,92 @@ registry order (`{...PROPS, ...DECOR, ...EXTRAS}`) disagreeing with the game's.
 **NOT verified in the live browser** — the preview pane was hidden, so the game
 never booted past its title. Look at a garden with a gateway in it first.
 
+### 4q-2 · THE SECOND WAVE, same day — "draw it closed"
+
+The owner, on a hedge with arches in it: *"could we just make it so its always
+drawn closed and the hedges that are in front of the other edges always
+overlap?"* Right instinct. **The overlap half was already true** — `depthOf` is
+`(tx + ty) * LEVELS + level` sorted ascending, so the nearer piece always draws
+last. Nothing foundational needed changing. The *closed* half was the fault.
+
+| configuration | start | body closed | end face |
+|---|---|---|---|
+| `hedge-tall` + `hedge-arch` | 97 | 19 | **0** |
+| `drystone-wall` + `drystone-gateway` | 192 | 66 | **0** |
+
+**A GATEWAY IS A BAR WITH A TALLER BIT IN THE MIDDLE, AND A TALLER BIT HAS
+ENDS.** `slab` draws a box's top and `slabFace` its near long side; nothing drew
+the SHORT face across the run, because a plain bar's ends are buried in its
+neighbours. A crown's and a pier's are not. New `slabEndFace` in `format.js`.
+
+Found by three agents on three deliberately different angles, in isolated
+worktrees. All three converged on the same missing face and all three
+independently found a second bug: a **nick** aimed at the back edge punched a
+hole clean through the crown, because on a piece drawn at two heights the back
+edge is not the topmost pixel of its column. **The adversarial verify panel
+never ran** (worktree creation failed); it was verified by hand instead.
+
+**NEW `tools/gap-audit.mjs`** — composes a run and counts transparent pixels
+with ink above and below. It catches what nothing else could: an enclosed-hole
+flood fill scores 1 (these gaps are open to the sky), and a per-sprite notch
+test scores **0**, because *no single sprite has the fault*. It only exists in
+the composite, and only where a piece differs from its neighbours.
+
+**AND THE INSTRUMENT I SHIPPED THAT MORNING WAS LYING.** `--map` filled an
+`ImageData` and encoded the *canvas*, so every map was 100% transparent — and a
+transparent PNG opens as a white page, indistinguishable from "no gaps". **An
+instrument that fails silently in the direction of good news is worse than
+none.** One line.
+
+### 4q-3 · SOLIDS FROM BOXES — `js/art/solid.js`, and the skill
+
+The owner: *"i'd also like to propose a skill that turns simple 3d objects into
+sprites … just add a skin to the geometric shape."* **Every fault this week was
+one fault** — somebody re-derived the projection by hand: the ribbon cap, the
+wire mesh (twice), the floor/ceil back edge, the crown's wedge, the missing end
+face, and the corner. None of them is an artistic decision.
+
+`box()` + `render()` with a z-buffer + `litSkin()`. Axes read off `slab`'s own
+membership test so it agrees with existing art to the pixel: `a` along +tx is
+`(+2,+1)`, `b` along +ty is `(-2,+1)`, `c` up is `(0,-1)`. **A hedge is
+`box(0, 16.5, 4, 12, 0, 30)`.** Corners come free because two points share a
+pixel exactly when they differ by `(1,1,2)` — the view ray — so depth is
+`a + b + 2c` and an L is simply two boxes. Straight, corner and cross all
+render with **zero** interior gaps.
+
+**Not wired to anything.** No catalogue entry uses it, no pixel changed.
+Captured as the portable skill **`iso-solid-sprites`**.
+
+### 4q-4 · STILL OPEN after the second wave
+
+- **THE CORNER — the biggest one left.** *"when you made it bend 90 degrees it
+  bends like a ribbon instead of a three dimensional object."* True of
+  `hedge-tall` and `drystone-wall`; the palisade is fine because a line of
+  posts genuinely IS two half-runs meeting. `joinedPiece` overlays two flat
+  half-bars, so a volumetric piece has no corner volume. **`solid.js` already
+  renders the correct L** (`docs/shots/solid-corner.png`) — the work is to give
+  the corner the family's own skin so a straight run flows into it seamlessly.
+  This changes art players already have, which is why it stopped here.
+- **`stepped-terrace-wall` still cannot bend**, named in `joining.test.mjs`
+  with its reason: a wall that CLIMBS needs sixteen states times the step
+  profile.
+- **The mirrored (+ty) drawing inverts the light.** `slabEndFace`'s end is a
+  step darker because it is a box's RIGHT face; mirrored it becomes a left face
+  and reads a step too dark. This is true of `slabFace` and **every mirrored
+  piece in the game** — a property of `axialJoins`, not of this change. Fixing
+  it means a second drawing rather than a mirror.
+- **One judgement call in the stone gate:** the pier's end face repaints ~71 px
+  that were the dark slot, because the near pier genuinely stands between the
+  camera and that part of the opening. The slot is now contained under the pier
+  instead of bleeding past it. If the wider slot is preferred, have
+  `slabEndFace` skip non-transparent pixels — reaches 0 too, at the cost of the
+  pier's end reading paper-thin.
+- **`gap-audit` composes straight runs only.** Pointed at an L it reports
+  thousands — for both families, with and without a gate, before and after all
+  of this. That is the corner fault above, not a regression, and the probe
+  would need to mirror the +ty leg the way the renderer does before its corner
+  numbers mean anything.
+
 ## 4p · WHERE A RUN ENDS, AND THE CUBIC HEDGE ✅ (2026-08-03)
 
 Full write-up: **`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md`** — read it
