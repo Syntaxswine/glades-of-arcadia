@@ -571,6 +571,34 @@ export function slabEndFace(g, x0, yTop, depth, iEnd, rise, keyFn) {
 }
 
 
+/**
+ * THE CUT END OF THE BAR ITSELF — the face at the very end of a linear piece,
+ * dropping from its cap to its foot.
+ *
+ * `slabEndFace` above caps a RAISED section, standing up from the run. This one
+ * caps the run, hanging down from it, and the two exist for the same reason a
+ * gateway needed the first: nothing ever drew a bar's own ends, because in a
+ * run they are buried in the neighbours.
+ *
+ * A GATE STANDING ALONE IS NOT IN A RUN. The owner, of both gateways:
+ * *"both the gates are open on the side."* The body either side of the opening
+ * is a stub of wall, and its end was a top face with nothing under it — a flat
+ * plate hanging in the air, which is exactly what you see on a gate nobody has
+ * built a wall up to yet.
+ */
+export function slabEndCap(g, x0, yTop, depth, iEnd, height, keyFn) {
+  for (let s = 0; s <= 2 * depth; s++) {
+    const b = s / 2;
+    const x = x0 + iEnd - s;
+    const cap = yTop + iEnd / 2 + b; // the top face at this depth
+    for (let k = 0; k < height; k++) {
+      const y = cap + 1 + k;
+      const key = keyFn(b, k, Math.round(x), Math.round(y));
+      if (key) put(g, x, y, key);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // JOINING — the sixteen ways a linear piece can meet its neighbours.
 //
@@ -722,6 +750,46 @@ function joinedPiece(name, arms, mask, ay, opts) {
  * and beats drawing nothing.
  * ---------------------------------------------------------------------------
  */
+/**
+ * A GATE THAT KNOWS WHETHER ANYONE HAS BUILT UP TO IT.
+ *
+ * `axialJoins` gives a gate two drawings, itself and its mirror, which is right
+ * about the ARGUMENT — half an arch is a post and a piece of lintel, and a gate
+ * must be drawn whole — and blind to one thing: whether the run it belongs to
+ * actually continues past it. A gate at the end of a wall, or standing on its
+ * own, shows the raw cut end of its own body.
+ *
+ * So: FOUR drawings from two, capped and plain in each axis, and the mask picks.
+ * The cap is drawn only where the run STOPS — the same rule the solid pieces
+ * follow, and for the same reason. An always-capped gate carries a face its
+ * neighbour buries, which is ink lying about the piece's extent, and the
+ * run-overlap guard in test/joining.test.mjs would refuse it — as it should.
+ */
+export function cappedAxialJoins(plain, capped) {
+  const mirror = (art, name) =>
+    defineSprite({
+      ...art,
+      name,
+      rows: art.rows.map((r) => r.split('').reverse().join('')),
+      anchor: [art.w - 1 - art.anchor[0], art.anchor[1]],
+      joins: null,
+    });
+  const plainTy = mirror(plain, `${plain.name}@ty`);
+  const cappedTy = mirror(capped, `${capped.name}@ty`);
+  const joins = Object.freeze(
+    Array.from({ length: JOIN_MASKS }, (_, m) => {
+      if (joinAxis(m) === 'ty') return m & 2 ? plainTy : cappedTy;
+      return m & 1 ? plain : capped;
+    })
+  );
+  // THE BASE SPRITE IS THE CAPPED ONE, because the base sprite IS mask 0 —
+  // a gate with nothing adjoining it, which is exactly when its own ends show.
+  // `joining.test.mjs` asserts base === joins[0] for every family, and it is
+  // right to: the catalogue names one sprite, and a piece standing alone must
+  // be that sprite and not a variant of it.
+  return defineSprite({ ...capped, name: plain.name, joins });
+}
+
 export function axialJoins(art) {
   const mirrored = defineSprite({
     ...art,

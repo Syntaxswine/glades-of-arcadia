@@ -378,6 +378,44 @@ export function solidJoins(mask, spec) {
 }
 
 /**
+ * THE FAR TOP EDGE OF A SOLID, whatever plan it has.
+ *
+ * `slabBackEdge` draws a stroke one pixel above a straight bar's far edge so
+ * the mass does not bleed into whatever stands behind it. It is indexed by run
+ * position, which stops meaning anything the moment the plan can turn a corner.
+ *
+ * THE SILHOUETTE IS THE HONEST STATEMENT OF THE SAME THING: take the topmost
+ * ink in each column and put the stroke one pixel above it. That follows a
+ * straight, an L, a T and a cross for nothing, and — unlike shading the far
+ * RANK of the top face — it does not paint a line down the length of the run.
+ * The owner caught that immediately: *"the low hedges and the high hedges have
+ * lines in the \ direction."* A constant value at constant depth IS a line down
+ * the run.
+ *
+ * `nick` gets a say per column, and a skipped stroke is a bite out of the
+ * silhouette that leaves the mass untouched — which is what a nick always was,
+ * and why it cannot punch a hole through a piece the way an erased top-face
+ * pixel did.
+ */
+export function outline(g, key, nick = null) {
+  const h = g.length;
+  const w = g[0].length;
+  for (let x = 0; x < w; x++) {
+    let top = -1;
+    for (let y = 0; y < h; y++) {
+      if (g[y][x] !== '.') {
+        top = y;
+        break;
+      }
+    }
+    if (top < 1) continue;
+    if (nick && nick(x, top - 1)) continue;
+    g[top - 1][x] = key;
+  }
+  return g;
+}
+
+/**
  * THE COMMON SKIN: one ramp, lit from the upper left, which SPEC §3 fixes and
  * this module must not be the one place that argues with.
  *

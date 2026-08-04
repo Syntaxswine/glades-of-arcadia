@@ -61,6 +61,8 @@ import {
   slabFace,
   slabBackEdge,
   slabEndFace,
+  slabEndCap,
+  cappedAxialJoins,
   linearJoins,
   axialJoins,
 } from './format.js';
@@ -3235,7 +3237,7 @@ function drystoneSkin(D, HIGH, X0) {
  * its own shaded flank. A wall shaded as one slab is a plank; a wall drawn as
  * even courses is brickwork, which is the wrong register entirely.
  */
-function drystoneGrid(gate = false) {
+function drystoneGrid(gate = false, cap = false) {
   // ------------------------------------------------------------------------
   // ONE TILE OF RUN, AND A REAL TOP. Both numbers here were wrong, and the
   // owner caught both from a screenshot:
@@ -3261,7 +3263,13 @@ function drystoneGrid(gate = false) {
   const D = 8; // the slab's depth across the run
   const HIGH = 13; // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH — unchanged, and
   const X0 = 2 * D + 2; // still the whole difficulty for the gateway below.
-  const TOP = 3;
+  // HEADROOM FOR THE PIERS, which stand RISE above the wall's cap. At TOP = 3
+  // the top nine pixels of every pier fell off the top of the grid — the owner:
+  // *"the old stone wall gate is cropped on the top."* The hedge arch was given
+  // this the same day and the wall was not, because they are separate
+  // generators that make the same assumption: that nothing in the sprite stands
+  // higher than the run does. A gateway is the piece for which that is false.
+  const TOP = 3 + 12; // 12 == RISE, declared below where the gateway needs it
   const g = G(X0 + LINE_W + 3, TOP + LINE_W / 2 + D + HIGH + 26);
 
   const { stoneAt, clampi, faceH, coping, course } = drystoneSkin(D, HIGH, X0);
@@ -3384,6 +3392,15 @@ function drystoneGrid(gate = false) {
     );
   }
 
+  // THE BAR'S OWN CUT END, drawn only for the state that needs it. See
+  // format.js §slabEndCap and §cappedAxialJoins.
+  if (cap) {
+    slabEndCap(g, X0, TOP, D, LINE_W, HIGH + 2, (b, k, x, y) => {
+      if (k >= faceH(LINE_W)) return null;
+      const c = course(LINE_W, k, y);
+      return STONE[Math.max(0, STONE.indexOf(c) - 1)];
+    });
+  }
   return { g, ax: X0 + 16 - D, ay: TOP + LINE_DROP(16) + D + HIGH + 1 };
 }
 
@@ -3484,11 +3501,12 @@ export const DRYSTONE_WALL = (() => {
  * one continuous wall rather than an arch standing where a wall is missing.
  */
 export const DRYSTONE_GATEWAY = (() => {
-  const { g, ax, ay } = drystoneGrid(true);
-  return axialJoins(
-    composed('drystone-gateway', g, [ax, ay], {
-      tags: ['structure', 'rock', 'order', 'enclosure', 'gate'],
-    })
+  const TAGS = ['structure', 'rock', 'order', 'enclosure', 'gate'];
+  const plain = drystoneGrid(true, false);
+  const capped = drystoneGrid(true, true);
+  return cappedAxialJoins(
+    composed('drystone-gateway', plain.g, [plain.ax, plain.ay], { tags: TAGS }),
+    composed('drystone-gateway@cap', capped.g, [capped.ax, capped.ay], { tags: TAGS })
   );
 })();
 

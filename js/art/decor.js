@@ -72,10 +72,12 @@ import {
   slabBackEdge,
   slabBackEdgeY,
   slabEndFace,
+  slabEndCap,
+  cappedAxialJoins,
   linearJoins,
   axialJoins,
 } from './format.js';
-import { solidJoins } from './solid.js';
+import { solidJoins, outline } from './solid.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -1374,7 +1376,14 @@ export const COLONNADE = COLN;
 function balustradeGrid() {
   const DEPTH = 4;
   const X0 = 2 * DEPTH + 2;
-  const g = grid(X0 + LINE_W + 3, 34);
+  // TALL ENOUGH TO HOLD ITS OWN NEAR END. The owner: *"the balustrade is
+  // cropped on the bottom."* At 34 it was not: the bottom rail's face reaches
+  // `TOP + 15 + LINE_DROP(LINE_W) + DEPTH + 2` = 40 at the near end of the run,
+  // so the last seven rows were cut off by the edge of the grid — which is why
+  // it only showed at the DOWN-RUN end and looked like a shading fault rather
+  // than a missing seven pixels. A grid is only as tall as the tallest thing in
+  // it, and for a linear piece that is measured at the near end, not the hub.
+  const g = grid(X0 + LINE_W + 3, 46);
   const TOP = 3;
   // Bottom rail, then balusters, then the top rail over their heads. The GAPS
   // are the object: a balustrade drawn as a solid band with lines on it is a
@@ -1840,24 +1849,23 @@ function hedgeSolid(name, h, ramp, seed, tags, nickRate = 0.14) {
     h: TOP + PAD + Math.ceil(R) + D + h + 8,
     faces: {
       top: (a, b, x, y) => {
-        // THE BACK EDGE AND THE NICKS ARE PART OF THE SKIN NOW, not two extra
-        // passes over the run. `slabBackEdge` drew a stroke along a straight
-        // bar's far edge and the nick loop bit pixels out of it — both indexed
-        // by run position, which has no meaning once the plan can turn a
-        // corner. Expressed as "the far rank of the top face", they follow an
-        // L, a T and a cross for nothing, and they cannot drift a pixel out of
-        // step with the surface they belong to (which is exactly what the
-        // floor/ceil bug was).
-        // A NICK THAT SHADES RATHER THAN PUNCTURES. A clipped edge is straight
-        // but not machined — and the hand-built version got that by ERASING a
-        // pixel of the back-edge stroke, which sat above the surface and so
-        // left nothing behind it. Erase a pixel of the TOP FACE instead and, in
-        // a run, the neighbour's mass stands above the hole: `gap-audit` went
-        // straight from 0 to 10 and it was right to. So the bite is carried two
-        // ranks deep in shade instead of one rank of absence, and the piece
-        // stays closed — which is the whole of what the owner asked for.
-        if (b < 2 && hash(x - (b | 0), y, seed + 5) < nickRate) return ramp[0];
-        if (b < 1) return ramp[0]; // dark, so the mass does not bleed behind it
+        // NOTHING BANDED BY DEPTH LIVES HERE. A first pass put the back edge in
+        // as "the far rank of the top face" — one rank of `ramp[0]`, plus a
+        // second for the nicks — reasoning that a rank follows an L where a
+        // stroke indexed by run position cannot. It does, and it also paints a
+        // DARK STRIPE ALONG THE WHOLE RUN, which the owner saw at once:
+        // *"the low hedges and the high hedges have lines in the \ direction."*
+        //
+        // A constant value at constant `b` is a line down the run, because that
+        // is what constant `b` IS. The back edge belongs OUTSIDE the surface,
+        // one pixel above the silhouette, where it reads as an outline rather
+        // than as a band — which is where `slabBackEdge` always drew it. See
+        // `outline()` below, which does the same job and still follows a bend.
+        //
+        // (The stone wall's joints run the other way, across the run, and the
+        // owner is happy with those: *"the old stone wall has the lines in the
+        // / direction, but i dont mind them since its stone blocks."* Across is
+        // masonry. Along is a mistake.)
         let v = n;
         const r = hash(x, y, seed);
         if (r < 0.2) v -= 1;
@@ -1890,7 +1898,8 @@ function hedgeSolid(name, h, ramp, seed, tags, nickRate = 0.14) {
     Array.from({ length: 16 }, (_, m) =>
       defineSprite({
         name: `${name}@${m}`,
-        rows: solidJoins(m, spec).map((r) => r.join('')),
+        rows: outline(solidJoins(m, spec), ramp[0], (x, y) => hash(x, y, seed + 5) < nickRate)
+          .map((r) => r.join('')),
         anchor: [spec.x0 + 16 - D, spec.yTop + LINE_DROP(16) + D + h + 1],
         tags,
       })
@@ -1926,7 +1935,7 @@ export const HEDGE_TALL = HHI;
  * The reading depends on the opening being DARK and having a visible far side.
  * A hole cut in a hedge that shows the grass behind it reads as damage.
  */
-function hedgeArchGrid() {
+function hedgeArchGrid(cap = false) {
   // ------------------------------------------------------------------------
   // ONLY THE CROWN RISES. The owner, on an arch set into a tall-hedge run:
   //
@@ -2079,11 +2088,27 @@ function hedgeArchGrid() {
     for (let yy = y - 1; yy >= 0 && sky; yy--) if (peek(g, x, yy) !== '.') sky = false;
     if (sky) put(g, x, y, '.');
   }
+  // THE BAR'S OWN CUT END. format.js §slabEndCap and §cappedAxialJoins.
+  if (cap) {
+    slabEndCap(g, X0, TOP, D, LINE_W, H, (b, k, x, y) => {
+      const t = k / Math.max(1, H - 1);
+      let v = Math.round(n - 1 - t * (n - 1.25));
+      if (hash(x, y, 97) < 0.22) v -= 1;
+      return YEW[clamp(v, 0, n)];
+    });
+  }
   return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + H + 1 };
 }
 
 {
-  const a = hedgeArchGrid();
+  const a = hedgeArchGrid(false);
+  // eslint-disable-next-line no-var
+  var HARCH_CAP = (() => {
+    const c = hedgeArchGrid(true);
+    return spriteAt('hedge-arch@cap', [c.ax, c.ay], c.g, {
+      tags: ['decor', 'hedge', 'plant', 'nullifier', 'gate', 'neoclassical'],
+    });
+  })();
   // eslint-disable-next-line no-var
   var HARCH = spriteAt('hedge-arch', [a.ax, a.ay], a.g, {
     tags: ['decor', 'hedge', 'plant', 'nullifier', 'gate', 'neoclassical'],
@@ -2099,7 +2124,7 @@ function hedgeArchGrid() {
  * right: a gateway is a catalogue decision, and an artist who draws one should
  * not have to know what the designer will hang it in.
  */
-export const HEDGE_ARCH = axialJoins(HARCH);
+export const HEDGE_ARCH = cappedAxialJoins(HARCH, HARCH_CAP);
 
 /** Topiary cone — clipped box, a true cone, with the same speckle as the ball. */
 function topiaryConeGrid() {

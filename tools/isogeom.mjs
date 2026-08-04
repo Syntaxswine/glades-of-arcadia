@@ -853,7 +853,26 @@ export const KNOWN_FLAT_FEET = new Set([
   // draws one ellipse per object and ellipses on adjacent tiles do not tile.
   // Fixing the art and fixing the stamp are the same decision; see the shadow
   // arc notes in proposals/.
-  'balustrade',
+  // ---------------------------------------------------------------------
+  // AND NOW IT IS EMPTY, 2026-08-04.
+  //
+  // `balustrade` was the last name here, carried as "a LINEAR RUN, and its
+  // contact is a STRIP along the +tx axis, not a blob … blocked on the same
+  // open question as the runtime shadow's scalloping." That diagnosis was
+  // wrong, and expensively so — it named a design question and closed the
+  // subject.
+  //
+  // The real cause was that `balustradeGrid` made a grid 34 rows tall and the
+  // bottom rail's face reaches row 40 at the near end of the run. THE BASE WAS
+  // FLAT BECAUSE THE GRID CUT IT OFF SQUARE. The owner found it by looking —
+  // *"the balustrade is cropped on the bottom"* — and the flat foot went with
+  // the crop, no shadow decision required.
+  //
+  // The lesson is the one this file keeps teaching: a measurement that is
+  // correct can still be attributed to the wrong cause, and a plausible cause
+  // written into a list stops anyone measuring again. If a name goes back on
+  // this list, check the sprite's own GRID before blaming its art.
+  // ---------------------------------------------------------------------
 ]);
 
 /**
