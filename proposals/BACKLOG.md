@@ -579,14 +579,19 @@ Captured as the portable skill **`iso-solid-sprites`**.
 
 ### 4q-4 · STILL OPEN after the second wave
 
-- **THE CORNER — the biggest one left.** *"when you made it bend 90 degrees it
-  bends like a ribbon instead of a three dimensional object."* True of
-  `hedge-tall` and `drystone-wall`; the palisade is fine because a line of
-  posts genuinely IS two half-runs meeting. `joinedPiece` overlays two flat
-  half-bars, so a volumetric piece has no corner volume. **`solid.js` already
-  renders the correct L** (`docs/shots/solid-corner.png`) — the work is to give
-  the corner the family's own skin so a straight run flows into it seamlessly.
-  This changes art players already have, which is why it stopped here.
+- ~~**THE CORNER**~~ ✅ **DONE.** `hedge-low`, `hedge-tall` and `drystone-wall`
+  take their SHAPE from `solid.js` and keep their SURFACE in their own module.
+  **The frame was proved first**: a solid box at the family's own
+  `x0`/`yTop`/`lift` covers the hand-built bar exactly — 1573 shared,
+  **zero** solid-only — so a straight is the straight that shipped and a corner
+  meets it without a seam. Three of my own errors were caught by the existing
+  measurements on the way: a gratuitous end cap (22.6% overlap), interior faces
+  between arms (13.6%), a nick that punched a hole (gap-audit 0 → 10), and a
+  wall built 8px too tall. **The back edge and the nicks are part of the SKIN
+  now** — "the far rank of the top face" follows an L, a T and a cross for
+  nothing, where a stroke indexed by run position cannot.
+  The gates stay hand-built: a hole and a lintel are easiest said run-position
+  by run-position, and both measure 0.
 - **`stepped-terrace-wall` still cannot bend**, named in `joining.test.mjs`
   with its reason: a wall that CLIMBS needs sixteen states times the step
   profile.
