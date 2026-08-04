@@ -19,7 +19,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { twoFinger, pinchVerdict, PINCH_TRIGGER } from '../js/input.js';
+import { twoFinger, pinchVerdict, PINCH_TRIGGER, LONG_PRESS_MS } from '../js/input.js';
 import { createMinimap, MINIMAP, tileToMini } from '../js/minimap.js';
 import { MAP_W, MAP_H } from '../js/iso.js';
 
@@ -61,6 +61,31 @@ test('the verdict is on the DISTANCE TRAVELLED, not on how far apart the fingers
   assert.equal(pinchVerdict(200, 160), 'in');
   assert.equal(pinchVerdict(160, 160), null);
   assert.equal(pinchVerdict(120, 160), 'out');
+});
+
+// ---------------------------------------------------------------------------
+// The long press
+// ---------------------------------------------------------------------------
+//
+// The BEHAVIOUR is a timer over DOM events and is verified in the browser — the
+// six-case matrix is in the handoff, §7d. What is worth pinning here is the
+// DURATION, because it is the whole safety argument for a gesture that deletes
+// and because a future edit that "tightens it up" to 250ms would make the
+// garden hostile without failing anything.
+
+test('the long press waits the platform’s own long-press duration', () => {
+  // Android's ViewConfiguration long-press timeout is 500ms and iOS's context
+  // menu is about the same. A phone player already has this duration in their
+  // hands from every other app they own; inventing our own would feel broken
+  // rather than safe. If this ever changes, change it because the PLATFORM did.
+  assert.equal(LONG_PRESS_MS, 500);
+});
+
+test('a long press is far longer than a tap and far longer than a pinch is wide', () => {
+  // A tap is ~100ms. The gap has to be big enough that nobody taps by accident
+  // at the slow end of normal.
+  assert.ok(LONG_PRESS_MS >= 400, 'a hold this short will fire on ordinary taps');
+  assert.ok(LONG_PRESS_MS <= 800, 'a hold this long reads as the game ignoring you');
 });
 
 // ---------------------------------------------------------------------------

@@ -364,8 +364,18 @@ greenlit for those."*
   placing now waits for the release**; a mouse still places on the press. A
   drag flushes the pending tile so painted ground keeps its first tile.
 
-**Still deliberately not built: long-press-as-right-click.** Right-click means
-*remove*, and a long press that razes what you were only looking at is a trap.
+**Long press = right click — SHIPPED**, over a stated objection the owner
+overruled: *"yes, long press should be the same as right click."* The objection
+was that right-click means *remove*, so a resting thumb deletes. The answer is
+**500ms** (Android's own long-press timeout, so it agrees with every other app
+on the phone — there is a test pinning it, because tightening it to 250ms would
+make the garden hostile without failing anything), plus four cancellations:
+travel cancels, a second finger cancels, `move` and `ask` are excluded, and it
+says *"Taken back. Ctrl+Z puts it back."* Touch only — a mouse has a real right
+button. Verified six ways, four of them cases that must NOT delete.
+
+**The gesture set is now closed:** one finger uses the tool, two fingers move
+the map, pinch shows the garden, hold removes.
 
 **`M` was free, not taken.** The note beside the move tool claimed `M` is mute;
 `setMuted()` exists in js/audio.js but nothing has ever bound a key to it. If

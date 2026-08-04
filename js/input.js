@@ -233,6 +233,26 @@ const INTERNAL = Symbol('internal-tick');
 /** How far the fingers must separate or close before it counts as a pinch. */
 export const PINCH_TRIGGER = 40;
 
+/**
+ * How long a finger must rest before it counts as a right-click.
+ *
+ * THE OWNER'S CALL, over a stated objection: *"yes, long press should be the
+ * same as right click."* The objection was that right-click means REMOVE, so a
+ * long press deletes whatever you were resting a thumb on. It is recorded here
+ * rather than argued again, and the number is the answer to it.
+ *
+ * 500ms is the platform convention (Android's ViewConfiguration long-press
+ * timeout is 500; iOS's context menu is around 500 too), which matters more
+ * than any figure this game could invent: a phone player already has this
+ * duration in their hands from every other app they own, and a gesture that
+ * disagreed with all of them by 200ms would feel broken rather than safe.
+ *
+ * The other half of the answer is not a number: it does not fire if the finger
+ * TRAVELLED, it does not fire during a two-finger gesture, and it says out loud
+ * what it took. Undo is 64 steps deep. See `armLongPress`.
+ */
+export const LONG_PRESS_MS = 500;
+
 /** The centroid and separation of two points. */
 export function twoFinger(a, b) {
   return {
@@ -347,6 +367,9 @@ export function createInput(opts = {}) {
      * that a mouse would already have committed.
      */
     pending: null,
+    /** The pending long-press timer id, and whether one has just gone off. */
+    longTimer: 0,
+    longFired: false,
     /**
      * Set while a gesture is running and NOT cleared until every finger is up.
      *
@@ -1115,6 +1138,60 @@ export function createInput(opts = {}) {
    * the second finger lands was never asked for, and building it would be the
    * gesture quietly editing the garden on its way past.
    */
+  function cancelLongPress() {
+    if (state.longTimer) {
+      clearTimeout(state.longTimer);
+      state.longTimer = 0;
+    }
+  }
+
+  /**
+   * A finger held still on the map is a right-click: it removes.
+   *
+   * WHAT PROTECTS IT FROM BEING THE TRAP IT COULD BE, since "the same as right
+   * click" on a touch screen means a thumb resting on a garden can delete part
+   * of it:
+   *
+   *   * it needs a FULL HALF SECOND of stillness — the platform's own long-press
+   *     duration, so it agrees with every other app on the phone;
+   *   * any travel past DRAG_SLOP cancels it, so a pan or a paint stroke never
+   *     becomes a deletion;
+   *   * a second finger cancels it, so reaching for a two-finger pan cannot
+   *     raze on the way — the same reasoning that made placing wait for the
+   *     release;
+   *   * it SAYS WHAT IT TOOK, so a mistake is legible rather than a thing you
+   *     find later and cannot explain;
+   *   * and `Ctrl+Z` is 64 steps deep, because removing has always been
+   *     undoable and this does not go round that.
+   *
+   * TOUCH ONLY. A mouse has a real right button and has always used it; giving
+   * the mouse a second, slower way to do the same thing would only mean a
+   * player who paused mid-click lost a tree.
+   */
+  function armLongPress(tx, ty) {
+    cancelLongPress();
+    state.longFired = false;
+    state.longTimer = setTimeout(() => {
+      state.longTimer = 0;
+      // Everything that could have happened in the last half second and would
+      // make this the wrong action.
+      if (state.gesture || state.suppress || state.touches.size !== 1) return;
+      if (state.moved > DRAG_SLOP || state.terrain) return;
+      state.longFired = true;
+      // The press is spent: it must not also place on the way up.
+      state.pending = null;
+      state.painting = false;
+      state.panning = false;
+      // `doRemove` answers yes or no, not with the thing — naming it would mean
+      // importing the catalogue into a module that imports only iso.js, for a
+      // nicety. Saying THAT something went, and nothing when nothing did, is
+      // the part that makes a mistaken press legible.
+      const removed = doRemove(tx, ty);
+      if (ui && ui.say) ui.say(removed ? 'Taken back. Ctrl+Z puts it back.' : 'Nothing there.', 2200);
+      refreshGhost();
+    }, LONG_PRESS_MS);
+  }
+
   function beginGesture() {
     const pts = [...state.touches.values()];
     const r = twoFinger(pts[0], pts[1]);
@@ -1127,6 +1204,10 @@ export function createInput(opts = {}) {
     // about to plant is thrown away, because the hand turned out to be
     // reaching for the map rather than for the meadow.
     state.pending = null;
+    // And the same for the deletion it was about to become. A slow two-finger
+    // pan must not raze the tile the first finger happened to rest on.
+    cancelLongPress();
+    state.longFired = false;
     state.gesture = { startDist: r.dist, cx: r.cx, cy: r.cy, fired: false };
     state.suppress = true;
     refreshGhost();
@@ -1275,6 +1356,22 @@ export function createInput(opts = {}) {
       else paintAt(t.tx, t.ty);
     }
 
+    // THE LONG PRESS, armed for any touch that landed on the garden with a
+    // tool that edits it.
+    //
+    // It is armed for the PANNING branch too, which is the case that matters
+    // most: with nothing selected, one finger pans, and that is exactly when a
+    // player is looking at the garden and wants to take something out of it.
+    // A right-click removes whether or not you are holding something, so this
+    // does too.
+    //
+    // The two tools that answer instead of building are excluded, on the same
+    // grounds the `?` is excluded from everything else: a help cursor that
+    // deletes is a trap, and so is a map-mover that deletes.
+    if (ev.pointerType === 'touch' && !state.terrain && tool !== 'move' && tool !== 'ask') {
+      armLongPress(t.tx, t.ty);
+    }
+
     canvas.focus({ preventScroll: true });
     if (canvas.setPointerCapture && ev.pointerId != null) {
       try {
@@ -1328,6 +1425,9 @@ export function createInput(opts = {}) {
         state.moved,
         Math.abs(p.x - state.downX) + Math.abs(p.y - state.downY)
       );
+      // A finger that has travelled is panning or painting, not resting. This
+      // is what keeps a stroke from ending in a deletion.
+      if (state.moved > DRAG_SLOP) cancelLongPress();
       // The map follows the pointer, so the camera moves the other way.
       if (state.panning) dragBy(-dx, -dy);
     }
@@ -1369,6 +1469,23 @@ export function createInput(opts = {}) {
 
   function onPointerUp(ev) {
     state.touches.delete(ev.pointerId);
+    cancelLongPress();
+
+    // A long press has already done this press's work. The release must not
+    // also place the pending tile, centre the map, or land a terrain region —
+    // exactly as lifting off a right-click does none of those.
+    if (state.longFired) {
+      state.longFired = false;
+      state.pending = null;
+      state.terrain = null;
+      state.dragging = false;
+      state.panning = false;
+      state.painting = false;
+      state.button = -1;
+      state.lastPaint = null;
+      refreshGhost();
+      return;
+    }
 
     // Coming out of a gesture. The remaining finger — and its eventual release
     // — must do nothing at all: no pan, no tile, no "take me there". See
@@ -1771,6 +1888,10 @@ export function createInput(opts = {}) {
     // A deferred placement whose release will never arrive is not placed. Same
     // reasoning as the terrain drag above: the player did not finish asking.
     state.pending = null;
+    // A timer that survived the window losing focus would fire into a garden
+    // nobody is looking at and delete something.
+    cancelLongPress();
+    state.longFired = false;
   }
 
   // --------------------------------------------------------------------- loop --
@@ -1889,6 +2010,9 @@ export function createInput(opts = {}) {
     destroy() {
       state.disposed = true;
       if (raf) cancelAnimationFrame(raf);
+      // A pending long press outlives the listeners unless it is cut here, and
+      // would fire into a torn-down input.
+      cancelLongPress();
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);

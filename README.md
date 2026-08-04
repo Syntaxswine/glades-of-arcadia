@@ -181,6 +181,11 @@ second art set at another tile size. The minimap is already the whole garden in
 one picture, in the same projection as the screen, with a camera box and
 tap-to-travel. Pinch makes it big.
 
+**Hold a finger still to take something back** — the touch equivalent of a
+right-click. Half a second, and it does not fire if the finger moved, if a
+second finger joined, or if you are holding the move or `?` tools. It tells you
+what it did, and `Ctrl+Z` is 64 steps deep.
+
 **On a finger, placing happens when you lift, not when you touch.** Two fingers
 never land at the same instant, so planting on contact meant that reaching for
 the map with a tree in your hand planted a tree and then panned away from it.

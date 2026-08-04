@@ -279,10 +279,61 @@ and:
 Verified after the fix: `plantedOnDown: 0`, `plantedOnUp: 1` on touch;
 `mousePlantedOnDown: 1` on desktop, unchanged.
 
-### 7d · Still deliberately not built
+### 7d · Long press = right click
 
-- **Long-press-as-right-click.** Right-click means *remove*. A long press that
-  razes what you were only looking at is a trap, not a shortcut.
+The owner, on the objection above: *"yes, long press should be the same as right
+click."* **It is built.** The concern is recorded here because it was real, not
+to relitigate it — the answer to it is the design, not a refusal.
+
+**The objection:** right-click means REMOVE, so a long press deletes whatever a
+thumb happens to be resting on.
+
+**What answers it.** One number and four cancellations:
+
+- **500ms**, which is Android's `ViewConfiguration` long-press timeout and about
+  iOS's context-menu delay. This matters more than any figure this game could
+  invent: a phone player already has that duration in their hands from every app
+  they own, and disagreeing with all of them by 200ms would feel *broken* rather
+  than *safe*. There is a test pinning it, because a later edit that "tightens
+  it up" to 250ms would make the garden hostile without failing anything.
+- **Travel cancels it.** A pan or a paint stroke can never end in a deletion.
+- **A second finger cancels it.** Reaching for a two-finger pan cannot raze on
+  the way — the same reasoning that made placing wait for the release (§7c).
+- **`move` and `ask` are excluded**, on the grounds the `?` was always excluded
+  from everything: a help cursor that deletes is a trap, and so is a map-mover
+  that deletes.
+- **It says what it did** — *"Taken back. Ctrl+Z puts it back."* — so a mistake
+  is legible instead of something you find later and cannot explain. Undo is 64
+  steps deep and removing was always undoable; this does not go round that.
+
+**Touch only.** A mouse has a real right button and has always used it. Giving
+the mouse a second, slower route to the same thing would only mean a player who
+paused mid-click lost a tree.
+
+It is armed for the **panning** branch too, which is the case that matters most:
+with nothing selected one finger pans, and that is exactly when a player is
+looking at the garden and wants something out of it. A right-click removes
+whether or not you are holding something, so this does too.
+
+**Verified on the running build — the six cases, and four of them are the ones
+that must NOT delete:**
+
+| gesture | result |
+|---|---|
+| hold still, one finger | **removed 1**, and the release planted 0 |
+| drag, then rest | deleted 0 |
+| two fingers resting | deleted 0 |
+| hold with the `move` tool | deleted 0 |
+| quick tap | planted 1 |
+| **mouse** held past 500ms | planted on press, deleted 0 |
+
+That the release plants 0 is not a detail: without it a long press would delete
+a tree and immediately plant another in its place.
+
+### 7e · Still not built
+
+Nothing outstanding from the owner's list. The gesture set is: one finger uses
+the tool, two fingers move the map, pinch shows the garden, hold removes.
 - **The `?` tool is the phone's escape hatch for the clipped info line.** If you
   widen the info line later, check you have not made `?` redundant — it is
   carrying more weight in this mode than in the desktop one.
