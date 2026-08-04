@@ -60,7 +60,19 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, foot, groundFoot, LINE_W, LINE_DROP, linearJoins, axialJoins } from './format.js';
+import {
+  defineSprite,
+  padToAnchor,
+  foot,
+  groundFoot,
+  LINE_W,
+  LINE_DROP,
+  slab,
+  slabFace,
+  slabBackEdge,
+  linearJoins,
+  axialJoins,
+} from './format.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -363,48 +375,10 @@ function stamp(g, rowsArr, x0, y0) {
  */
 export { LINE_W, LINE_DROP };
 
-/**
- * A horizontal SLAB running along the +tx axis: the top face is a
- * parallelogram, `len` px of run by `depth` units of width, and `keyFn(a, b)`
- * paints it in its own coordinates (a along the run, b across it).
- *
- * The first pass drew linear pieces as a 2 px line and every one of them —
- * bench, balustrade, hedge, rill — read as a handrail. A slab in isometric has
- * to have WIDTH in the other axis; that is the whole difference between a
- * plank and a piece of furniture. b runs from 0 at the far edge to `depth` at
- * the near edge, so `b` is also "how close to the viewer", which is what a rill
- * needs to put its water in the middle.
- */
-function slab(g, x0, yTop, len, depth, keyFn) {
-  for (let y = yTop; y <= yTop + len / 2 + depth + 1; y++) {
-    for (let x = x0 - 2 * depth - 1; x <= x0 + len + 1; x++) {
-      const u = x - x0;
-      const v = y - yTop;
-      const a = (v + u / 2) / 2;
-      const b = (v - u / 2) / 2;
-      if (a < -0.02 || a > len / 2 || b < -0.02 || b > depth) continue;
-      const k = keyFn(a, b, x, y);
-      if (k) put(g, x, y, k);
-    }
-  }
-}
-
-/** The near long face of a slab: what you see below its front edge. */
-function slabFace(g, x0, yTop, len, depth, thick, keyFn) {
-  for (let i = 0; i <= len; i++) {
-    const x = x0 + i - 2 * depth;
-    const y = yTop + LINE_DROP(i) + depth;
-    for (let k = 0; k < thick; k++) {
-      const key = keyFn(i, k);
-      if (key) put(g, x, y + 1 + k, key);
-    }
-  }
-}
-
-/** The far top edge of a slab, so it does not bleed into what is behind it. */
-function slabBackEdge(g, x0, yTop, len, key) {
-  for (let i = 0; i <= len; i++) put(g, x0 + i, yTop + LINE_DROP(i) - 1, key);
-}
+// slab / slabFace / slabBackEdge NOW LIVE IN format.js, beside LINE_W and
+// LINE_DROP, and for the same reason: they state a fact about the projection.
+// props.js drew the drystone wall's top by hand and got a ribbon. See the note
+// there.
 
 /**
  * The step profile. ONE riser for the whole set, so a flight climbs exactly

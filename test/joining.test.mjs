@@ -289,8 +289,15 @@ test('a gate belongs to its wall, and only a gate shares a group', () => {
 async function joiningFamilies() {
   const decor = await import('../js/art/decor.js');
   const extras = await import('../js/art/extras.js');
+  // props.js IS IN THIS LIST NOW, and its absence was a real hole. The
+  // drystone wall and its gateway live there, they carry all sixteen states,
+  // and every family test below silently skipped them — so the wall ran for a
+  // whole arc at TWO TILES of length with a full green suite behind it. A
+  // helper that decides which modules count is a test's blind spot written
+  // down; this one named two of the three art modules and looked complete.
+  const props = await import('../js/art/props.js');
   const out = [];
-  for (const table of [decor.DECOR, extras.EXTRAS]) {
+  for (const table of [decor.DECOR, extras.EXTRAS, props.PROPS]) {
     for (const [k, v] of Object.entries(table || {})) if (v && v.joins) out.push([k, v]);
   }
   return out;
@@ -317,6 +324,51 @@ test('every joining family keeps one hub for all sixteen states', async () => {
       assert.equal(s.anchor[1], art.joins[0].anchor[1], `${name}@${m} sits at a different height`);
       assert.ok(s.anchor[0] >= 0 && s.anchor[0] < s.w, `${name}@${m} anchors outside itself`);
     }
+  }
+});
+
+test('a piece of a run spans ONE tile, and does not cover its own neighbour', async () => {
+  // ---------------------------------------------------------------------
+  // The owner, on the drystone wall: *"its way longer than the other walls,
+  // and so when the gate is placed between the segments the walls on either
+  // end cover it."* It was drawn 65 px long against a note calling that "a
+  // full-tile bar". A full tile of run is LINE_W = 33. 65 is two of them.
+  //
+  // THIS IS NOT A WIDTH CHECK, deliberately. A piece's ink is wider than its
+  // run — a slab's top face recedes 2*depth to the left — so any constant
+  // bound on width is a number nobody can defend and every artist has to
+  // work around. The invariant that actually matters is about ADJACENCY:
+  // lay the piece down, lay its +tx neighbour down, and see how much of the
+  // first the second buries. That is a fact about runs, not about taste.
+  //
+  //   drystone-wall, before   50.1%   ...half the wall was drawn twice
+  //   drystone-gateway         34.4%
+  //   every family, after      0.0% – 6.9%
+  //
+  // A run wants a HAIRLINE of overlap and gets one: LINE_W is "32 px of run
+  // plus one overlap column", so a few per cent is the seam doing its job.
+  // 20% is a third of the fault and three times the healthy maximum.
+  // ---------------------------------------------------------------------
+  const { TILE_W, TILE_H } = await import('../js/iso.js');
+  for (const [name, art] of await joiningFamilies()) {
+    const sp = art.joins[5]; // +tx and -tx: the middle of a straight run
+    const ink = new Set();
+    sp.rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        if (row[x] !== '.') ink.add(`${x - sp.anchor[0]},${y - sp.anchor[1]}`);
+      }
+    });
+    let buried = 0;
+    for (const k of ink) {
+      const [x, y] = k.split(',').map(Number);
+      if (ink.has(`${x - TILE_W / 2},${y - TILE_H / 2}`)) buried++;
+    }
+    const frac = buried / ink.size;
+    assert.ok(
+      frac < 0.2,
+      `${name} covers ${(frac * 100).toFixed(1)}% of itself with its own neighbour — ` +
+        'it is longer than one tile, and anything set between two of them will be buried'
+    );
   }
 });
 

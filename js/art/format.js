@@ -417,6 +417,79 @@ export const LINE_DROP = (x) => x >> 1;
 
 
 // ---------------------------------------------------------------------------
+// THE SLAB — how a linear piece gets a TOP, and why that lives here.
+//
+// These three were private to decor.js while props.js drew its own walls by
+// hand, and the two disagreed about what a box IS. The drystone wall drew its
+// cap course as a VERTICAL band directly above its face — a shape with upright
+// ends — where a slab's top face is a parallelogram whose ends run along +ty,
+// and whose near edge is offset `2 * depth` to the left of its far edge. That
+// offset is the entire visual difference between a box and a ribbon, and the
+// owner read the wall exactly as the geometry drew it: *"it also has problems
+// with not being volumetric."*
+//
+// The note above `LINE_W` already stated the rule this now obeys — a constant
+// two modules need is a constant that must have one home — and named the very
+// case that broke: *"a hedge and a drystone wall that bent at different pitches
+// would be the exact seam this whole arc is about."* They did not bend at
+// different pitches. They disagreed about a flatter fact than that: which way
+// a top face recedes. So the slab joins LINE_W and LINE_DROP here, because it
+// states a fact about the PROJECTION rather than a matter of any one artist's
+// taste, and a second module drawing its own was the fault, not a convenience.
+// ---------------------------------------------------------------------------
+
+/** Bounds-checked write. Both art modules had a byte-identical private copy. */
+function put(g, x, y, k) {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (y >= 0 && y < g.length && x >= 0 && x < g[0].length) g[y][x] = k;
+}
+
+/**
+ * A horizontal SLAB running along the +tx axis: the top face is a
+ * parallelogram, `len` px of run by `depth` units of width, and `keyFn(a, b)`
+ * paints it in its own coordinates (a along the run, b across it).
+ *
+ * The first pass drew linear pieces as a 2 px line and every one of them —
+ * bench, balustrade, hedge, rill — read as a handrail. A slab in isometric has
+ * to have WIDTH in the other axis; that is the whole difference between a
+ * plank and a piece of furniture. b runs from 0 at the far edge to `depth` at
+ * the near edge, so `b` is also "how close to the viewer", which is what a rill
+ * needs to put its water in the middle.
+ */
+export function slab(g, x0, yTop, len, depth, keyFn) {
+  for (let y = yTop; y <= yTop + len / 2 + depth + 1; y++) {
+    for (let x = x0 - 2 * depth - 1; x <= x0 + len + 1; x++) {
+      const u = x - x0;
+      const v = y - yTop;
+      const a = (v + u / 2) / 2;
+      const b = (v - u / 2) / 2;
+      if (a < -0.02 || a > len / 2 || b < -0.02 || b > depth) continue;
+      const k = keyFn(a, b, x, y);
+      if (k) put(g, x, y, k);
+    }
+  }
+}
+
+/** The near long face of a slab: what you see below its front edge. */
+export function slabFace(g, x0, yTop, len, depth, thick, keyFn) {
+  for (let i = 0; i <= len; i++) {
+    const x = x0 + i - 2 * depth;
+    const y = yTop + LINE_DROP(i) + depth;
+    for (let k = 0; k < thick; k++) {
+      const key = keyFn(i, k);
+      if (key) put(g, x, y + 1 + k, key);
+    }
+  }
+}
+
+/** The far top edge of a slab, so it does not bleed into what is behind it. */
+export function slabBackEdge(g, x0, yTop, len, key) {
+  for (let i = 0; i <= len; i++) put(g, x0 + i, yTop + LINE_DROP(i) - 1, key);
+}
+
+
+// ---------------------------------------------------------------------------
 // JOINING — the sixteen ways a linear piece can meet its neighbours.
 //
 // js/iso.js §JOINING has the argument for why a corner cannot be a facing.

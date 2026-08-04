@@ -51,7 +51,17 @@
 //
 // DOM-free and dependency-free; imports cleanly in Node.
 
-import { defineSprite, padToAnchor, groundFoot, linearJoins, axialJoins } from './format.js';
+import {
+  defineSprite,
+  padToAnchor,
+  groundFoot,
+  LINE_W,
+  LINE_DROP,
+  slab,
+  slabFace,
+  linearJoins,
+  axialJoins,
+} from './format.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -3295,8 +3305,34 @@ export const HEDGE_ARCH = hedgeRun('hedge-arch', {
  * even courses is brickwork, which is the wrong register entirely.
  */
 function drystoneGrid(gate = false) {
-  const len = 65, deep = 8, high = 13, y0 = 3;
-  const g = G(len, Math.ceil(y0 + len / 2 + deep + high + 8));
+  // ------------------------------------------------------------------------
+  // ONE TILE OF RUN, AND A REAL TOP. Both numbers here were wrong, and the
+  // owner caught both from a screenshot:
+  //
+  //   *"its way longer than the other walls, and so when the gate is placed
+  //   between the segments the walls on either end cover it."*
+  //   *"it also has problems with not being volumetric."*
+  //
+  // The run was 65 px against a note claiming that was "a full-tile bar". A
+  // full tile of run is LINE_W = 33; 65 is TWO of them, so every segment
+  // overhung its plot by half a tile at each end and the neighbours simply
+  // drew over the gateway standing between them. A run of plain wall hid the
+  // fault perfectly — each piece covered its neighbour with more of the same
+  // masonry — which is why it survived a whole arc of joining work. It took a
+  // GATE, the one piece that is not interchangeable with its neighbours, to
+  // make the overlap visible.
+  //
+  // And the top was drawn as a vertical band directly above the face, which is
+  // not what a top face is: see the slab note in js/art/format.js. It now uses
+  // the same three primitives the hedges do, so a wall and a hedge cannot
+  // disagree about which way a surface recedes.
+  // ------------------------------------------------------------------------
+  const D = 8; // the slab's depth across the run
+  const HIGH = 13; // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH — unchanged, and
+  const X0 = 2 * D + 2; // still the whole difficulty for the gateway below.
+  const TOP = 3;
+  const g = G(X0 + LINE_W + 3, TOP + LINE_W / 2 + D + HIGH + 26);
+
   // Stone id from a coarse, deliberately irregular lattice.
   const stoneAt = (x, y) => {
     const row = Math.floor(y / (4 + Math.floor(nz(Math.floor(y / 4), 7) * 3)));
@@ -3304,38 +3340,41 @@ function drystoneGrid(gate = false) {
     const col = Math.floor((x + row * 5) / w);
     return { row, col, edgeX: (x + row * 5) % w === 0, key: col * 31 + row * 7 };
   };
-  const footAt = (x) => Math.round(y0 + x / 2 + deep + high + nz(x * 0.4, 3) * 2);
+  const clampi = (v) => Math.max(0, Math.min(3, v));
+  /** The foot wanders a couple of pixels. A dry wall is not laid to a line. */
+  const faceH = (i) => HIGH + Math.round(nz(i * 0.4, 3) * 2);
+
   /**
-   * ONE COLUMN of wall — the cap course along the top, then the near face down
-   * to the foot. Factored out because THE GATEWAY'S PIERS ARE THIS WALL, built
-   * higher: a first attempt drew them as bare four-pixel strokes with no cap
-   * and no depth and they came out as a wire bracket hovering over the stones.
-   * A pier is masonry. If it does not get the same treatment as the wall it
-   * stands in, it is not the same wall.
+   * THE COPING, in the slab's own (run, depth) coordinates. Its joints run
+   * ACROSS the wall, because that is how a stone is laid on top of one.
+   *
+   * DO NOT HAND-ROLL THIS SURFACE. It was written twice as a loop over run
+   * positions — `for b in 0..D: put(X0 + i - 2b, yTop + b)` — which looks like
+   * a top face and is not one: stepping `b` moves x by -2 while stepping `i`
+   * moves it by +1, so only two screen columns in every four are ever written
+   * and the cap comes out as a wire mesh with the grass showing through it.
+   * That aliasing is precisely why `slab` iterates the bounding box and tests
+   * membership instead. The keyFn below is the part an artist owns; the fill
+   * is the projection's business.
    */
-  const column = (x, far, foot) => {
-    const near = far + deep;
-    // Cap course along the top: the lit face of the wall.
-    for (let y = Math.round(far); y <= Math.round(near); y++) {
-      const st = stoneAt(x, y * 3);
-      const t = (y - far) / deep;
-      let i = t < 0.35 ? 3 : t < 0.8 ? 2 : 1;
-      if (nz(st.key, 3) > 0.6) i -= 1;
-      if (st.edgeX) i = 0;
-      put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
-    }
-    for (let y = Math.round(near) + 1; y <= foot; y++) {
-      const st = stoneAt(x, y);
-      const t = (y - near) / high;
-      let i = 2 + Math.round((nz(st.key * 1.3, st.row * 2.7) - 0.5) * 1.6);
-      if (y - Math.round(near) < 2) i += 1; // each course catches light on top
-      if (st.edgeX || y % (4 + Math.floor(nz(st.row, 7) * 3)) === 0) i = 0; // joint
-      if (t > 0.82) i -= 1;
-      put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
-    }
+  const coping = (i, b) => {
+    const cw = 9 + Math.floor(nz(Math.floor(i / 11), 11) * 6); // this stone's length
+    const t = b / D;
+    let v = t < 0.4 ? 3 : t < 0.85 ? 2 : 1;
+    if (nz(i * 1.7, b * 2.3) > 0.86) v -= 1; // grain, sparse
+    if (Math.floor(i) % cw === 0) v -= 2; // the joint between coping stones
+    return STONE[clampi(v)];
   };
 
-  for (let x = 0; x < len; x++) column(x, y0 + x / 2, footAt(x));
+  /** The near face: courses of unmortared stone, dark slots between them. */
+  const course = (i, k, y) => {
+    const st = stoneAt(X0 + i - 2 * D, y);
+    let v = 2 + Math.round((nz(st.key * 1.3, st.row * 2.7) - 0.5) * 1.6);
+    if (k < 2) v += 1; // each course catches light on top
+    if (st.edgeX || y % (4 + Math.floor(nz(st.row, 7) * 3)) === 0) v = 0; // joint
+    if (k / HIGH > 0.82) v -= 1;
+    return STONE[clampi(v)];
+  };
 
   // ------------------------------------------------------------------------
   // THE GATEWAY, built out of the wall it stands in.
@@ -3349,49 +3388,91 @@ function drystoneGrid(gate = false) {
   // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH, which is the whole difficulty. A
   // first attempt carved a doorway INTO it and produced a dark smudge that was
   // invisible at 1x — correctly, because a hole in a knee-high wall is a gap
-  // you step over rather than a way through. A gateway has to ANNOUNCE ITSELF:
-  // the hedge arch does it by standing four pixels proud of its hedge, and
-  // real gateposts do it by being the tallest thing in the field. So the piers
-  // are built UP and the lintel bridges them.
+  // you step over rather than a way through. A gateway has to ANNOUNCE ITSELF,
+  // and real gateposts do it by being the tallest thing in the field. So the
+  // piers are built UP and the lintel bridges them.
+  //
+  // NOTE WHAT THIS PIECE GETS RIGHT THAT THE HEDGE ARCH DID NOT: only the
+  // MIDDLE of the run rises. The ends stay at exactly wall height, so a gate
+  // meets its neighbours flush and there is no raised cross-section standing
+  // proud with nothing drawn on its cut face. The hedge arch lifted its whole
+  // bar by four and showed a lit raw edge above every neighbour for it. The
+  // stone gate had the answer first; decor.js now copies it.
   // ------------------------------------------------------------------------
+  const CX = LINE_W / 2;
+  const HALF_GAP = 5; // the clear opening, in run pixels
+  const PIER = 3; // ...and the jamb either side of it
+  const RISE = 12; // how far the piers stand proud of the wall's cap
+
+  // NOTHING IS ERASED. The old code cleared a screen column and redrew it,
+  // which only worked because a run position was a single column of pixels.
+  // Now that the cap recedes, one screen column carries parts of many run
+  // positions and clearing by column would take its neighbours' masonry with
+  // it. So each pass simply declines the run positions that are not its own,
+  // and the passes are ordered plain wall, passage, piers, lintel.
+  const raised = (i) => gate && Math.abs(i - CX) <= HALF_GAP + PIER;
+  const opening = (i) => gate && Math.abs(i - CX) <= HALF_GAP;
+
+  // 1 · The wall itself, at wall height, everywhere the gateway is not.
+  for (let i = 0; i <= LINE_W; i++) {
+    if (!raised(i)) put(g, X0 + i, TOP + LINE_DROP(i) - 1, STONE[0]); // far top edge
+  }
+  slab(g, X0, TOP, LINE_W, D, (a, b) => (raised(a * 2) ? null : coping(a * 2, b)));
+  slabFace(g, X0, TOP, LINE_W, D, HIGH + 2, (i, k) =>
+    raised(i) || k >= faceH(i) ? null : course(i, k, TOP + LINE_DROP(i) + D + 1 + k)
+  );
+
   if (gate) {
-    const CX = len / 2;
-    const HALF_GAP = 10; // the clear opening, in run pixels
-    const PIER = 6; // ...and the jamb either side of it
-    const RISE = 12; // how far the piers stand proud of the wall's cap
-    for (let x = 0; x < len; x++) {
-      const d = Math.abs(x - CX);
-      if (d > HALF_GAP + PIER) continue;
-      const far = y0 + x / 2;
-      const foot = footAt(x);
-      for (let y = Math.round(far - RISE); y <= foot; y++) put(g, x, y, '.');
-      if (d <= HALF_GAP) {
-        // The passage. A hole cut in a wall that shows the GRASS behind it
-        // reads as damage — decor.js's lesson on the hedge arch, in stone — so
-        // the opening is filled with the dark of the way through.
-        for (let y = Math.round(far + deep) - 1; y <= foot; y++) {
-          put(g, x, y, nz(x, y) > 0.84 ? STONE[1] : STONE[0]);
-        }
-        // The lintel: one long stone laid over the opening, drawn as a short
-        // section of wall so it is the same masonry rather than a bar.
-        column(x, far - RISE, Math.round(far - RISE) + deep + 3);
-      } else {
-        column(x, far - RISE, foot); // the pier: this wall, built higher
-      }
+    // 2 · The passage. A hole cut in a wall that shows the GRASS behind it
+    // reads as damage — decor.js's lesson on the hedge arch, in stone — so the
+    // opening is filled with the dark of the way through, from just under the
+    // lintel down to the ground.
+    for (let i = 0; i <= LINE_W; i++) {
+      if (!opening(i)) continue;
+      const fx = X0 + i - 2 * D;
+      const top = TOP + LINE_DROP(i) - RISE + D + 4;
+      const foot = TOP + LINE_DROP(i) + D + faceH(i);
+      for (let y = top; y <= foot; y++) put(g, fx, y, nz(fx, y) > 0.84 ? STONE[1] : STONE[0]);
     }
+    // 3 · The piers: this wall, built higher, their faces carried to the foot.
+    for (let i = 0; i <= LINE_W; i++) {
+      if (raised(i) && !opening(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, STONE[0]);
+    }
+    slab(g, X0, TOP - RISE, LINE_W, D, (a, b) =>
+      raised(a * 2) && !opening(a * 2) ? coping(a * 2, b) : null
+    );
+    slabFace(g, X0, TOP - RISE, LINE_W, D, RISE + HIGH + 2, (i, k) =>
+      raised(i) && !opening(i) && k < RISE + faceH(i)
+        ? course(i, k, TOP + LINE_DROP(i) - RISE + D + 1 + k)
+        : null
+    );
+    // 4 · The lintel: one long stone laid over the opening, drawn as a short
+    // section of wall so it is the same masonry rather than a bar.
+    for (let i = 0; i <= LINE_W; i++) {
+      if (opening(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, STONE[0]);
+    }
+    slab(g, X0, TOP - RISE, LINE_W, D, (a, b) => (opening(a * 2) ? coping(a * 2, b) : null));
+    slabFace(g, X0, TOP - RISE, LINE_W, D, 3, (i, k) =>
+      opening(i) ? course(i, k, TOP + LINE_DROP(i) - RISE + D + 1 + k) : null
+    );
   }
 
-  return { g, ay: Math.round(y0 + 16 + deep + high) };
+  return { g, ax: X0 + 16 - D, ay: TOP + LINE_DROP(16) + D + HIGH + 1 };
 }
 
 export const DRYSTONE_WALL = (() => {
-  const { g, ay } = drystoneGrid(false);
+  const { g, ax, ay } = drystoneGrid(false);
   // ALL SIXTEEN CONNECTION STATES, for one line — js/art/format.js §JOINING.
-  // The wall was already drawn as a full-tile bar running down-right from an
-  // anchor at its exact midpoint (x = 32 of 65), which is the only thing
-  // `linearJoins` needs: it cuts the bar at the hub to get the -tx and +tx
-  // arms and mirrors those two to get -ty and +ty. A run of walls is
-  // byte-identical to what it was; only a corner is new art.
+  // The wall is drawn as a full-tile bar running down-right from its hub,
+  // which is the only thing `linearJoins` needs: it cuts the bar at the hub to
+  // get the -tx and +tx arms and mirrors those two to get -ty and +ty.
+  //
+  // THE ANCHOR IS NO LONGER WRITTEN DOWN HERE. It used to say `ax: 32` beside
+  // a note calling that "its exact midpoint (x = 32 of 65)" — true of the
+  // grid, and the reason the wall was two tiles long went unnoticed for an
+  // arc: a hand-copied constant agreed with the wrong length and so nothing
+  // ever disagreed. The generator returns its own hub now, derived from
+  // LINE_W, and there is one place left to get it wrong.
   //
   // Note what this fixes that no audit was looking at. A nullifier that leaves
   // a gap "is not a barrier, and the player will not believe a line they can
@@ -3400,7 +3481,7 @@ export const DRYSTONE_WALL = (() => {
   // each other and stuck a spur out past the turn.
   return linearJoins(
     'drystone-wall',
-    { g, ax: 32, ay },
+    { g, ax, ay },
     { tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'] }
   );
 })();
@@ -3417,9 +3498,9 @@ export const DRYSTONE_WALL = (() => {
  * one continuous wall rather than an arch standing where a wall is missing.
  */
 export const DRYSTONE_GATEWAY = (() => {
-  const { g, ay } = drystoneGrid(true);
+  const { g, ax, ay } = drystoneGrid(true);
   return axialJoins(
-    composed('drystone-gateway', g, [32, ay], {
+    composed('drystone-gateway', g, [ax, ay], {
       tags: ['structure', 'rock', 'order', 'enclosure', 'gate'],
     })
   );
