@@ -1,7 +1,13 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-04 (ELEVENTH pass, §4q) against the handoff written that day.
+Reconciled 2026-08-04 (TWELFTH pass, §4q and §4r) against the two handoffs
+written that day. The day had two halves and they split by subject:
 
+* **`HANDOFF-SOLIDS-AND-THE-BENDING-RUN-2026-08-04.md`** — the keystone for
+  **`js/art/solid.js`**: describing a piece as boxes and letting one rasteriser
+  that knows the projection draw it. Read it before authoring or fixing ANY
+  built scenery, and read its §3 before converting an existing family — *prove
+  the frame first* is the step that makes the rest safe.
 * **`HANDOFF-A-GATE-IN-ITS-WALL-2026-08-04.md`** — the keystone for **how long
   one tile of a run is**, and for the slab primitives that give a linear piece a
   top. Read it before touching `format.js`, any wall, any hedge, or any gateway.
@@ -558,24 +564,55 @@ transparent PNG opens as a white page, indistinguishable from "no gaps". **An
 instrument that fails silently in the direction of good news is worse than
 none.** One line.
 
-### 4q-3 · SOLIDS FROM BOXES — `js/art/solid.js`, and the skill
+### 4q-3 · SOLIDS FROM BOXES — see §4r
 
-The owner: *"i'd also like to propose a skill that turns simple 3d objects into
-sprites … just add a skin to the geometric shape."* **Every fault this week was
-one fault** — somebody re-derived the projection by hand: the ribbon cap, the
-wire mesh (twice), the floor/ceil back edge, the crown's wedge, the missing end
-face, and the corner. None of them is an artistic decision.
+The owner proposed the primitive here — *"a skill that turns simple 3d objects
+into sprites … just add a skin to the geometric shape"* — and it landed the same
+day and then got used. **§4r below is the account.** This heading is kept only so
+the day reads in order: the idea arrived in the middle of the gateway work, as
+the answer to a fault list that was already five items long.
 
-`box()` + `render()` with a z-buffer + `litSkin()`. Axes read off `slab`'s own
-membership test so it agrees with existing art to the pixel: `a` along +tx is
-`(+2,+1)`, `b` along +ty is `(-2,+1)`, `c` up is `(0,-1)`. **A hedge is
-`box(0, 16.5, 4, 12, 0, 30)`.** Corners come free because two points share a
-pixel exactly when they differ by `(1,1,2)` — the view ray — so depth is
-`a + b + 2c` and an L is simply two boxes. Straight, corner and cross all
-render with **zero** interior gaps.
+## 4r · SOLIDS, AND A RUN THAT BENDS ✅ (2026-08-04, second half)
 
-**Not wired to anything.** No catalogue entry uses it, no pixel changed.
-Captured as the portable skill **`iso-solid-sprites`**.
+Full write-up: **`HANDOFF-SOLIDS-AND-THE-BENDING-RUN-2026-08-04.md`**.
+
+`js/art/solid.js` — `box()`, `render`/`renderInto` with a z-buffer, `outline()`,
+`solidJoins()`. `hedge-low`, `hedge-tall` and `drystone-wall` take their SHAPE
+from it and keep their SURFACE in their own module. **A hedge is
+`box(0, 16.5, 0, D, 0, H)`.** Corners come free: two points share a pixel exactly
+when they differ by `(1,1,2)` — the view ray — so `depth = a + b + 2c` and an L
+is two boxes. Captured as the portable skill **`iso-solid-sprites`**.
+
+**PROVE THE FRAME FIRST.** A solid box in the family's own `x0`/`yTop`/`lift`
+against the art that ships: **1573 both, 33 hand-only, ZERO solid-only.** Without
+that number, "does the corner line up" is a matter of opinion.
+
+Then four of the owner's sightings, three of them faults introduced that same
+morning: the `\` lines (a back edge put inside the top face — a constant value at
+constant depth IS a line down the run), the stone gate cropped on top (piers 12
+above a grid starting at 3), both gates open on the side (nothing ever drew a
+bar's own END — new `slabEndCap` + `cappedAxialJoins`, capped only where the run
+stops), and the balustrade cropped at the bottom.
+
+**AND THAT LAST CROP EMPTIED `KNOWN_FLAT_FEET`.** It had been carried as a strip
+contact "blocked on the same open question as the runtime shadow's scalloping" —
+a real design question, confidently named, and not the cause. The base was flat
+because the grid cut it off square. **329 sprites measured, 0 flat feet.**
+*A correct measurement can still be pinned on the wrong cause, and a plausible
+cause written into a list stops anyone measuring again.*
+
+Four more errors of mine were caught by instruments that already existed and just
+needed running: a gratuitous end cap (22.6% overlap), interior faces between arms
+(13.6%), a nick that punched through (`gap-audit` 0 → 10), and a wall 8px too
+tall. **A face abutting another box is coplanar with its neighbour's interior,
+not behind it — the z-buffer will not hide it for you.**
+
+**STILL OPEN — the last item on the owner's list:** the **balustrade ribbons at a
+bend**, specifically the `<` and `>` corners (the other two hide it). It is the
+last family composed from flat half-bars, and the awkward one: **its rails sit at
+two heights** while `solidJoins` builds one box from the ground up. Needs layered
+boxes — `box` already takes `c0`, so a spec change, not a rewrite — plus
+balusters placed **per arm** rather than per run position.
 
 ### 4q-4 · STILL OPEN after the second wave
 
