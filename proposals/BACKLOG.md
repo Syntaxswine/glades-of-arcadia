@@ -1,15 +1,21 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-03 (TENTH pass, §4i and §4p) against the two handoffs written
-that day, which split the work by subject rather than by date:
+Reconciled 2026-08-04 (ELEVENTH pass, §4q) against the handoff written that day.
 
+* **`HANDOFF-A-GATE-IN-ITS-WALL-2026-08-04.md`** — the keystone for **how long
+  one tile of a run is**, and for the slab primitives that give a linear piece a
+  top. Read it before touching `format.js`, any wall, any hedge, or any gateway.
+  It also carries the two rules that cost the most this week: *do not hand-roll
+  a top face*, and *check that a proposed guard refuses the bug you already
+  have*.
 * **`HANDOFF-MOBILE-MODE-2026-08-03.md`** — the keystone for the chrome: a
   second logical screen (`?mode=mobile`), the layout that derives from it, and
   every touch gesture. Read it before changing `iso.js` MODES, `ui.LAYOUT`, the
   panel, or anything in `input.js` that touches a pointer.
 * **`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md`** — the keystone for how
   a run of pieces ENDS, and for the trap that a sprite's name is not its
-  placeable's id. Read it before editing any sprite at all.
+  placeable's id. Read it before editing any sprite at all. **Its §7 is now
+  fully closed** — see the 08-04 handoff for what each item turned out to be.
 
 `HANDOFF-THE-IMAGE-PACK-2026-08-02.md` §8 remains the keystone for which way an
 object faces; `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` for the shadow arc, the
@@ -464,10 +470,61 @@ screen — so §4e went first and the menu was designed once. It shipped
 2026-08-01 (Continue / Gardens / Recover), and a mode switch is one more button
 on a panel that already knows how to swap what it offers.
 
+## 4q · A GATE IN ITS WALL ✅ (2026-08-04)
+
+Full write-up: **`HANDOFF-A-GATE-IN-ITS-WALL-2026-08-04.md`**. Read it before
+touching `format.js`, any wall, any hedge or any gateway.
+
+Started as bookkeeping — closing §4p's four open items — and the first of them,
+a one-command measurement, turned out to be a fault the owner was already
+looking at. All four closed; three more found.
+
+**One sentence for all of it: a piece of a run has to agree with its neighbours
+about where the run IS.** A full tile of run is `LINE_W = 33`.
+
+| piece | was | is |
+|---|---|---|
+| `drystone-wall` | 65 px = **1.97 tiles**, 50.1% self-overlap | 34 px, 5.0% |
+| `cypress-screen` | art along +tx, plot `[1,2]` along **+ty** | one tile, `[1,1]` |
+| `hedge-arch` | +4 proud over its whole length, raw ends | crown only, ends flush |
+| `slabBackEdge` | floors where `slab` ceils | **20/50 detached columns → 0** |
+
+**Why a whole joining arc missed the wall:** a run of plain wall hides it
+perfectly — each piece covers its neighbour with more of the same masonry. It
+took a GATE, the one piece in a run that is not interchangeable with its
+neighbours, to make the overlap visible.
+
+**Three instruments had already reported the cypress** — anchor-audit in *both*
+its lists, plus a `KNOWN_UNDERSIZED` exemption. All three readings were right
+and the diagnosis was never made, because no amount of reach can satisfy a plot
+that lies at right angles to its own art. It is the first name to leave that
+list; **eleven remain, and each is a claim nobody has re-derived.**
+
+Shipped alongside: `tools/registry-audit.mjs` (a census, not a gate), the
+retirement of props.js's 155-line unreachable hedge family, and a run-overlap
+guard in `joining.test.mjs` verified to REFUSE the old geometry at 50.1%.
+
+**Two rules from this one, both expensive:**
+* **Do not hand-roll a top face.** `for b: put(x - 2b, y + b)` writes two screen
+  columns in four and produces wire mesh. `slab()` tests membership for exactly
+  this reason.
+* **Check that a proposed guard refuses the bug you already have.** The obvious
+  invariant here — *a sprite must not be wider than its plot's diamond* — was
+  measured and thrown away: a 1×1 diamond is 64 px wide and the broken wall was
+  65. It would have passed both faults.
+
+**Still open** (handoff §8): `gravel-walk` defined twice and asked never; 22
+props sprites unreachable and named after placeable ids; eleven exemptions; the
+gateway's proportions scaled but never re-judged at 1×; and `joinshot`'s
+registry order (`{...PROPS, ...DECOR, ...EXTRAS}`) disagreeing with the game's.
+
+**NOT verified in the live browser** — the preview pane was hidden, so the game
+never booted past its title. Look at a garden with a gateway in it first.
+
 ## 4p · WHERE A RUN ENDS, AND THE CUBIC HEDGE ✅ (2026-08-03)
 
 Full write-up: **`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md`** — read it
-before editing ANY sprite, for §5 alone.
+before editing ANY sprite, for §5 alone. **Its §7 is fully closed — see §4q.**
 
 The owner, with a picture: *"single hedges are represented differently than
 connected hedges."* And then: *"it would be nice if you could make the hedge a

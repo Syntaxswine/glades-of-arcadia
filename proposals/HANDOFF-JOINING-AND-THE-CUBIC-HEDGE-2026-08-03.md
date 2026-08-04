@@ -171,24 +171,32 @@ see; put that sentence in the file and check it when a finding surprises you.
 
 ---
 
-## 7 · What is open
+## 7 · What is open — ✅ ALL FOUR CLOSED 2026-08-04
 
-- **`props.js` still carries `CLIPPED_HEDGE` / `TALL_HEDGE` / `HEDGE_ARCH` that
-  nothing asks for.** They are in step and labelled, but they are a second source
-  and the next person to change a hedge will find them first, because they are
-  named after the placeables. Retire them, or make the catalogue ask for them and
-  retire decor's — but not both.
-- **The dark back-edge line on `hedge-low`.** Visible in every render as a thin
-  dark stroke along the far top edge, slightly detached from the mass. It is
-  `slabBackEdge` and it **predates this work** — it is in the baseline shot. Not
-  touched, because it is a separate question from the two the owner asked.
-- **`drystone-wall` was not measured after the fix**, only `hedge-*` and
-  `palisade-*`. It goes through `joinedPiece` so it is covered by construction,
-  but it has never been in a `--lone` frame. One command: `node
-  tools/joinshot.mjs --ids drystone-wall --lone`.
-- **`hedge-arch` renders in a stone-grey palette** in `joinshot`, not foliage.
-  Noticed in passing while rendering corners; not investigated, and it may well
-  be intended for an arch. Worth one look.
+Closed the next day, in `HANDOFF-A-GATE-IN-ITS-WALL-2026-08-04.md`. **Read that
+one for what actually happened**, because three of the four turned out to be
+larger than they look here, and the fourth turned out to be an instrument fault
+rather than an art one.
+
+- ~~**`props.js` still carries `CLIPPED_HEDGE` / `TALL_HEDGE` / `HEDGE_ARCH`**~~
+  ✅ **RETIRED**, and `hedgeRun` with them — 155 lines. They were also a second
+  home for `const len = 65`, the wrong run length that this file's own
+  `drystone-wall` was built on. Keeping a dead copy "in step" cost more than
+  deleting it would have.
+- ~~**The dark back-edge line on `hedge-low`**~~ ✅ **FIXED, and it was
+  arithmetic.** `slabBackEdge` indexed by run position with `LINE_DROP`, which
+  floors, while `slab`'s far edge lands on `ceil` — so on every ODD column the
+  stroke sat one pixel clear of its own mass. Measured: **20 of `hedge-low`'s 50
+  columns**, all odd. Not a stylistic edge; a parity bug in every slab in the
+  game.
+- ~~**`drystone-wall` was not measured after the fix**~~ ✅ **MEASURED, and it
+  was 1.97 TILES LONG.** The one-command check in this bullet is what started
+  the whole of the next day. Its neighbours buried its own gateway.
+- ~~**`hedge-arch` renders in a stone-grey palette**~~ ✅ **NOT THE ART.** The
+  owner confirms the colour is right in game. `joinshot` builds its registry as
+  `{...PROPS, ...DECOR, ...EXTRAS}` where the game puts DECOR last — still worth
+  bringing into line, and now recorded as an instrument bug in the new handoff
+  §8 rather than an art one.
 
 ---
 
