@@ -950,13 +950,19 @@ function createArtist(mods) {
   const COMPOSERS = (mods.grow && mods.grow.COMPOSERS) || {};
   const registry = new Map();
   // ORDER IS PRECEDENCE — a later module overwrites an earlier one's sprite of
-  // the same name. `art/decor.js` goes last on purpose. It collides with
-  // art/props.js on exactly three names — `broken-column`, `gravel-walk` and
-  // `hedge-arch` — and in all three the decor version is the one to draw: it is
-  // authored in the same family vocabulary (one flute pitch, one plinth, one
-  // step profile) as the columns and benches beside it, and its hedge arch has
-  // a legible doorway, which the influence rule REQUIRES a player to be able to
-  // see. Nothing else in either module shares a name.
+  // the same name. `art/decor.js` goes last on purpose. It now collides with
+  // art/props.js on exactly two names — `broken-column` and `gravel-walk` —
+  // and in both the decor version is the one to draw: it is authored in the
+  // same family vocabulary (one flute pitch, one plinth, one step profile) as
+  // the columns and benches beside it.
+  //
+  // `hedge-arch` WAS a third collision and is not one any more: props.js kept a
+  // whole second hedge family that nothing could reach, two of them registered
+  // under placeable ids the artist never looks up, and it has been retired —
+  // see the tombstone in js/art/props.js. Precedence is a fine way to choose
+  // between two drawings and a terrible way to keep one alive, because the
+  // loser goes on compiling, rendering in probes, and taking edits meant for
+  // the winner. `tools/registry-audit.mjs` reports both cases.
   for (const m of [mods.tiles, mods.extras, mods.props, mods.decor]) {
     if (!m) continue;
     for (const [k, v] of Object.entries(m)) {

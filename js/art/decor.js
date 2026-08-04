@@ -1810,28 +1810,55 @@ export const HEDGE_TALL = HHI;
  * A hole cut in a hedge that shows the grass behind it reads as damage.
  */
 function hedgeArchGrid() {
-  // FOUR ABOVE THE TALL HEDGE, as it always was (20 -> 24, now 30 -> 34). The
-  // arch stands INSIDE tall-hedge's run (catalog `joins: 'tall-hedge'`), so
-  // the two must move together or the gateway starts reading as a separate
-  // object standing where a hedge is missing.
-  const h = 34;
+  // ------------------------------------------------------------------------
+  // ONLY THE CROWN RISES. The owner, on an arch set into a tall-hedge run:
+  //
+  //   *"the tall hedge gate color matches, but not the location in space and
+  //   it does have open edges."*
+  //
+  // It used to stand FOUR ABOVE THE TALL HEDGE over its whole length — the
+  // entire bar at 34 against the hedge's 30 — which is a step at both ends
+  // of every gateway. And a bar has no end cap, so the four pixels standing
+  // proud of each neighbour showed the arch's raw lit cross-section with
+  // nothing drawn on it. That is the "open edges", exactly.
+  //
+  // THE STONE GATE HAD THE ANSWER FIRST. props.js `drystoneGrid` raises only
+  // the middle of its run: the ends stay at wall height, so a gateway meets
+  // its neighbours flush and no cut face is ever exposed. This now does the
+  // same, and it is also what a clipped yew arch looks like in a garden —
+  // the hedge runs level and a squared crown stands over the doorway.
+  //
+  // So H IS THE TALL HEDGE'S HEIGHT, not four more than it, and the two must
+  // still move together: the arch stands INSIDE that run (catalog
+  // `joins: 'tall-hedge'`) and a gateway of a different height reads as a
+  // separate object standing where a hedge is missing.
+  // ------------------------------------------------------------------------
+  const H = 30; // the tall hedge, exactly — hedgeGrid(30, YEW, 77, 0.1)
+  const RISE = 6; // ...and how far the crown over the doorway stands proud
   const D = HEDGE_DEPTH;
   const X0 = 2 * D + 2;
-  const g = grid(X0 + LINE_W + 3, h + D + 24);
-  const TOP = 3;
+  const g = grid(X0 + LINE_W + 3, H + RISE + D + 30);
+  // HEADROOM FOR THE CROWN. Every other piece in this file starts at TOP = 3;
+  // this one has something standing RISE above its own hedge line, and at 3 the
+  // crown's far edge was cut off by the top of the grid — measurably, the arch
+  // came out 2 px proud of the hedge instead of 6. A grid is only as tall as
+  // the tallest thing in it, and the crown is not the hedge.
+  const TOP = 3 + RISE;
   const n = YEW.length - 1;
   const MID = 16; // the doorway is at the middle of the run
   const HALF = 6.5;
+  const CROWN = 10; // half the crown: a little wider than the jambs it carries
+  const crowned = (i) => Math.abs(i - MID) <= CROWN;
 
-  slabBackEdge(g, X0, TOP, LINE_W, YEW[0]);
-  slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => {
+  /** The lit top. Same speckle as the hedge's, so the two read as one clip. */
+  const top = (b, x, y) => {
     let v = n;
     const r = hash(x, y, 91);
     if (r < 0.2) v -= 1;
     else if (r > 0.9) v -= 2;
     if (b > D - 1.2) v = n - 1;
     return YEW[clamp(v, 0, n)];
-  });
+  };
 
   // The opening. It reads only if there is something INSIDE it: a lit soffit
   // running round the head, deep shade on the far jamb, and a strip of ground
@@ -1843,9 +1870,17 @@ function hedgeArchGrid() {
     const head = Math.sqrt(1 - d * d) * 9;
     return k < 13 + head;
   };
-  slabFace(g, X0, TOP, LINE_W, D, h, (i, k) => {
+
+  /**
+   * The near face at run position `i`, `kk` px above the ground.
+   *
+   * THE GRADIENT IS MEASURED FROM THE GROUND, not from each column's own top,
+   * which is the one thing that lets a crown six pixels taller sit in the same
+   * foliage as the hedge beside it. Shading each column across its own height
+   * would stretch the crown's ramp and draw a visible seam down both jambs.
+   */
+  const face = (i, kk) => {
     const x = X0 + i - 2 * D;
-    const kk = h - 1 - k; // height above the ground
     if (inArch(i, kk)) {
       if (!inArch(i, kk + 1)) return 'l'; // the soffit, lit
       if (!inArch(i - 1, kk)) return 'k'; // the near jamb catching light
@@ -1853,19 +1888,38 @@ function hedgeArchGrid() {
       if (kk < 5) return 'm';
       return 'j'; // the tunnel
     }
-    const t = k / Math.max(1, h - 1);
+    const t = clamp((H - 1 - kk) / (H - 1), 0, 1);
     let v = Math.round(n - t * (n - 0.25));
-    const r = hash(x, k, 93);
+    const r = hash(x, H - 1 - kk, 93);
     if (r < 0.2) v -= 1;
     else if (r > 0.88) v += 1;
-    if (k === 0) v = n;
-    if (k === h - 1) v = 0;
+    if (kk === 0) v = 0;
     return YEW[clamp(v, 0, n)];
-  });
-  for (let i = 0; i < LINE_W; i++) {
-    if (hash(X0 + i, 0, 96) < 0.1) put(g, X0 + i, TOP + LINE_DROP(i), '.');
+  };
+
+  // 1 · The hedge, at hedge height, everywhere the crown is not.
+  for (let i = 0; i <= LINE_W; i++) {
+    if (!crowned(i)) put(g, X0 + i, TOP + LINE_DROP(i) - 1, YEW[0]);
   }
-  return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + h + 1 };
+  slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? null : top(b, x, y)));
+  slabFace(g, X0, TOP, LINE_W, D, H, (i, k) => (crowned(i) ? null : face(i, H - 1 - k)));
+
+  // 2 · The crown over the doorway, RISE proud of it, carried down to the foot.
+  for (let i = 0; i <= LINE_W; i++) {
+    if (crowned(i)) put(g, X0 + i, TOP + LINE_DROP(i) - RISE - 1, YEW[0]);
+  }
+  slab(g, X0, TOP - RISE, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? top(b, x, y) : null));
+  slabFace(g, X0, TOP - RISE, LINE_W, D, H + RISE, (i, k) =>
+    crowned(i) ? face(i, H + RISE - 1 - k) : null
+  );
+
+  // Nicks. A clipped edge is straight but not machined; one pixel, no more.
+  for (let i = 0; i < LINE_W; i++) {
+    if (hash(X0 + i, 0, 96) < 0.1) {
+      put(g, X0 + i, TOP + LINE_DROP(i) - (crowned(i) ? RISE : 0), '.');
+    }
+  }
+  return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + H + 1 };
 }
 
 {

@@ -3135,161 +3135,32 @@ export const WATERING_PLACE = (() => {
 // mechanic made visible.
 // ---------------------------------------------------------------------------
 
-/**
- * A hedge running along the +tx axis, spanning a full tile from the far
- * neighbour's corner to the near one so a row of them abuts into one unbroken
- * barrier. That continuity IS the mechanic made visible.
- *
- * Take one drew these as a thin lit band with a flat dithered wall under it
- * and all three came out as painted cardboard — green ribbons standing on the
- * grass. Two faults, both instructive:
- *
- *   1. THE TOP FACE WAS THE WRONG DEPTH. A hedge has thickness in the ty
- *      direction, and one tile of ty is (-32, +16) on screen. A hedge a third
- *      of a tile deep therefore has a top face about ELEVEN pixels of vertical
- *      extent, not six. At six it reads as an edge highlight rather than as a
- *      surface — and a barrier with no visible top has no thickness, so it
- *      cannot look impassable.
- *   2. THE TEXTURE WAS PER-PIXEL. A checkerboard between two greens is what
- *      SPEC 3 permits on large flat areas, and a hedge is not one — it is a
- *      mass of small leaves. Sampling the noise on a 2px grid instead makes
- *      CLUSTERS, and clusters read as foliage where single pixels read as
- *      film grain.
- *
- * The top is clipped crisp; the bottom is not. Foliage never meets the ground
- * in a straight line, and the scalloped foot is most of what stops the object
- * reading as a cut-out.
- */
-function hedgeRun(name, opt) {
-  const len = 65;
-  const deep = opt.deep === undefined ? 11 : opt.deep;
-  const high = opt.high;
-  const y0 = opt.y0 === undefined ? 3 : opt.y0;
-  const gap = opt.gap || null;
-  const g = G(len, Math.ceil(y0 + len / 2 + deep + high + 8));
-  // The texture is allowed to lighten a leaf by one step, but never past the
-  // ceiling of the plane it is on. Without the cap the front face's brightest
-  // clusters climbed into the top face's range, the two planes stopped being
-  // separable, and the hedge lost its thickness again — the exact fault the
-  // deeper top face was added to cure.
-  const tex = (x, y, base, cap) => {
-    const n = nz(Math.floor(x / 2) * 1.3, Math.floor(y / 2) * 2.1) * 0.7 + nz(x, y) * 0.3;
-    const i = base + (n > 0.68 ? 1 : n < 0.27 ? -1 : 0);
-    return LEAF[Math.max(0, Math.min(cap, i))];
-  };
-  for (let x = 0; x < len; x++) {
-    const far = y0 + x / 2;
-    const near = far + deep;
-    const foot = Math.round(near + high + nz(x * 0.4, 3) * 2);
-    let arch = null;
-    if (gap && x > gap.x0 && x < gap.x1) {
-      const u = (x - (gap.x0 + gap.x1) / 2) / ((gap.x1 - gap.x0) / 2);
-      arch = Math.round(near + high - 3 - Math.sqrt(Math.max(0, 1 - u * u)) * (high - 8));
-    }
-    for (let y = Math.round(far); y <= Math.round(near); y++) {
-      const t = (y - far) / deep;
-      put(g, x, y, tex(x, y, t < 0.3 ? 4 : t < 0.72 ? 3 : 2, 4));
-    }
-    // The vertical face is capped at 'b'. A hedge is FOLIAGE, and palette.js
-    // makes it law that foliage reads dark against the ground — take two let
-    // the face come up to grass value and the barrier stopped looking like a
-    // barrier and started looking like a lawn stood on its edge.
-    for (let y = Math.round(near) + 1; y <= foot; y++) {
-      if (arch !== null && y >= arch) continue;
-      const t = (y - near) / high;
-      put(g, x, y, tex(x, y, t < 0.16 ? 2 : t < 0.78 ? 1 : 0, 2));
-    }
-    // The cut edge of clipped foliage is PALER — you are looking at fresh leaf
-    // ends. It is what makes an opening read as cut rather than as damage, and
-    // it is the only light anywhere in the lower half of the arch sprite.
-    if (arch !== null) {
-      put(g, x, arch, 'd');
-      put(g, x, arch - 1, 'c');
-    }
-  }
-  if (gap) {
-    for (const jx of [gap.x0 + 1, gap.x1 - 1]) {
-      const near = y0 + jx / 2 + deep;
-      for (let y = Math.round(near); y < near + high; y++) {
-        if (peek(g, jx, y) !== '.') put(g, jx, y, jx === gap.x0 + 1 ? 'd' : 'a');
-      }
-    }
-  }
-  return composed(name, g, [32, Math.round(y0 + 16 + deep + high)], { tags: opt.tags });
-}
-
 // ---------------------------------------------------------------------------
-// *** THE CATALOGUE DOES NOT ASK FOR THESE THREE. ***
+// THE SECOND HEDGE FAMILY IS GONE — `hedgeRun`, CLIPPED_HEDGE, TALL_HEDGE and
+// HEDGE_ARCH used to stand here, and the game never drew a pixel of any of it.
 //
-// `clipped-hedge`, `tall-hedge` and `hedge-arch` in js/catalog.js name the
-// sprites `hedge-low`, `hedge-tall` and `hedge-arch` — and all three of those
-// live in js/art/decor.js, which is LAST in the artist's registry and wins.
-// The versions below are registered under `clipped-hedge` / `tall-hedge`, and
-// nothing in the game ever looks those names up.
+// js/catalog.js asks for the sprites `hedge-low`, `hedge-tall` and
+// `hedge-arch`. All three live in js/art/decor.js, which is LAST in the
+// artist's registry and wins. These were registered under the PLACEABLE ids
+// `clipped-hedge` and `tall-hedge`, which nothing ever looks up — so they were
+// unreachable by name — and this file's `hedge-arch` was simply overwritten.
 //
-// They are kept in step with decor.js's numbers rather than left to drift, and
-// the first attempt at the owner's cubic hedge was made here BY MISTAKE — a
-// whole edit to art nobody draws. If you are changing how a hedge looks, change
-// js/art/decor.js. See proposals/BACKLOG.md §4m.
+// THEY COST A WHOLE EDIT. The owner asked for a more cubic hedge and the first
+// attempt was made right here, rendered fine in a probe, and changed nothing in
+// the garden — because a sprite's NAME IS NOT ITS PLACEABLE'S ID. To find the
+// art the game actually draws, resolve the descriptor:
 //
-// THE HEDGES ARE CUBIC, and the numbers are not taste.
+//   node -e "import('./js/catalog.js').then(c=>console.log(c.byId('clipped-hedge').art))"
 //
-// The owner: *"it would be nice if you could make the hedge a little more of a
-// cubic form too."* A clipped yew IS a cuboid — that is the whole point of
-// clipping it — and the first version was a ribbon: 65 px of run (one full
-// tile) but only 10 px of top face, which is 0.63 of a tile deep. Long, thin,
-// and standing on the grass like a painted board.
+// And they were a second home for the very constant this file just got wrong
+// twice: `hedgeRun` opened with `const len = 65`, and the arch cut its doorway
+// at `gap: {x0: 21, x1: 44}` of that 65, all measured against a full tile of
+// run that is actually LINE_W = 33. Keeping a dead copy "in step" is not free:
+// it is a second place for a wrong number to look deliberate.
 //
-// `deep` is the top face's VERTICAL EXTENT in pixels. One tile of ty is
-// (-32, +16) on screen, so a footprint one tile square has a top face 16 px
-// tall at any given column. **`deep: 16` is therefore exactly one tile deep** —
-// the hedge finally fills the square it occupies instead of two thirds of it.
-//
-// `high` is the front face below that. `LEVEL_H` is 16, so a `high` of 16 is
-// one terrace step: the low hedge is a genuine unit cube — one tile by one
-// tile by one step — and the tall one is the same block at two steps. That is
-// what makes them read as clipped MASSES rather than as screens, and it is
-// checkable against the terraces they stand beside rather than against taste.
+// `tools/registry-audit.mjs` now reports any sprite that is defined and
+// unreachable, so the next one of these gets caught rather than inherited.
 // ---------------------------------------------------------------------------
-
-/** Nullifier · low clipped box. Crisp, formal, see-over. Neoclassical register. */
-export const CLIPPED_HEDGE = hedgeRun('clipped-hedge', {
-  deep: 16,
-  high: 16,
-  tags: ['nullifier', 'hedge', 'order', 'enclosure'],
-});
-
-/** Nullifier · tall yew screen. Full visual block; the cypress screen's soft
- *  sibling and the parent shape of the hedge arch. */
-export const TALL_HEDGE = hedgeRun('tall-hedge', {
-  deep: 16,
-  high: 32,
-  tags: ['nullifier', 'hedge', 'order', 'enclosure', 'seclusion'],
-});
-
-/**
- * Nullifier · the hedge arch. The gap is MECHANICALLY REAL — influence leaks
- * through it — so it has to be unmistakably a way through, and you have to be
- * able to see the ground on the far side. That means genuinely transparent
- * pixels inside the opening, not a dark painted recess: a painted hole is the
- * one thing that would make a player mistrust the rule.
- *
- * The crown of the arch stops well below the top of the hedge so there is a
- * solid lintel of foliage above it. Cut through to the top edge it would read
- * as two separate hedges standing near each other, which is the opposite of
- * what the object is for.
- */
-export const HEDGE_ARCH = hedgeRun('hedge-arch', {
-  // MATCHES TALL_HEDGE EXACTLY, and must. The arch declares `joins:
-  // 'tall-hedge'` in the catalogue so it stands INSIDE that hedge's run; a
-  // gateway a different thickness from the wall it is set into is a gateway
-  // that reads as a separate object standing where a hedge is missing, which
-  // is the exact fault the `joins`-as-a-group-name mechanism was built to fix.
-  deep: 16,
-  high: 32,
-  gap: { x0: 21, x1: 44 },
-  tags: ['nullifier', 'hedge', 'gateway', 'order', 'enclosure'],
-});
 
 /**
  * Nullifier · DRYSTONE WALL.
@@ -4517,9 +4388,6 @@ export const PROPS = {
   'ancient-oak': ANCIENT_OAK,
   'blackthorn-thicket': BLACKTHORN_THICKET,
   'white-thorn': WHITE_THORN,
-  'clipped-hedge': CLIPPED_HEDGE,
-  'tall-hedge': TALL_HEDGE,
-  'hedge-arch': HEDGE_ARCH,
   'cypress-screen': CYPRESS_SCREEN,
   'gravel-walk': GRAVEL_WALK,
   'wild-vine': WILD_VINE,
@@ -4620,9 +4488,18 @@ export const AFFINITY = {
   // `gap` marks the one occluder that LEAKS. The hedge arch blocks influence
   // everywhere except through its doorway, which is the most interesting piece
   // in the set: it is how a player deliberately connects two zones through a
-  // controlled opening. The opening is 22px of genuinely transparent pixels
-  // centred on the sprite, so what the rule says and what the picture shows
-  // are the same thing — you can see the far side through it.
+  // controlled opening.
+  //
+  // THIS NOTE USED TO SAY the opening was "22px of genuinely transparent pixels
+  // centred on the sprite", and it described the dead props.js arch that was
+  // removed above — art the game never drew. The arch it actually draws is in
+  // js/art/decor.js and its opening is DARK, not transparent: a lit soffit
+  // round the head, shade on the far jamb, a strip of ground at the bottom.
+  // The two files stated opposite rules for one object for as long as both
+  // existed. decor.js's is the live one, and its argument is the better one —
+  // *"a hole cut in a hedge that shows the grass behind it reads as damage"*.
+  // What matters to the mechanic is that the way through is VISIBLY a way
+  // through, which a dark tunnel says and a transparent hole does not.
   herm: nul(),
   'drystone-wall': nul(),
   'clipped-hedge': nul(),
