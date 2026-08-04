@@ -1779,7 +1779,12 @@ const STRUCTURE = [
     id: 'cypress-screen',
     name: 'Cypress screen',
     group: 'structure',
-    footprint: [1, 2],
+    // [1, 1], not [1, 2]. The art runs along +tx and this plot ran along +ty,
+    // so the build ghost was drawn at right angles to the trees it previewed.
+    // A screen is a LINEAR piece like the hedges and the drystone wall: one
+    // tile each, and the player builds the length they want. See the note in
+    // js/art/props.js CYPRESS_SCREEN.
+    footprint: [1, 1],
     art: sprite('cypress-screen'),
     zone: NULLIFIER,
     register: 'neoclassical',

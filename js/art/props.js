@@ -3380,10 +3380,39 @@ export const DRYSTONE_GATEWAY = (() => {
 /** Nullifier · a cypress screen. The most Mediterranean way to divide ground,
  *  and the tallest thing a player can put between two zones. */
 export const CYPRESS_SCREEN = (() => {
-  const g = G(66, 88);
-  // Three spires along +tx, each stepping down-right by half the tile slope,
-  // so a run of screens reads as one avenue rather than three stuck posts.
-  const spires = [[13, 62], [33, 72], [52, 82]];
+  // ------------------------------------------------------------------------
+  // ONE TILE, TWO SPIRES. The owner: *"the cypress screen has similar problems
+  // to the drystone wall. the preview that shows where its building also seems
+  // bugged."* Both were the same fault, and the second explains the first.
+  //
+  // The art was 66 px of run — two tiles — with three spires in it, while the
+  // catalogue gave it `footprint: [1, 2]`: ONE tile along tx and TWO along ty.
+  // So the plot ran at RIGHT ANGLES to the trees standing in it. That is the
+  // "bugged" preview exactly: the ghost is drawn from the footprint and the
+  // art from the sprite, and here the two genuinely disagreed about which way
+  // the object lay. Nothing was wrong with the ghost.
+  //
+  // tools/anchor-audit.mjs had been reporting it in BOTH of its lists — as a
+  // float and as a footprint mismatch, "1x2 claimed, art is 1x1" — for as long
+  // as the lists have existed, and test/sprite-anchors.test.mjs carried it as a
+  // KNOWN_UNDERSIZED exemption. Three instruments agreed and none of them was
+  // read as a bug report.
+  //
+  // Now the art is LINE_W of run like every other linear piece, the footprint
+  // is [1, 1] like the hedges and the drystone wall, and a player builds the
+  // length of screen they want — which is what "a close-planted row" is.
+  // ------------------------------------------------------------------------
+  const X0 = 4;
+  const Y0 = 62;
+  const g = G(X0 + LINE_W + 14, Y0 + 22);
+  // TWO SPIRES, at run 8 and run 24, each stepping down-right by half the tile
+  // slope. Sixteen run pixels apart — and because a tile step is 32, the gap
+  // ACROSS a seam is also sixteen, so a row of these is evenly planted instead
+  // of pairing up with a hole at every join.
+  const spires = [
+    [X0 + 8, Y0 + LINE_DROP(8)],
+    [X0 + 24, Y0 + LINE_DROP(24)],
+  ];
   for (let s = 0; s < spires.length; s++) {
     const [cx, base] = spires[s];
     const top = base - 62;
@@ -3401,7 +3430,9 @@ export const CYPRESS_SCREEN = (() => {
       }
     }
   }
-  return composed('cypress-screen', g, [32, 74], { tags: ['nullifier', 'tree', 'cypress', 'order', 'enclosure', 'seclusion'] });
+  return composed('cypress-screen', g, [X0 + 16, Y0 + LINE_DROP(16) + 1], {
+    tags: ['nullifier', 'tree', 'cypress', 'order', 'enclosure', 'seclusion'],
+  });
 })();
 
 /**

@@ -290,7 +290,12 @@ const KNOWN_UNDERSIZED = new Set([
   // it is placed as a 2x2 object drawn 1x1. 17px short.
   'mosaic-panel',
   'arbour-seat', // 2x1 claimed: 17px short
-  'cypress-screen', // 1x2 claimed: 16px short — 6 of its 14px of reach was shadow
+  // 'cypress-screen' WAS HERE, and it is the first name to leave this list.
+  // It claimed 1x2 and was 16px short, which the audit reported and this list
+  // then licensed. The reading was right and the diagnosis was never made: the
+  // art ran along +tx and the plot along +ty, so the two were at right angles
+  // and no amount of reach could ever have satisfied it. The art is one tile
+  // now and the footprint is [1, 1]. An exemption is a bug with a note on it.
 ]);
 
 test('no NEW placeable floats over the plot the catalogue gives it', () => {
