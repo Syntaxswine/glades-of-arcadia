@@ -2,6 +2,12 @@
 
 **2026-08-03.** Written by the builder who shipped it, for whoever picks it up.
 
+**This day had two arcs and they share nothing but the date.** This one is the
+chrome: a second logical screen, the touch gestures, tap-to-turn. The other is
+`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md` — art and geometry, where a
+run of hedges ends and why a hedge needed to be taller rather than thicker.
+Separate documents on purpose; neither depends on the other.
+
 The owner's instruction, in full, because every decision below is downstream of
 one of its three clauses:
 
@@ -417,9 +423,10 @@ every one of those constants a function.** Do not start that without reading §1
 
 | | |
 |---|---|
-| tests | **461** (440 before; +4 seams, +9 new `test/titlescreen.test.mjs`, +12 new `test/touch.test.mjs` — the front door and the gestures had none at all until now) |
+| tests | **469 at the end of the day**, from **436** at the start of it. This arc added them all: +4 seams, +9 in a new `test/titlescreen.test.mjs`, +14 in a new `test/touch.test.mjs`, +6 in `test/world.test.mjs`. The sibling arc rewrote assertions in `test/joining.test.mjs` rather than adding any. The front door and the gestures had no test at all until now |
 | playtest | 49 / 49 |
 | `iso-audit --strict` | 1 of 312 — `balustrade`, the known step-4 worklist entry |
+| commits | `3bf6194` mobile mode · `3c1f8a4` two fingers and pinch · `2da099c` long press · `1faf6e1` tap to turn |
 | build stamp | bumped — **it cache-busts `style.css`, and this arc touches the stylesheet.** Leaving it would have served returning players new JS with old CSS: desktop geometry under a mobile layout, silently |
 | verified in-browser | title screen, boot, layout, all 24 controls, drag, tap-to-centre, planting, all 8 tabs, two-finger pan with a tree in hand, pinch in and out, tap-to-travel, `M`, `Esc`, and that a desktop mouse still places on the press |
 

@@ -1,10 +1,19 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-03 (NINTH pass, §4o — the clock lever, the back rim, the brush, the scramble, and the perception layer)
-against **`HANDOFF-THE-IMAGE-PACK-2026-08-02.md`** §8, which is now the
-keystone for anything about which way an object faces or how two pieces meet.
-`HANDOFF-THE-FIRST-GLADE-2026-07-31.md` remains the keystone for the shadow
-arc, the palette laws and the traps.
+Reconciled 2026-08-03 (TENTH pass, §4i and §4p) against the two handoffs written
+that day, which split the work by subject rather than by date:
+
+* **`HANDOFF-MOBILE-MODE-2026-08-03.md`** — the keystone for the chrome: a
+  second logical screen (`?mode=mobile`), the layout that derives from it, and
+  every touch gesture. Read it before changing `iso.js` MODES, `ui.LAYOUT`, the
+  panel, or anything in `input.js` that touches a pointer.
+* **`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md`** — the keystone for how
+  a run of pieces ENDS, and for the trap that a sprite's name is not its
+  placeable's id. Read it before editing any sprite at all.
+
+`HANDOFF-THE-IMAGE-PACK-2026-08-02.md` §8 remains the keystone for which way an
+object faces; `HANDOFF-THE-FIRST-GLADE-2026-07-31.md` for the shadow arc, the
+palette laws and the traps.
 
 Nothing here blocks play. The game is complete and live; this is refinement.
 Ordered by how much each would improve the thing a player actually sees.
@@ -304,6 +313,9 @@ are the edges left showing.
 
 ## 4i · MOBILE MODE — ✅ SHIPPED (2026-08-03)
 
+Full write-up: **`HANDOFF-MOBILE-MODE-2026-08-03.md`** — read it before touching
+`iso.js` MODES, `ui.LAYOUT`, the panel, or any pointer handling in `input.js`.
+
 **Owner's words, 2026-08-01: "my plan is to have a mobile mode on the title
 screen. Same game just different. That's kind of low on the priority list, but it
 should be on our todo."** — and 2026-08-03, which is what started it: *"create a
@@ -452,7 +464,10 @@ screen — so §4e went first and the menu was designed once. It shipped
 2026-08-01 (Continue / Gardens / Recover), and a mode switch is one more button
 on a panel that already knows how to swap what it offers.
 
-## 4m · WHERE A RUN ENDS, AND THE CUBIC HEDGE ✅ (2026-08-03)
+## 4p · WHERE A RUN ENDS, AND THE CUBIC HEDGE ✅ (2026-08-03)
+
+Full write-up: **`HANDOFF-JOINING-AND-THE-CUBIC-HEDGE-2026-08-03.md`** — read it
+before editing ANY sprite, for §5 alone.
 
 The owner, with a picture: *"single hedges are represented differently than
 connected hedges."* And then: *"it would be nice if you could make the hedge a
