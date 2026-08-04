@@ -148,12 +148,29 @@ function palisadeRows(mask) {
   const put = (x, y, k) => {
     if (x >= 0 && x < FENCE_W && y >= 0 && y < FENCE_H) g[y][x] = k;
   };
-  const arms = JOIN_DIRS.filter(([, , bit]) => mask & bit);
+  const armIdx = JOIN_DIRS.map((d, i) => i).filter((i) => mask & JOIN_DIRS[i][2]);
   // A piece with no neighbours at all is still a fence, not a lone post: it
   // draws the straight run, and js/main.js lets the facing wheel decide which
   // diagonal that is. Anything else would make the first piece a player places
   // look like a mistake until they placed the second.
-  const use = arms.length ? arms : [JOIN_DIRS[0], JOIN_DIRS[2]];
+  //
+  // AND AN END DRAWS BOTH WAYS, for the same reason and by the same rule as
+  // `joinedPiece` in art/format.js — see the long note there. THE PALISADE HAS
+  // ITS OWN GENERATOR, which is why it had to be fixed twice: the hedge and the
+  // drystone wall come out of `axialJoins`, the fence is built here by hand,
+  // and a rule about how runs END belongs to both. Measured before: a lone
+  // fence was 314 ink pixels and an end was 159 — half of one. A run of five
+  // fenced four tiles.
+  //
+  // Corners are untouched: two arms already meet at the hub, and giving each
+  // its opposite would turn every L into a crossroads.
+  let use;
+  if (!armIdx.length) use = [JOIN_DIRS[0], JOIN_DIRS[2]];
+  else if (armIdx.length === 1) {
+    const only = armIdx[0];
+    use = [JOIN_DIRS[only], JOIN_DIRS[(only + 2) % 4]];
+  } else use = armIdx.map((i) => JOIN_DIRS[i]);
+  const arms = armIdx.map((i) => JOIN_DIRS[i]);
 
   // Rails first, so the stakes draw over them and read as in front. Each is
   // 2px deep — a rail seen very nearly edge-on, which is all a rail is here.

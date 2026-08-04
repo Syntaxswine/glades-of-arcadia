@@ -477,8 +477,41 @@ function armsOf(g, ax) {
 function joinedPiece(name, arms, mask, ay, opts) {
   // Back arms first: -tx and -ty go away from the camera, so a front arm
   // drawn over them is what makes the bend one solid rather than two.
-  const order = [2, 3, 0, 1].filter((i) => mask & JOIN_DIRS[i][2]);
-  const use = order.length ? order : [2, 0]; // no neighbours: the straight run
+  const DRAW_ORDER = [2, 3, 0, 1];
+  const order = DRAW_ORDER.filter((i) => mask & JOIN_DIRS[i][2]);
+
+  /**
+   * WHERE A RUN ENDS, which is the owner's finding: *"single hedges are
+   * represented differently than connected hedges."*
+   *
+   * Measured before it was touched, on `hedge-low`: a LONE piece and a piece in
+   * the MIDDLE of a run are byte-identical — 855 ink pixels, the whole bar —
+   * while the two END pieces are 395 and 486. An end was HALF A BAR.
+   *
+   * That is the asymmetry. A hedge on its own fills its tile; the last hedge of
+   * a run stopped at its tile's CENTRE, because an end had only the one arm
+   * that reached its neighbour and nothing at all on the side where the run
+   * finished. So a run of five covered four tiles of ground and a run of one
+   * covered one, and the ends looked chopped next to any hedge standing alone.
+   *
+   * THE FIX IS NARROW ON PURPOSE. A piece with exactly ONE neighbour is a
+   * straight end, so it also draws the arm going the other way — the same two
+   * arms a lone piece uses, which is why the two now match by construction
+   * rather than by a second drawing that could drift.
+   *
+   * IT MUST NOT APPLY TO CORNERS. Mask 3 is +tx and +ty; giving each of those
+   * its opposite would make an L into a plus. A corner is right to stop at the
+   * hub, because that is where its two arms already meet and there is no raw
+   * cut to see. Only the one-armed masks — 1, 2, 4, 8 — have an end with
+   * nothing to meet.
+   */
+  let use;
+  if (!order.length) use = [2, 0]; // no neighbours: the straight run
+  else if (order.length === 1) {
+    const only = order[0];
+    const opposite = (only + 2) % 4;
+    use = DRAW_ORDER.filter((i) => i === only || i === opposite);
+  } else use = order;
   let L = 0;
   let R = 0;
   let H = 0;

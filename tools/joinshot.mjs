@@ -82,7 +82,10 @@ const OUT = resolve(arg('--out', 'docs/shots/join.png'));
 const WANT = [
   has('--corner') || has('--all') ? 'corner' : null,
   has('--cross') || has('--all') ? 'cross' : null,
-  has('--run') || has('--all') || (!has('--corner') && !has('--cross')) ? 'run' : null,
+  has('--lone') || has('--all') ? 'lone' : null,
+  has('--run') || has('--all') || (!has('--corner') && !has('--cross') && !has('--lone'))
+    ? 'run'
+    : null,
 ].filter(Boolean);
 
 if (!IDS.length) {
@@ -135,6 +138,27 @@ function layout(kind, n) {
       out.push([h, i, f]);
       out.push([h, h + 1 + i, f]);
     }
+  } else if (kind === 'lone') {
+    /**
+     * A RUN, AND TWO PIECES STANDING ON THEIR OWN, IN ONE FRAME.
+     *
+     * THE BLIND SPOT THIS TOOL WAS BORN WITH. The header above says a player
+     * never builds one hedge, and everything here draws things TOUCHING —
+     * which is exactly why it could not see the owner's finding: *"single
+     * hedges are represented differently than connected hedges."* A probe that
+     * only ever draws runs is blind to every fault of the lone case, in the
+     * same way `propshot` was blind to the scalloping by only ever drawing
+     * one. The two tools between them managed to cover neither comparison.
+     *
+     * So this configuration is the COMPARISON rather than either case: a run
+     * of `n`, an isolated piece at facing 0, and an isolated piece at facing 1,
+     * far enough from everything to read as alone, all on one lattice at one
+     * scale. Whatever the answer turns out to be, it is a question you can
+     * only settle by seeing the two side by side.
+     */
+    for (let i = 0; i < n; i++) out.push([i, 0, 0]); // the run
+    out.push([1, n + 1, 0]); // alone, unturned
+    out.push([n + 1, n + 1, 1]); // alone, turned
   }
   return out;
 }

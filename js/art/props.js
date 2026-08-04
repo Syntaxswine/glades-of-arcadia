@@ -3208,18 +3208,52 @@ function hedgeRun(name, opt) {
   return composed(name, g, [32, Math.round(y0 + 16 + deep + high)], { tags: opt.tags });
 }
 
+// ---------------------------------------------------------------------------
+// *** THE CATALOGUE DOES NOT ASK FOR THESE THREE. ***
+//
+// `clipped-hedge`, `tall-hedge` and `hedge-arch` in js/catalog.js name the
+// sprites `hedge-low`, `hedge-tall` and `hedge-arch` — and all three of those
+// live in js/art/decor.js, which is LAST in the artist's registry and wins.
+// The versions below are registered under `clipped-hedge` / `tall-hedge`, and
+// nothing in the game ever looks those names up.
+//
+// They are kept in step with decor.js's numbers rather than left to drift, and
+// the first attempt at the owner's cubic hedge was made here BY MISTAKE — a
+// whole edit to art nobody draws. If you are changing how a hedge looks, change
+// js/art/decor.js. See proposals/BACKLOG.md §4m.
+//
+// THE HEDGES ARE CUBIC, and the numbers are not taste.
+//
+// The owner: *"it would be nice if you could make the hedge a little more of a
+// cubic form too."* A clipped yew IS a cuboid — that is the whole point of
+// clipping it — and the first version was a ribbon: 65 px of run (one full
+// tile) but only 10 px of top face, which is 0.63 of a tile deep. Long, thin,
+// and standing on the grass like a painted board.
+//
+// `deep` is the top face's VERTICAL EXTENT in pixels. One tile of ty is
+// (-32, +16) on screen, so a footprint one tile square has a top face 16 px
+// tall at any given column. **`deep: 16` is therefore exactly one tile deep** —
+// the hedge finally fills the square it occupies instead of two thirds of it.
+//
+// `high` is the front face below that. `LEVEL_H` is 16, so a `high` of 16 is
+// one terrace step: the low hedge is a genuine unit cube — one tile by one
+// tile by one step — and the tall one is the same block at two steps. That is
+// what makes them read as clipped MASSES rather than as screens, and it is
+// checkable against the terraces they stand beside rather than against taste.
+// ---------------------------------------------------------------------------
+
 /** Nullifier · low clipped box. Crisp, formal, see-over. Neoclassical register. */
 export const CLIPPED_HEDGE = hedgeRun('clipped-hedge', {
-  deep: 10,
-  high: 12,
+  deep: 16,
+  high: 16,
   tags: ['nullifier', 'hedge', 'order', 'enclosure'],
 });
 
 /** Nullifier · tall yew screen. Full visual block; the cypress screen's soft
  *  sibling and the parent shape of the hedge arch. */
 export const TALL_HEDGE = hedgeRun('tall-hedge', {
-  deep: 12,
-  high: 30,
+  deep: 16,
+  high: 32,
   tags: ['nullifier', 'hedge', 'order', 'enclosure', 'seclusion'],
 });
 
@@ -3236,8 +3270,13 @@ export const TALL_HEDGE = hedgeRun('tall-hedge', {
  * what the object is for.
  */
 export const HEDGE_ARCH = hedgeRun('hedge-arch', {
-  deep: 12,
-  high: 30,
+  // MATCHES TALL_HEDGE EXACTLY, and must. The arch declares `joins:
+  // 'tall-hedge'` in the catalogue so it stands INSIDE that hedge's run; a
+  // gateway a different thickness from the wall it is set into is a gateway
+  // that reads as a separate object standing where a hedge is missing, which
+  // is the exact fault the `joins`-as-a-group-name mechanism was built to fix.
+  deep: 16,
+  high: 32,
   gap: { x0: 21, x1: 44 },
   tags: ['nullifier', 'hedge', 'gateway', 'order', 'enclosure'],
 });

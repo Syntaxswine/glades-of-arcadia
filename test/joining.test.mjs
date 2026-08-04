@@ -114,14 +114,41 @@ test('a straight run is the same picture whichever way it was reached', async ()
   // is the one case the facing model DOES cover and the reason the straight
   // never needed a second drawing.
   assert.notEqual(j(2 | 8), j(1 | 4), 'the two axes are different pictures');
-  // A ONE-ARMED PIECE IS AN END, and it draws only its arm — it stops at the
-  // hub rather than running on into empty ground. That is a real choice and
-  // not an oversight: a fence that overshoots its last tile by half a step is
-  // the same fault as the corner spike this whole mechanism exists to remove,
-  // just at the end of the run instead of the bend.
-  assert.notEqual(j(1), j(1 | 4), 'an end piece should stop at the hub');
+  // A ONE-ARMED PIECE IS AN END, AND AN END FILLS ITS TILE.
+  //
+  // THIS ASSERTION USED TO SAY THE OPPOSITE and the reversal is deliberate, so
+  // the old argument is kept here to be answered rather than quietly deleted:
+  //
+  //   > "it draws only its arm — it stops at the hub rather than running on
+  //   > into empty ground ... a fence that overshoots its last tile by half a
+  //   > step is the same fault as the corner spike."
+  //
+  // The premise is measurably wrong. THE HUB IS THE TILE CENTRE (see the
+  // anchor note in art/extras.js) and an arm is HALF A TILE, so a piece with
+  // both arms spans its own tile exactly, edge to edge, and reaches into no
+  // neighbour at all. There was never an overshoot to prevent.
+  //
+  // What the old rule actually produced was the owner's finding: *"single
+  // hedges are represented differently than connected hedges."* A lone piece
+  // draws the straight (both arms, a full tile); an END drew half of one. So a
+  // run of five fenced four tiles, its two ends stopped dead at the tile
+  // centre, and any piece standing alone beside it looked like a different and
+  // longer object. Measured on `hedge-low` before the change: lone 855 ink
+  // pixels, middle-of-run 855, ends 395 and 486.
+  //
+  // A CORNER IS STILL RIGHT TO STOP AT THE HUB — its two arms already meet
+  // there and there is no raw cut to see. The rule is only about the masks
+  // with exactly one neighbour, which are the only ones with an end that meets
+  // nothing. That is asserted below.
+  assert.equal(j(1), j(1 | 4), 'an end should draw the straight, filling its tile');
   const ink = (rows) => rows.split('').filter((c) => c !== '.' && c !== '\n').length;
-  assert.ok(ink(j(1)) < ink(j(1 | 4)), 'an end piece should carry less timber than a full run');
+  assert.equal(ink(j(1)), ink(j(1 | 4)), 'an end should carry the same timber as a full run');
+  assert.equal(j(0), j(1), 'a lone piece and an end are the same picture');
+  // ...and a CORNER is emphatically not the straight. If a future edit ever
+  // generalises the end rule to every mask, this is what fails: it would turn
+  // every L into a crossroads.
+  assert.notEqual(j(2 | 4), j(1 | 4), 'a corner became a straight');
+  assert.ok(ink(j(2 | 4)) < ink(j(15)), 'a corner should carry less timber than a cross');
 });
 
 test('a bend has a corner post and a straight does not', async () => {
@@ -165,14 +192,26 @@ test('every corner reaches exactly the tiles its mask names', async () => {
     const row = s.rows[y] || '';
     return row[x - 1] === 'q' || row[x] === 'q';
   };
+  // THE RULE, restated for the end pieces. A mask with two or more neighbours
+  // reaches exactly the tiles it names — that is the corner invariant and it is
+  // untouched. A mask with EXACTLY ONE reaches its neighbour AND the opposite
+  // way, because that is its own tile's other half and an end fills its tile;
+  // see the long note in the straight-run test above.
+  const armsOfMask = (m) => {
+    const bits = JOIN_DIRS.filter(([, , bit]) => m & bit);
+    if (bits.length !== 1) return (dtx, dty) => JOIN_DIRS.some(([x, y, bit]) => (m & bit) && x === dtx && y === dty);
+    const [ox, oy] = bits[0];
+    return (dtx, dty) => (dtx === ox && dty === oy) || (dtx === -ox && dty === -oy);
+  };
   for (let m = 1; m < JOIN_MASKS; m++) {
     const s = PALISADE_JOINS[m];
-    for (const [dtx, dty, bit] of JOIN_DIRS) {
-      const want = !!(m & bit);
+    const want = armsOfMask(m);
+    for (const [dtx, dty] of JOIN_DIRS) {
+      const expected = want(dtx, dty);
       assert.equal(
         reaches(s, dtx, dty),
-        want,
-        `mask ${m}: arm toward [${dtx},${dty}] should be ${want ? 'present' : 'absent'}`
+        expected,
+        `mask ${m}: arm toward [${dtx},${dty}] should be ${expected ? 'present' : 'absent'}`
       );
     }
   }

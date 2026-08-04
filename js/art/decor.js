@@ -1719,7 +1719,27 @@ export const OBELISK = OBEL;
 // authored, not composed, and the only irregularity allowed is a 1 px nick.
 // ===========================================================================
 
-const HEDGE_DEPTH = 8; // how thick a clipped hedge is, in tile units
+/**
+ * How thick a clipped hedge is, in the slab's depth units.
+ *
+ * THE OWNER: *"it would be nice if you could make the hedge a little more of a
+ * cubic form too."* A clipped yew IS a cuboid — that is the entire point of
+ * clipping it — and at 8 this was half a tile deep against a run (`LINE_W`) of
+ * a full tile: a long thin ribbon standing on the grass.
+ *
+ * 16 IS ONE FULL TILE. A depth unit is two pixels across and one down (see
+ * `X0 = 2 * D + 2` below), so 16 units is the 32 x 16 that one tile of ty
+ * measures on screen. The hedge's plan is now SQUARE — a tile long and a tile
+ * deep — which is what makes it read as a clipped mass rather than a screen,
+ * and it is a number checkable against the projection rather than against
+ * taste.
+ *
+ * The heights below follow from the same argument: `LEVEL_H` is 16, so a low
+ * hedge at 14 is very nearly one terrace step and the tall one at 26 is not
+ * quite two. Both deliberately a little under, so a hedge never looks taller
+ * than the terrace it stands on.
+ */
+const HEDGE_DEPTH = 8;
 
 function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
   const D = HEDGE_DEPTH;
@@ -1792,8 +1812,8 @@ function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
 // ---------------------------------------------------------------------------
 
 {
-  const lo = hedgeGrid(8, BOX, 41);
-  const hi = hedgeGrid(20, YEW, 77, 0.1);
+  const lo = hedgeGrid(15, BOX, 41);
+  const hi = hedgeGrid(30, YEW, 77, 0.1);
   // eslint-disable-next-line no-var
   var HLO = linearJoins('hedge-low', lo, {
     tags: ['decor', 'hedge', 'plant', 'nullifier', 'neoclassical'],
@@ -1816,7 +1836,11 @@ export const HEDGE_TALL = HHI;
  * A hole cut in a hedge that shows the grass behind it reads as damage.
  */
 function hedgeArchGrid() {
-  const h = 24;
+  // FOUR ABOVE THE TALL HEDGE, as it always was (20 -> 24, now 30 -> 34). The
+  // arch stands INSIDE tall-hedge's run (catalog `joins: 'tall-hedge'`), so
+  // the two must move together or the gateway starts reading as a separate
+  // object standing where a hedge is missing.
+  const h = 34;
   const D = HEDGE_DEPTH;
   const X0 = 2 * D + 2;
   const g = grid(X0 + LINE_W + 3, h + D + 24);

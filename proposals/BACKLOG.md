@@ -452,6 +452,56 @@ screen — so §4e went first and the menu was designed once. It shipped
 2026-08-01 (Continue / Gardens / Recover), and a mode switch is one more button
 on a panel that already knows how to swap what it offers.
 
+## 4m · WHERE A RUN ENDS, AND THE CUBIC HEDGE ✅ (2026-08-03)
+
+The owner, with a picture: *"single hedges are represented differently than
+connected hedges."* And then: *"it would be nice if you could make the hedge a
+little more of a cubic form too."*
+
+**The measured fault.** A LONE piece and a piece in the MIDDLE of a run were
+byte-identical — `hedge-low`, 855 ink pixels, the whole bar — while the two END
+pieces were 395 and 486. **An end was half a bar.** So a run of five fenced four
+tiles, its ends stopped dead at the tile CENTRE, and any piece standing alone
+beside it looked like a longer, different object. True of all five joining
+pieces, not just the hedge.
+
+**The old rule argued for itself**, in `test/joining.test.mjs`: *"a fence that
+overshoots its last tile by half a step is the same fault as the corner spike."*
+The premise is wrong and that is why this is a fix and not a preference — **the
+hub is the TILE CENTRE and an arm is HALF A TILE**, so both arms span the
+piece's own tile exactly and reach into no neighbour at all. There was never an
+overshoot to prevent. The test now states the reversal and keeps the old
+argument to answer it.
+
+**The rule is narrow.** Only masks with EXACTLY ONE neighbour also draw the
+opposite arm. A corner is right to stop at the hub — its two arms already meet
+there — and generalising this would turn every L into a crossroads. There is an
+assertion for that.
+
+**It had to be fixed TWICE**: `axialJoins`/`joinedPiece` in art/format.js serves
+the hedges and the drystone wall, and the palisade has its own hand-built
+generator in art/extras.js. A rule about how runs end belongs to both.
+
+**The cubic hedge.** `HEDGE_DEPTH` and the two heights in art/decor.js. The low
+hedge went 8 → 15 and the tall 20 → 30, with the arch tracking the tall one at
++4 as it always did (24 → 34). **Depth was left at 8 on purpose**: raising it to
+16 (one full tile, the "obviously correct" cubic answer) made the lit TOP face
+dominate and the thing read as a pale slab lying on the grass — worse than
+before. The mass a hedge was missing was HEIGHT, not thickness.
+
+**THE TRAP THIS AROSE FROM, and it is the one this project keeps finding.** The
+first cubic edit went into `props.js` `CLIPPED_HEDGE` — which the game never
+draws. The catalogue asks for the sprite named **`hedge-low`**, and that lives
+in `decor.js`; props' version is registered under `clipped-hedge` and nothing
+asks for it. **Two drawings of the same object, one of them dead.** Before
+editing any sprite, resolve the name the CATALOGUE asks for — `d.art.sprite` —
+and not the one that shares the placeable's id.
+
+**Left open:** `props.js` still carries `CLIPPED_HEDGE` / `TALL_HEDGE` /
+`HEDGE_ARCH` that the catalogue never asks for. They were brought into line with
+the new numbers rather than left to diverge, but they are a second source and
+should be retired or pointed at.
+
 ## 4j · THINKING IN HEXAGONS — the art faces the viewer ✅ CLOSED (2026-08-01)
 
 The owner, looking at the sprite lab: *"there are several objects, like the cave,
