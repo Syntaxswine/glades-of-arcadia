@@ -64,7 +64,7 @@ import {
 // before it reaches into the next diagonal row — so iso.js owns it and this
 // module imports it. world.js still owns the integer level itself and knows
 // nothing about the pixel rise (LEVEL_H is deliberately not imported here).
-import { MAP_W, MAP_H, MAX_LEVEL, clampFacing } from './iso.js';
+import { MAP_W, MAP_H, MAX_LEVEL, FACINGS, clampFacing } from './iso.js';
 
 /**
  * THE MAP SIZE HAS ONE HOME AND IT IS iso.js. Re-exported here only because
@@ -1239,6 +1239,54 @@ export class World {
     return obj ? this.remove(obj.uid) : null;
   }
 
+  /**
+   * Turn a thing that is already standing in the garden. Returns the new
+   * facing, or null if there was nothing there or it does not turn.
+   *
+   * THE OWNER: *"rotate is still not implemented for mobile. perhaps if you tap
+   * on the completed building with the build tool it rotates the object."*
+   *
+   * Until now a facing could only be chosen BEFORE placing — the wheel turns
+   * what you are holding — and a phone has no wheel, so on a phone every hedge
+   * went down facing whichever way it was drawn and stayed that way for ever.
+   *
+   * WHY THIS IS SAFE, AND WHY IT DOES NOT NEED `canPlace`. A facing in this
+   * game is a MIRROR and/or a swap to the back drawing — `facingMirrored` and
+   * `facingDrawing` in iso.js — and never a 90-degree rotation. `FACINGS` is 4
+   * and none of the four changes the footprint. So a thing that fitted where it
+   * stands still fits when it is turned: there is no tile to re-check, no
+   * neighbour to re-ask, and no way for this to leave the garden in a state
+   * `place` would have refused. If a future facing ever DID rotate a footprint,
+   * this is the method that has to grow a legality check, and iso.js §FACING is
+   * the note that would have to change first.
+   *
+   * Undoable like every other edit, on the same 64-step stack.
+   */
+  turn(uid, delta = 1) {
+    const obj = this._byUid.get(uid);
+    if (!obj) return null;
+    const def = byId(obj.id);
+    const n = Math.max(1, Math.min(FACINGS, (def && def.facings) || 1));
+    if (n < 2) return null; // a thing with one drawing cannot be turned
+    const from = clampFacing(obj.facing ?? 0, n);
+    const to = clampFacing(from + delta, n);
+    if (to === from) return null;
+    // ABSENT WHEN ZERO, matching `place` — the save format writes `facing` only
+    // when it is non-zero, and a stray `facing: 0` would make a v3 save differ
+    // byte for byte from the one that produced it.
+    if (to) obj.facing = to;
+    else delete obj.facing;
+    this._record({ kind: 'turn', uid, from, to });
+    this._emit({ type: 'turn', object: obj, def });
+    return to;
+  }
+
+  /** Turn whatever stands on a tile. Returns the new facing, or null. */
+  turnAt(tx, ty, delta = 1) {
+    const obj = this.objectAt(tx, ty);
+    return obj ? this.turn(obj.uid, delta) : null;
+  }
+
   /** Remove by uid. Returns the removed object, or null. */
   remove(uid) {
     const obj = this._byUid.get(uid);
@@ -1322,6 +1370,15 @@ export class World {
         if (obj) {
           this._detach(obj, byId(obj.id));
           this._emit({ type: 'remove', object: obj, def: byId(obj.id) });
+        }
+        break;
+      }
+      case 'turn': {
+        const obj = this._byUid.get(op.uid);
+        if (obj) {
+          if (op.from) obj.facing = op.from;
+          else delete obj.facing;
+          this._emit({ type: 'turn', object: obj, def: byId(obj.id) });
         }
         break;
       }

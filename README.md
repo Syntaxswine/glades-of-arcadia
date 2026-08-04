@@ -186,6 +186,12 @@ right-click. Half a second, and it does not fire if the finger moved, if a
 second finger joined, or if you are holding the move or `?` tools. It tells you
 what it did, and `Ctrl+Z` is 64 steps deep.
 
+**Tap a thing that is already standing there to turn it.** The wheel aims what
+you are *holding*; this turns what is already *down*, which is the half a phone
+had no way to reach. It works with a mouse too — that click used to do nothing
+but tell you the tile was occupied. Repeated taps cycle through the facings, and
+a thing that has only one drawing still just says the tile is taken.
+
 **On a finger, placing happens when you lift, not when you touch.** Two fingers
 never land at the same instant, so planting on contact meant that reaching for
 the map with a tree in your hand planted a tree and then panned away from it.

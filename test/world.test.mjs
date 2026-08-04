@@ -274,3 +274,98 @@ test('every placeable in the catalogue can actually be placed somewhere', () => 
   }
   assert.ok(byId('oak'));
 });
+
+// ---------------------------------------------------------------------------
+// TURNING SOMETHING ALREADY STANDING — the owner's mobile rotate
+// ---------------------------------------------------------------------------
+//
+// The owner: *"rotate is still not implemented for mobile. perhaps if you tap
+// on the completed building with the build tool it rotates the object."*
+//
+// Until this existed, a facing could only be chosen BEFORE placing — the wheel
+// turns what you are holding — so on a phone, which has no wheel, every hedge
+// went down facing whichever way it was drawn and stayed that way for ever.
+
+test('a placed thing can be turned, and it comes back round', () => {
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  const turnable = CATALOG.filter((p) => (p.facings || 1) > 1 && p.group !== 'terrain');
+  assert.ok(turnable.length, 'fixture: something in the catalogue turns');
+  const def = turnable[0];
+
+  assert.ok(w.place(def.id, 4, 4), `fixture: ${def.id} can be placed on open ground`);
+  const obj = w.objectAt(4, 4);
+  const n = def.facings;
+
+  // A full cycle returns to where it started, and `facing` is ABSENT at zero —
+  // the save format writes it only when non-zero, so a stray `facing: 0` would
+  // make a round trip differ byte for byte from the save that produced it.
+  assert.equal(obj.facing ?? 0, 0);
+  assert.ok(!('facing' in obj), 'facing 0 was written rather than left absent');
+  for (let i = 1; i < n; i++) {
+    assert.equal(w.turnAt(4, 4), i, `turn ${i} did not land on facing ${i}`);
+    assert.equal(w.objectAt(4, 4).facing, i);
+  }
+  assert.equal(w.turnAt(4, 4), 0, 'the last turn did not come back round to 0');
+  assert.ok(!('facing' in w.objectAt(4, 4)), 'coming back to 0 left a stray facing');
+});
+
+test('turning never moves a thing or changes what it occupies', () => {
+  // THE REASON THIS IS SAFE WITHOUT A LEGALITY CHECK. A facing in this game is
+  // a mirror and/or a swap to the back drawing (iso.js §FACING) and never a
+  // 90-degree rotation, so a thing that fitted still fits. If a future facing
+  // ever DID rotate a footprint, this test is the one that should fail first.
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  const def = CATALOG.filter((p) => (p.facings || 1) > 1 && p.group !== 'terrain')[0];
+  w.place(def.id, 4, 4);
+  const before = { ...w.objectAt(4, 4) };
+  const countBefore = w.objects.length;
+  w.turnAt(4, 4);
+  const after = w.objectAt(4, 4);
+  assert.equal(after.tx, before.tx);
+  assert.equal(after.ty, before.ty);
+  assert.equal(after.uid, before.uid, 'turning replaced the object instead of turning it');
+  assert.equal(after.id, before.id);
+  assert.equal(w.objects.length, countBefore, 'turning changed how many things are in the garden');
+});
+
+test('a thing with one drawing refuses to turn, and says so by answering null', () => {
+  // This is what lets input.js fall through to the ordinary "there is already
+  // something here" explanation instead of a bench silently ignoring a tap.
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  const fixed = CATALOG.filter((p) => (p.facings || 1) === 1 && p.group !== 'terrain' && p.group !== 'ground');
+  assert.ok(fixed.length, 'fixture: something in the catalogue does not turn');
+  let placed = null;
+  for (const d of fixed) if (w.place(d.id, 6, 6)) { placed = d; break; }
+  assert.ok(placed, 'fixture: one of them could be placed');
+  assert.equal(w.turnAt(6, 6), null);
+});
+
+test('turning empty ground is nothing at all', () => {
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  assert.equal(w.turnAt(3, 3), null);
+  assert.equal(w.turn(999), null, 'an unknown uid turned something');
+});
+
+test('a turn is undoable, and undoing it restores the exact previous facing', () => {
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  const def = CATALOG.filter((p) => (p.facings || 1) > 1 && p.group !== 'terrain')[0];
+  w.place(def.id, 4, 4);
+  w.turnAt(4, 4);
+  const turned = w.objectAt(4, 4).facing;
+  assert.ok(turned > 0);
+  assert.equal(w.undo(), true);
+  assert.ok(!('facing' in w.objectAt(4, 4)), 'undo left a facing behind rather than removing it');
+  // ...and the object is still there. An undone TURN must not undo the PLACE.
+  assert.ok(w.objectAt(4, 4), 'undoing a turn removed the object');
+  assert.equal(w.undo(), true);
+  assert.equal(w.objectAt(4, 4), null, 'the second undo did not take the placement back');
+});
+
+test('a turned facing survives a save and reload', () => {
+  const w = new World({ w: 12, h: 12, seed: 5 });
+  const def = CATALOG.filter((p) => (p.facings || 1) > 1 && p.group !== 'terrain')[0];
+  w.place(def.id, 4, 4);
+  const to = w.turnAt(4, 4);
+  const back = World.deserialize(w.serialize());
+  assert.equal(back.objectAt(4, 4).facing, to, 'the turn was lost in the save');
+});

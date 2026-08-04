@@ -374,8 +374,26 @@ travel cancels, a second finger cancels, `move` and `ask` are excluded, and it
 says *"Taken back. Ctrl+Z puts it back."* Touch only — a mouse has a real right
 button. Verified six ways, four of them cases that must NOT delete.
 
+**Tap a placed thing to turn it — SHIPPED.** The owner: *"rotate is still not
+implemented for mobile. perhaps if you tap on the completed building with the
+build tool it rotates the object."* The gap was total: a facing could only be
+chosen BEFORE placing, so on a wheel-less phone every hedge went down as drawn
+and stayed that way. `world.turn` / `world.turnAt` are new — undoable, `facing`
+absent when zero so a full cycle leaves a save byte-identical.
+
+**It needs no legality check and this is the load-bearing reason:** a facing is
+a MIRROR and/or a back-drawing swap (iso.js §FACING), **never a 90° rotation**,
+so the footprint never changes and a thing that fitted still fits. *If a future
+facing ever rotates a footprint, `world.turn` is where the check goes* — there
+is a test named for it that should fail first.
+
+The tap was already spent (an occupied tile refuses a placement), so this costs
+no gesture. Not mobile-only — a mouse click does the same, because a rule that
+fires on a phone and not a monitor is two behaviours to keep working.
+
 **The gesture set is now closed:** one finger uses the tool, two fingers move
-the map, pinch shows the garden, hold removes.
+the map, pinch shows the garden, hold removes, and a tap on something already
+standing turns it.
 
 **`M` was free, not taken.** The note beside the move tool claimed `M` is mute;
 `setMuted()` exists in js/audio.js but nothing has ever bound a key to it. If

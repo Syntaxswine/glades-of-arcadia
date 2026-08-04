@@ -330,10 +330,58 @@ that must NOT delete:**
 That the release plants 0 is not a detail: without it a long press would delete
 a tree and immediately plant another in its place.
 
-### 7e · Still not built
+### 7e · Tap a placed thing to turn it
+
+The owner: *"rotate is still not implemented for mobile. perhaps if you tap on
+the completed building with the build tool it rotates the object."*
+
+**He was right that it was missing, and the gap was total.** A facing could only
+ever be chosen BEFORE placing — the wheel turns what you are holding — so on a
+phone, which has no wheel, every hedge went down facing whichever way it was
+drawn and stayed that way for ever. `js/world.js` had no way to turn a placed
+object at all; facing was written once, at `place`, and never again.
+
+**Why the suggested gesture is free.** That tap was already spent: a tile with
+something on it refuses a placement, so the click's entire outcome was a
+sentence in the status line saying so. Turning what is there instead uses a
+gesture that previously did nothing, which is why it needs no modifier, no mode
+and no new button. The wheel still aims what you are holding — before it is
+down you aim it, after it is down you tap it.
+
+**It is NOT mobile-only, deliberately.** The same click does the same thing with
+a mouse. A rule that fires on a phone and not on a monitor is two behaviours to
+hold in your head and two to keep working, and this arc has refused that fork
+everywhere else.
+
+**Why `world.turn` needs no legality check, which is the thing to understand
+before touching it.** A facing in this game is a MIRROR and/or a swap to the
+back drawing (`facingMirrored` / `facingDrawing`, iso.js §FACING) and **never a
+90-degree rotation**. None of the four facings changes the footprint. So a thing
+that fitted where it stands still fits when it is turned: no tile to re-check,
+no neighbour to re-ask, no way to reach a state `place` would have refused.
+**If a future facing ever DID rotate a footprint, `world.turn` is the method
+that has to grow a legality check** — and there is a test named for exactly
+that, which should be the first thing to fail.
+
+Undoable on the same 64-step stack, and `facing` stays **absent when zero** so a
+full cycle round leaves a save byte-identical to the one that produced it.
+
+A thing with one drawing answers `null`, which is what lets input.js fall
+through to the ordinary "there is already something here" rather than have a
+bench silently ignore a tap.
+
+**Verified on the running build:** tap empty ground plants (1 object, facing 0);
+tap the same tile turns it to 1 with still one object; tap again returns to 0.
+Hold on the same hedge **removes** it instead — tap and hold do not collide —
+and `Ctrl+Z` puts it back. On a desktop mouse: the click turns, and wheeling
+before placing still arrives turned. Six Node tests in `test/world.test.mjs`
+cover the cycle, the footprint, the refusal, undo, and the save round trip.
+
+### 7f · Still not built
 
 Nothing outstanding from the owner's list. The gesture set is: one finger uses
-the tool, two fingers move the map, pinch shows the garden, hold removes.
+the tool, two fingers move the map, pinch shows the garden, hold removes, and a
+tap on something already standing turns it.
 - **The `?` tool is the phone's escape hatch for the clipped info line.** If you
   widen the info line later, check you have not made `?` redundant — it is
   carrying more weight in this mode than in the desktop one.

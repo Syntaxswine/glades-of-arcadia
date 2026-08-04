@@ -968,6 +968,42 @@ export function createInput(opts = {}) {
       else state.lastSaid = null;
       return laid > 0;
     }
+    // A TAP ON SOMETHING ALREADY STANDING THERE TURNS IT.
+    //
+    // The owner: *"perhaps if you tap on the completed building with the build
+    // tool it rotates the object."*
+    //
+    // WHY THIS COSTS NOTHING AND CONFLICTS WITH NOTHING: that tap was already
+    // spent. A tile with something on it refuses a placement — it always has —
+    // so the click's whole outcome was a sentence in the status line saying so.
+    // Turning what is there instead uses a gesture that previously did nothing
+    // at all, which is why it needs no modifier, no mode and no new button.
+    //
+    // The wheel still turns what you are HOLDING, and that is the other half:
+    // before the thing is down you aim it, after it is down you tap it. A phone
+    // has no wheel, so this is the only half a phone had.
+    //
+    // IT IS NOT MOBILE-ONLY, deliberately. The same click does the same thing
+    // with a mouse. A rule that fires on a phone and not on a monitor is two
+    // behaviours to hold in your head and two to keep working, and this project
+    // has spent the whole arc refusing that fork.
+    //
+    // A thing with ONE drawing still explains itself the way it always did —
+    // `turnAt` answers null, and the player learns the tile is occupied rather
+    // than watching a bench that cannot turn ignore them.
+    if (world && typeof world.turnAt === 'function' && !legality(item, tx, ty).ok) {
+      const to = world.turnAt(tx, ty, 1);
+      if (to !== null && to !== undefined) {
+        state.lastSaid = null;
+        touched();
+        // No count: `world.turn` knows how many facings the thing has, this
+        // module does not, and importing the catalogue here for one number is
+        // the dependency the long-press message already declined to add.
+        if (ui && ui.say) ui.say('Turned.', 1600);
+        refreshGhost();
+        return true;
+      }
+    }
     return placeOne(item, tx, ty, false);
   }
 
