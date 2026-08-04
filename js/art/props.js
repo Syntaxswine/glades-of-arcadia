@@ -64,6 +64,7 @@ import {
   linearJoins,
   axialJoins,
 } from './format.js';
+import { solidJoins } from './solid.js';
 import { GROUND_ELLIPSE } from '../iso.js';
 
 /**
@@ -3164,48 +3165,18 @@ export const WATERING_PLACE = (() => {
 // unreachable, so the next one of these gets caught rather than inherited.
 // ---------------------------------------------------------------------------
 
-/**
- * Nullifier · DRYSTONE WALL.
- *
- * Spans a full tile on the same geometry as the hedges, for the same reason: a
- * nullifier that leaves gaps between segments is not a barrier, and the player
- * will not believe a line they can see through. Take one was a 24px stub and a
- * run of them read as scattered rubble.
- *
- * Drystone has no mortar, so the JOINTS are the whole texture — dark slots
- * between stones of unrelated size, each stone with its own lit top edge and
- * its own shaded flank. A wall shaded as one slab is a plank; a wall drawn as
- * even courses is brickwork, which is the wrong register entirely.
- */
-function drystoneGrid(gate = false) {
-  // ------------------------------------------------------------------------
-  // ONE TILE OF RUN, AND A REAL TOP. Both numbers here were wrong, and the
-  // owner caught both from a screenshot:
-  //
-  //   *"its way longer than the other walls, and so when the gate is placed
-  //   between the segments the walls on either end cover it."*
-  //   *"it also has problems with not being volumetric."*
-  //
-  // The run was 65 px against a note claiming that was "a full-tile bar". A
-  // full tile of run is LINE_W = 33; 65 is TWO of them, so every segment
-  // overhung its plot by half a tile at each end and the neighbours simply
-  // drew over the gateway standing between them. A run of plain wall hid the
-  // fault perfectly — each piece covered its neighbour with more of the same
-  // masonry — which is why it survived a whole arc of joining work. It took a
-  // GATE, the one piece that is not interchangeable with its neighbours, to
-  // make the overlap visible.
-  //
-  // And the top was drawn as a vertical band directly above the face, which is
-  // not what a top face is: see the slab note in js/art/format.js. It now uses
-  // the same three primitives the hedges do, so a wall and a hedge cannot
-  // disagree about which way a surface recedes.
-  // ------------------------------------------------------------------------
-  const D = 8; // the slab's depth across the run
-  const HIGH = 13; // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH — unchanged, and
-  const X0 = 2 * D + 2; // still the whole difficulty for the gateway below.
-  const TOP = 3;
-  const g = G(X0 + LINE_W + 3, TOP + LINE_W / 2 + D + HIGH + 26);
 
+/**
+ * THE DRYSTONE SKIN, lifted out of `drystoneGrid` so the wall's SHAPE and its
+ * SURFACE can be built by different machinery without drifting apart.
+ *
+ * The gateway is still drawn run-position by run-position, because a hole and a
+ * lintel are easiest to say that way. The plain wall is now a SOLID (see
+ * js/art/solid.js) so it can turn a corner like a box instead of folding like a
+ * ribbon. Both call these, so a bend and a gate cannot end up in different
+ * masonry — which is the whole reason this is one function and not two copies.
+ */
+function drystoneSkin(D, HIGH, X0) {
   // Stone id from a coarse, deliberately irregular lattice.
   const stoneAt = (x, y) => {
     const row = Math.floor(y / (4 + Math.floor(nz(Math.floor(y / 4), 7) * 3)));
@@ -3248,6 +3219,52 @@ function drystoneGrid(gate = false) {
     if (k / HIGH > 0.82) v -= 1;
     return STONE[clampi(v)];
   };
+  return { stoneAt, clampi, faceH, coping, course };
+}
+
+/**
+ * Nullifier · DRYSTONE WALL.
+ *
+ * Spans a full tile on the same geometry as the hedges, for the same reason: a
+ * nullifier that leaves gaps between segments is not a barrier, and the player
+ * will not believe a line they can see through. Take one was a 24px stub and a
+ * run of them read as scattered rubble.
+ *
+ * Drystone has no mortar, so the JOINTS are the whole texture — dark slots
+ * between stones of unrelated size, each stone with its own lit top edge and
+ * its own shaded flank. A wall shaded as one slab is a plank; a wall drawn as
+ * even courses is brickwork, which is the wrong register entirely.
+ */
+function drystoneGrid(gate = false) {
+  // ------------------------------------------------------------------------
+  // ONE TILE OF RUN, AND A REAL TOP. Both numbers here were wrong, and the
+  // owner caught both from a screenshot:
+  //
+  //   *"its way longer than the other walls, and so when the gate is placed
+  //   between the segments the walls on either end cover it."*
+  //   *"it also has problems with not being volumetric."*
+  //
+  // The run was 65 px against a note claiming that was "a full-tile bar". A
+  // full tile of run is LINE_W = 33; 65 is TWO of them, so every segment
+  // overhung its plot by half a tile at each end and the neighbours simply
+  // drew over the gateway standing between them. A run of plain wall hid the
+  // fault perfectly — each piece covered its neighbour with more of the same
+  // masonry — which is why it survived a whole arc of joining work. It took a
+  // GATE, the one piece that is not interchangeable with its neighbours, to
+  // make the overlap visible.
+  //
+  // And the top was drawn as a vertical band directly above the face, which is
+  // not what a top face is: see the slab note in js/art/format.js. It now uses
+  // the same three primitives the hedges do, so a wall and a hedge cannot
+  // disagree about which way a surface recedes.
+  // ------------------------------------------------------------------------
+  const D = 8; // the slab's depth across the run
+  const HIGH = 13; // A DRYSTONE WALL IS THIRTEEN PIXELS HIGH — unchanged, and
+  const X0 = 2 * D + 2; // still the whole difficulty for the gateway below.
+  const TOP = 3;
+  const g = G(X0 + LINE_W + 3, TOP + LINE_W / 2 + D + HIGH + 26);
+
+  const { stoneAt, clampi, faceH, coping, course } = drystoneSkin(D, HIGH, X0);
 
   // ------------------------------------------------------------------------
   // THE GATEWAY, built out of the wall it stands in.
@@ -3389,11 +3406,70 @@ export const DRYSTONE_WALL = (() => {
   // see through" — the note above, written about a run. The same argument
   // applies at a BEND, and until now two walls meeting at right angles crossed
   // each other and stuck a spur out past the turn.
-  return linearJoins(
-    'drystone-wall',
-    { g, ax, ay },
-    { tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'] }
+  // ------------------------------------------------------------------------
+  // A WALL THAT BENDS LIKE A WALL. The owner: *"the old stone wall has the same
+  // issues as the tall hedge … when you made it bend 90 degrees it bends like a
+  // ribbon instead of a three dimensional object."*
+  //
+  // `linearJoins` overlays two flat half-bars at a bend, which is right for the
+  // palisade — a picket fence's corner IS two half-runs of posts meeting — and
+  // wrong for masonry, which needs an L-shaped cap and an outer vertical edge.
+  //
+  // So the SHAPE comes from js/art/solid.js and the SURFACE from `drystoneSkin`
+  // above, which the gateway also uses. A bend and a gate cannot end up in
+  // different masonry, because there is one lattice and one ramp between them.
+  // The straight states are the bar that shipped: verified on the hedges, whose
+  // solid box covers the hand-built bar's pixels exactly.
+  // ------------------------------------------------------------------------
+  const D = 8;
+  const HIGH = 13;
+  const X0 = 2 * D + 2;
+  const TOP = 3;
+  const R = LINE_W / 2;
+  const PAD = Math.ceil(R) + 2;
+  const skin = drystoneSkin(D, HIGH, X0 + PAD);
+  const spec = {
+    R,
+    D,
+    // H IS THE FACE'S HEIGHT, NOT THE FACE PLUS THE CAP. The first pass wrote
+    // `HIGH + D` on the reasoning that the coping is part of the solid — it is,
+    // but as the box's TOP FACE at c = H, not as eight more pixels of wall. The
+    // wall came out eight px taller than the one that shipped.
+    H: HIGH,
+    x0: X0 + PAD,
+    yTop: TOP + PAD,
+    w: X0 + PAD + LINE_W + PAD + 3,
+    h: TOP + PAD + Math.ceil(R) + D + HIGH + 10,
+    faces: {
+      top: (a, b, x, y) => skin.coping(a * 2, b),
+      side: (a, k, x, y) => (k >= skin.faceH(a * 2) ? null : skin.course(a * 2, k, y)),
+      // THE CUT END, one step darker: it turns down-RIGHT, away from the light,
+      // where the near face turns down-left toward it. Shading them alike is
+      // what made the old bend read as folded paper.
+      end: (b, k, x, y) => {
+        if (k >= skin.faceH(0)) return null;
+        const c = skin.course(0, k, y);
+        return STONE[Math.max(0, STONE.indexOf(c) - 1)];
+      },
+    },
+  };
+  const anchor = [spec.x0 + 16 - D, spec.yTop + LINE_DROP(16) + D + HIGH + 1];
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) =>
+      defineSprite({
+        name: `drystone-wall@${m}`,
+        rows: solidJoins(m, spec).map((r) => r.join('')),
+        anchor,
+        tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'],
+      })
+    )
   );
+  return defineSprite({
+    ...joins[0],
+    name: 'drystone-wall',
+    joins,
+    tags: ['nullifier', 'structure', 'rock', 'order', 'enclosure'],
+  });
 })();
 
 /**

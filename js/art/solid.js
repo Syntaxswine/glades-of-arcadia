@@ -100,6 +100,101 @@ const EPS = 1e-6;
  * Returns `{ g, ax, ay }` ready for `spriteAt` / `linearJoins`, with the hub
  * placed at world (a, b, c) = (`hub`, 0, 0) — the tile centre, at the ground.
  */
+/**
+ * Rasterise boxes into a grid a CALLER already owns, in that caller's own
+ * coordinates.
+ *
+ * THIS IS THE ONE THAT MATTERS FOR MIGRATING EXISTING ART. `render` below picks
+ * its own frame, which is fine for a new sprite and useless for a corner that
+ * has to meet a hand-drawn straight run without a seam. Here the caller states
+ * the same three numbers it already passes to `slab`:
+ *
+ *   x0, yTop   where the run's far top corner sits, exactly as in `slab`
+ *   lift       how far the top face stands above the anchor's ground line,
+ *              i.e. the piece's own height — because `slab` draws the TOP and
+ *              this module measures `c` up from the GROUND
+ *
+ *   gx = x0 + 2a - 2b        gy = yTop + a + b + lift - c
+ *
+ * With those, `box(0, LINE_W / 2, 0, depth, 0, height)` reproduces exactly the
+ * volume that `slab` + `slabFace` draw between them — which is the check to run
+ * FIRST when converting a family, and the check that tells you the frame is
+ * right before any of the interesting shapes are attempted.
+ */
+export function renderInto(g, boxes, { x0, yTop, lift }) {
+  const H = g.length;
+  const W = g[0].length;
+  const zbuf = new Float64Array(W * H).fill(-Infinity);
+  const put = (x, y, depth, key) => {
+    if (!key) return;
+    const px = Math.round(x);
+    const py = Math.round(y);
+    if (px < 0 || py < 0 || px >= W || py >= H) return;
+    const i = py * W + px;
+    if (depth <= zbuf[i]) return;
+    zbuf[i] = depth;
+    g[py][px] = key;
+  };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const bx of boxes) {
+    for (const a of [bx.a0, bx.a1]) {
+      for (const b of [bx.b0, bx.b1]) {
+        for (const c of [bx.c0, bx.c1]) {
+          const x = x0 + 2 * a - 2 * b;
+          const y = yTop + a + b + lift - c;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+  }
+  minX = Math.max(0, Math.floor(minX) - 1);
+  maxX = Math.min(W - 1, Math.ceil(maxX) + 1);
+  minY = Math.max(0, Math.floor(minY) - 1);
+  maxY = Math.min(H - 1, Math.ceil(maxY) + 1);
+
+  for (const bx of boxes) {
+    const { a0, a1, b0, b1, c0, c1, faces } = bx;
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const u = x - x0;
+        const v = y - yTop - lift;
+        const h = u / 2;
+        // TOP, c = c1:  a - b = u/2,  a + b = v + c1
+        if (faces.top) {
+          const a = (h + v + c1) / 2;
+          const b = (v + c1 - h) / 2;
+          if (a >= a0 - EPS && a <= a1 + EPS && b >= b0 - EPS && b <= b1 + EPS) {
+            put(x, y, depthOf(a, b, c1), faces.top(a - a0, b - b0, x, y));
+          }
+        }
+        // SIDE, b = b1
+        if (faces.side) {
+          const a = h + b1;
+          const c = a + b1 - v;
+          if (a >= a0 - EPS && a <= a1 + EPS && c >= c0 - EPS && c <= c1 + EPS) {
+            put(x, y, depthOf(a, b1, c), faces.side(a - a0, c1 - c, x, y));
+          }
+        }
+        // END, a = a1
+        if (faces.end) {
+          const b = a1 - h;
+          const c = a1 + b - v;
+          if (b >= b0 - EPS && b <= b1 + EPS && c >= c0 - EPS && c <= c1 + EPS) {
+            put(x, y, depthOf(a1, b, c), faces.end(b - b0, c1 - c, x, y));
+          }
+        }
+      }
+    }
+  }
+  return g;
+}
+
 export function render(boxes, { hub = A_STEP / 2, pad = 2 } = {}) {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -173,6 +268,113 @@ export function render(boxes, { hub = A_STEP / 2, pad = 2 } = {}) {
     }
   }
   return { g, ax: TO_X(hub, 0) - minX, ay: TO_Y(hub, 0, 0) - minY + 1 };
+}
+
+/**
+ * THE SIXTEEN STATES OF A RUN, BUILT AS SOLIDS — the corner the owner asked for.
+ *
+ *   *"when you made it bend 90 degrees it bends like a ribbon instead of a
+ *   three dimensional object."*
+ *
+ * `joinedPiece` in format.js composes a bend by overlaying two flat half-bars.
+ * That is exactly right for a PICKET FENCE, where a corner genuinely is two
+ * half-runs of posts meeting — the owner confirms the palisade "is working
+ * perfectly" — and it is wrong for anything with volume, because two overlaid
+ * half-bars have no corner MASS. There is no outer vertical edge and no L-shaped
+ * top, so the eye reads a folded sheet.
+ *
+ * Here a bend is two boxes and the z-buffer does the rest.
+ *
+ * THE FRAME IS THE FAMILY'S OWN, which is the part that makes this usable on art
+ * that already exists. Verified before any of it was written: a solid
+ * `box(0, R, 0, D, 0, H)` drawn at the family's own `x0`/`yTop`/`lift` covers the
+ * hand-built bar's pixels EXACTLY — 1573 shared, **zero** solid-only. The 33 the
+ * hand version has spare are its back-edge stroke and its nicks, which `slab`
+ * never drew either. So a straight built here is the straight that shipped, and
+ * a corner built here meets it without a seam.
+ *
+ * `spec` carries the family's numbers and its own skin, so the foliage speckle
+ * and the stone lattice come out of the SAME functions the straight run uses:
+ *
+ *   R, D, H     run (LINE_W / 2), depth, height — the box the family already is
+ *   x0, yTop    where its run's far top corner sits, exactly as passed to `slab`
+ *   w, h        one grid size for all sixteen states, so the hub is trivially
+ *               the hub — the renderer allows states to differ in width but the
+ *               anchor's Y must match, and one size makes that unarguable
+ *   faces       { top, side, end } in the family's own vocabulary
+ */
+export function solidJoins(mask, spec) {
+  const { R, D, H, x0, yTop, w, h, faces } = spec;
+  const g = Array.from({ length: h }, () => new Array(w).fill('.'));
+
+  const C = R / 2; // the tile centre along the run
+  const Cb = D / 2; // ...and across it: the bar is D thick, centred here
+  const HALF = R / 2; // half a tile, the reach of one arm
+
+  // THE ARMS, in the family's own (a, b). The +tx pair laid end to end is the
+  // straight bar the family already draws; the +ty pair is that same bar turned,
+  // which is why its cross-section is D wide about the centre of the run.
+  //
+  // Each carries WHICH OF ITS TWO VERTICAL FACES ARE ON THE OUTSIDE of the
+  // union, because the z-buffer cannot work that out for you. A face that abuts
+  // another box of the same set is coplanar with its neighbour's interior, not
+  // behind it, so nothing hides it and it draws a seam straight down the middle
+  // of a solid bar. Visible on a run of four before this was made explicit.
+  //
+  //   `end`  is the face at a = a1, turned +tx (down-right)
+  //   `side` is the face at b = b1, turned +ty (down-left)
+  const ARM = {
+    // +tx: its far end is outer only where the run STOPS.
+    1: [C, R, 0, D, { end: !(mask & 1), side: true }],
+    // +ty: turned, so its far end is the `side`. Same rule, other axis.
+    2: [C - Cb, C + Cb, Cb, Cb + HALF, { end: true, side: !(mask & 2) }],
+    // -tx: its +tx face always abuts the hub or the +tx arm. Never drawn.
+    4: [0, C, 0, D, { end: false, side: true }],
+    // -ty: likewise its +ty face.
+    8: [C - Cb, C + Cb, Cb - HALF, Cb, { end: true, side: false }],
+  };
+  // The block at the crossing. Without it a bend is two arms that only touch at
+  // a line, and the outer corner has nothing in it. Its two outward faces are
+  // covered exactly when the arm that would cover them is present.
+  const HUB = [C - Cb, C + Cb, 0, D, { end: !(mask & 1), side: !(mask & 2) }];
+
+  const bits = [1, 2, 4, 8].filter((b) => mask & b);
+  let use;
+  if (bits.length <= 1) {
+    // WHERE A RUN ENDS — the rule from HANDOFF-JOINING-AND-THE-CUBIC-HEDGE. A
+    // piece with one neighbour or none draws BOTH arms of its axis, so a lone
+    // piece and the end of a run fill their tile identically, by construction.
+    use = bits.length && (bits[0] === 2 || bits[0] === 8) ? [ARM[2], ARM[8]] : [ARM[1], ARM[4]];
+  } else {
+    use = [HUB, ...bits.map((b) => ARM[b])];
+  }
+
+  /**
+   * A CAP ONLY WHERE THERE IS NOTHING TO CUT IT.
+   *
+   * Where a neighbour stands, it buries the outward face — and drawing one
+   * anyway is not merely wasted ink. The run-overlap guard in
+   * test/joining.test.mjs measures how much of a piece its own neighbour
+   * covers, and a gratuitous end cap took `hedge-low` from 5.1% to **22.6%**,
+   * through a threshold set at 20% to catch a wall that was two tiles long.
+   * The guard was right to refuse: ink that is always hidden is ink that lies
+   * about the piece's extent.
+   *
+   * So a cap appears exactly where the run STOPS — the same rule, seen from
+   * the other side, that makes a lone piece and the end of a run identical.
+   */
+  renderInto(
+    g,
+    use.map(([a0, a1, b0, b1, show]) =>
+      box(a0, a1, b0, b1, 0, H, {
+        top: faces.top,
+        side: show.side ? faces.side : null,
+        end: show.end ? faces.end : null,
+      })
+    ),
+    { x0, yTop, lift: H }
+  );
+  return g;
 }
 
 /**

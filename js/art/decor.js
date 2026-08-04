@@ -75,6 +75,7 @@ import {
   linearJoins,
   axialJoins,
 } from './format.js';
+import { solidJoins } from './solid.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -1805,17 +1806,113 @@ function hedgeGrid(h, ramp, seed, nickRate = 0.14) {
 // solid mass reads as one solid rather than as two slabs meeting.
 // ---------------------------------------------------------------------------
 
+/**
+ * A HEDGE THAT BENDS LIKE A SOLID. The owner: *"when you made it bend 90
+ * degrees it bends like a ribbon instead of a three dimensional object."*
+ *
+ * `linearJoins` overlays two flat half-bars at a bend, which is right for the
+ * palisade — a corner of a picket fence IS two half-runs of posts meeting, and
+ * the owner confirms it "is working perfectly" — and wrong for a clipped mass,
+ * which needs an L-shaped top and an outer vertical edge it never had.
+ *
+ * So the SHAPE comes from js/art/solid.js and the SKIN stays here: the two
+ * callbacks below are the same ones `slab` and `slabFace` were given, so the
+ * speckle and the ramp are unchanged and a solid-built straight is the straight
+ * that shipped. Verified before this was written — a solid box drawn in this
+ * family's own frame covers the hand-built bar's pixels exactly, zero spare.
+ */
+function hedgeSolid(name, h, ramp, seed, tags, nickRate = 0.14) {
+  const D = HEDGE_DEPTH;
+  const X0 = 2 * D + 2;
+  const TOP = 3;
+  const n = ramp.length - 1;
+  const R = LINE_W / 2;
+  // Room for an arm reaching a half-tile the OTHER way: the +ty leg of a bend
+  // swings 2 * HALF px left of x0 and its far end rises above yTop.
+  const PAD = Math.ceil(R) + 2;
+  const spec = {
+    R,
+    D,
+    H: h,
+    x0: X0 + PAD,
+    yTop: TOP + PAD,
+    w: X0 + PAD + LINE_W + PAD + 3,
+    h: TOP + PAD + Math.ceil(R) + D + h + 8,
+    faces: {
+      top: (a, b, x, y) => {
+        // THE BACK EDGE AND THE NICKS ARE PART OF THE SKIN NOW, not two extra
+        // passes over the run. `slabBackEdge` drew a stroke along a straight
+        // bar's far edge and the nick loop bit pixels out of it — both indexed
+        // by run position, which has no meaning once the plan can turn a
+        // corner. Expressed as "the far rank of the top face", they follow an
+        // L, a T and a cross for nothing, and they cannot drift a pixel out of
+        // step with the surface they belong to (which is exactly what the
+        // floor/ceil bug was).
+        // A NICK THAT SHADES RATHER THAN PUNCTURES. A clipped edge is straight
+        // but not machined — and the hand-built version got that by ERASING a
+        // pixel of the back-edge stroke, which sat above the surface and so
+        // left nothing behind it. Erase a pixel of the TOP FACE instead and, in
+        // a run, the neighbour's mass stands above the hole: `gap-audit` went
+        // straight from 0 to 10 and it was right to. So the bite is carried two
+        // ranks deep in shade instead of one rank of absence, and the piece
+        // stays closed — which is the whole of what the owner asked for.
+        if (b < 2 && hash(x - (b | 0), y, seed + 5) < nickRate) return ramp[0];
+        if (b < 1) return ramp[0]; // dark, so the mass does not bleed behind it
+        let v = n;
+        const r = hash(x, y, seed);
+        if (r < 0.2) v -= 1;
+        else if (r > 0.9) v -= 2;
+        if (b > D - 1.2) v = n - 1; // the near edge turns away a little
+        return ramp[clamp(v, 0, n)];
+      },
+      side: (a, k, x, y) => {
+        const t = k / Math.max(1, h - 1);
+        let v = Math.round(n - t * (n - 0.25));
+        const r = hash(x, k, seed + 2);
+        if (r < 0.2) v -= 1;
+        else if (r > 0.88) v += 1;
+        if (k === 0) v = n; // the lit edge where the top turns over
+        if (k >= h - 1) v = 0;
+        return ramp[clamp(v, 0, n)];
+      },
+      // THE FACE A BAR NEVER HAD. It turns to +tx — down-right, away from the
+      // light — so it sits a step under the near face. Giving it the same value
+      // is what made the old bend read as folded paper.
+      end: (b, k, x, y) => {
+        const t = k / Math.max(1, h - 1);
+        let v = Math.round(n - 1 - t * (n - 1.25));
+        if (hash(x, y, seed + 8) < 0.22) v -= 1;
+        return ramp[clamp(v, 0, n)];
+      },
+    },
+  };
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) =>
+      defineSprite({
+        name: `${name}@${m}`,
+        rows: solidJoins(m, spec).map((r) => r.join('')),
+        anchor: [spec.x0 + 16 - D, spec.yTop + LINE_DROP(16) + D + h + 1],
+        tags,
+      })
+    )
+  );
+  return defineSprite({ ...joins[0], name, joins, tags });
+}
+
 {
-  const lo = hedgeGrid(15, BOX, 41);
-  const hi = hedgeGrid(30, YEW, 77, 0.1);
   // eslint-disable-next-line no-var
-  var HLO = linearJoins('hedge-low', lo, {
-    tags: ['decor', 'hedge', 'plant', 'nullifier', 'neoclassical'],
-  });
+  var HLO = hedgeSolid('hedge-low', 15, BOX, 41, [
+    'decor', 'hedge', 'plant', 'nullifier', 'neoclassical',
+  ]);
   // eslint-disable-next-line no-var
-  var HHI = linearJoins('hedge-tall', hi, {
-    tags: ['decor', 'hedge', 'plant', 'nullifier', 'screen', 'neoclassical'],
-  });
+  var HHI = hedgeSolid(
+    'hedge-tall',
+    30,
+    YEW,
+    77,
+    ['decor', 'hedge', 'plant', 'nullifier', 'screen', 'neoclassical'],
+    0.1
+  );
 }
 export const HEDGE_LOW = HLO;
 export const HEDGE_TALL = HHI;
