@@ -166,6 +166,26 @@ Switching modes is a navigation back to the title screen, so you see the frame
 before you commit to it, and it can never wipe a garden. Everything else — every
 keyboard binding, every URL above — works unchanged in both.
 
+**Two fingers.** Drag with two fingers to move the map *whatever you are
+holding* — the move tool still works, but it costs a trip to the toolbar, and
+one finger has to keep meaning "use the thing in my hand" or you could not plant
+a hedge. Two fingers is the gesture every map on a phone already has.
+
+**Pinch together for the whole garden**, tap a spot to travel there, and pinch
+apart (or tap away, or `Esc`) to close. `M` does the same from a keyboard.
+
+That is a magnified minimap and not a zoom, deliberately: the canvas is exactly
+the logical screen and the upscale is a whole number (SPEC §2), so a real zoom
+would mean either a fractional canvas — smearing every pixel the game has — or a
+second art set at another tile size. The minimap is already the whole garden in
+one picture, in the same projection as the screen, with a camera box and
+tap-to-travel. Pinch makes it big.
+
+**On a finger, placing happens when you lift, not when you touch.** Two fingers
+never land at the same instant, so planting on contact meant that reaching for
+the map with a tree in your hand planted a tree and then panned away from it.
+A mouse still places on the press, where it always did.
+
 To get one file you can mail to somebody:
 
 ```

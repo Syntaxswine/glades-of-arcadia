@@ -186,12 +186,103 @@ big cluster instead.
 
 ---
 
-## 7 · What is deliberately NOT built
+## 7 · The gestures — shipped the same day
 
-- **No pinch, no two-finger pan, no long-press.** The move tool covers
-  navigation and was verified doing it. Long-press-as-right-click is the one to
-  be careful with: right-click means *remove*, and a long press that razes what
-  you were only looking at is a trap, not a shortcut.
+§7 originally read "no pinch, no two-finger pan, no long-press". The owner, on
+seeing that list: *"both of those are great additions to the mobile portion, you
+are greenlit for those."* Two of the three are now in. The third is still out,
+and §7c says why.
+
+### 7a · Two-finger pan
+
+**Why it exists when the move tool already pans:** the move tool costs a trip to
+the toolbar. One finger has to keep meaning "use the thing I am holding" — that
+is how a hedge gets planted — so a player holding a hedge who wants to look
+somewhere else must put it down, pan, and pick it up again. Two fingers is what
+every map on a phone already does.
+
+It is **additive**. The move tool is untouched, and a mouse never produces a
+second pointer, so nothing here can fire on a desktop.
+
+The arithmetic is pure and exported (`twoFinger`, `pinchVerdict` in input.js) so
+Node can test the decisions without a finger; only the plumbing touches the DOM.
+The pan follows the **centroid**, which is what keeps the map still when the
+fingers only spread.
+
+**`state.suppress` is the load-bearing detail.** Fingers do not leave the glass
+together: one lifts, and for a moment there is a single pointer down in the
+middle of the map, indistinguishable from a press. Without suppression the
+remaining finger becomes a fresh drag and its release becomes a click. It is set
+when the gesture starts and cleared only when **every** finger is up.
+
+`pointercancel` is bound to the same handler as `pointerup`, because a touch the
+system takes back — an edge swipe, an incoming call — fires only the former.
+Miss it and a phantom finger stays on the books and every later tap is swallowed
+as a third one.
+
+### 7b · Pinch, and why it is not a zoom
+
+**A real zoom is architecturally closed.** The backing canvas is exactly the
+logical screen, the CSS upscale is a whole number (SPEC §2), and the tiles are
+64 × 32 pixel art. Zooming out means a fractional canvas — smearing every pixel
+the game has — or a second art set at another tile size. Both break a founding
+law to serve a gesture. **Do not try to route around this**; it is not an
+oversight.
+
+But the *intent* is entirely servable and the machinery was already here. The
+minimap is the whole garden in one picture, in the same projection as the
+screen, with a camera box and a tap-to-travel that have worked since it shipped.
+It was simply 119 × 60 in a corner. **Pinch makes it big and centres it.**
+
+- Fingers **close** = "show me everything" — the way closing your fingers on a
+  map reads everywhere else. Fingers **open** = back to the garden.
+- Magnified **2× on a phone, 3× on a monitor**, always a whole number, through
+  **one draw path** — every `1` that was a pixel became `k`. A second draw
+  routine would be two pictures of the same garden that could disagree, which is
+  the fault this project keeps finding in itself.
+- **`hit()` claims the entire view while it is open**, so a tap on the meadow
+  showing round the edge closes it rather than planting a tree through the
+  picture — input.js falls through to the tools on a false.
+- `pick()` divides the scale back out. If that inverse ever breaks, the symptom
+  is "tapping the map sends me somewhere else", which reads as a projection bug
+  and is not one. There is a test that taps every corner.
+- `M` and `Esc` reach it from a keyboard, because a gesture must never be the
+  only way to reach something.
+
+**`M` was free.** The note beside the move tool said `M` is mute; `setMuted()`
+exists in js/audio.js and **nothing has ever bound a key to it**. The letter was
+reserved for a control that does not exist. If mute wants a key it can have one,
+but not this one back silently.
+
+### 7c · The fault the gestures uncovered, which was never about gestures
+
+Placement happened on `pointerdown`. **Two fingers do not land together.**
+
+Measured on the running build, before any of this existed: with a tree in hand,
+reaching for the map planted a tree — objects went 2 → 3 on the *first* finger,
+and then the gesture panned away from it. A player would go to look at their
+garden and find a pine in it.
+
+**On touch, placing now waits for the release.** A mouse still places on the
+press, where it always did and where the crisper feel belongs — a mouse has one
+pointer, so a press can only ever mean one thing. Touch defers to `state.pending`
+and:
+
+- `beginGesture()` throws it away — the hand turned out to be reaching for the
+  map, not the meadow;
+- a drag past `DRAG_SLOP` **flushes it first**, so painted ground keeps the tile
+  the player actually aimed at rather than starting from where the drag was
+  noticed;
+- `onBlur` discards it, on the same grounds the terrain drag is discarded: the
+  player never finished asking.
+
+Verified after the fix: `plantedOnDown: 0`, `plantedOnUp: 1` on touch;
+`mousePlantedOnDown: 1` on desktop, unchanged.
+
+### 7d · Still deliberately not built
+
+- **Long-press-as-right-click.** Right-click means *remove*. A long press that
+  razes what you were only looking at is a trap, not a shortcut.
 - **The `?` tool is the phone's escape hatch for the clipped info line.** If you
   widen the info line later, check you have not made `?` redundant — it is
   carrying more weight in this mode than in the desktop one.
@@ -227,19 +318,25 @@ every one of those constants a function.** Do not start that without reading §1
 
 | | |
 |---|---|
-| tests | **449** (440 before; +4 seams, +9 new `test/titlescreen.test.mjs`, and the front door had none at all until now) |
+| tests | **461** (440 before; +4 seams, +9 new `test/titlescreen.test.mjs`, +12 new `test/touch.test.mjs` — the front door and the gestures had none at all until now) |
 | playtest | 49 / 49 |
 | `iso-audit --strict` | 1 of 312 — `balustrade`, the known step-4 worklist entry |
-| build stamp | bumped to `fdd3d73-20260803` — **it cache-busts `style.css`, and this change touches the stylesheet.** Leaving it would have served returning players new JS with old CSS: desktop geometry under a mobile layout, silently |
-| verified in-browser | title screen, boot, layout, all 24 controls, drag, tap-to-centre, planting, all 8 tabs |
+| build stamp | bumped — **it cache-busts `style.css`, and this arc touches the stylesheet.** Leaving it would have served returning players new JS with old CSS: desktop geometry under a mobile layout, silently |
+| verified in-browser | title screen, boot, layout, all 24 controls, drag, tap-to-centre, planting, all 8 tabs, two-finger pan with a tree in hand, pinch in and out, tap-to-travel, `M`, `Esc`, and that a desktop mouse still places on the press |
 
 **Files that changed:** `js/iso.js` (the MODES table), `js/ui.js` (`layoutFor`,
-the four CSS properties, `data-cramped`, the tool cluster, `keepTabVisible`),
+the CSS properties, `data-cramped`, the tool cluster, `keepTabVisible`),
 `js/titlescreen.js` (`modeHref`, `looksLikePhone`, the switch),
-`css/style.css` (four hard-coded 640s made variable, `[data-cramped]`, and one
-additive `[data-mode="mobile"]` block at the end), `index.html` (build stamp),
-`test/seams.test.mjs`, `test/titlescreen.test.mjs` (new), `README.md`,
-`proposals/BACKLOG.md`.
+`js/input.js` (`twoFinger`, `pinchVerdict`, the pointer book, `suppress`,
+`pending`, `pointercancel`, `M`, `Esc`), `js/minimap.js` (the overview — one
+draw path at scale `k`), `css/style.css` (four hard-coded 640s made variable,
+`[data-cramped]`, and one additive `[data-mode="mobile"]` block at the end),
+`index.html` (build stamp), `test/seams.test.mjs`, `test/titlescreen.test.mjs`
+(new), `test/touch.test.mjs` (new), `README.md`, `proposals/BACKLOG.md`.
+
+**`js/main.js` was not touched at all**, including for the overview: the minimap
+owns whether it is expanded, and `draw`/`hit`/`pick` switch on it, so the one
+call site in main.js needed no change.
 
 **The desktop is byte-identical in behaviour.** The only shared edits were the
 four that turned a hard-coded 640 into `var(--sw)` and the media query in §4 —

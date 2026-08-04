@@ -342,10 +342,35 @@ fails if a future edit takes that away.
   never changing group, because the ids I fed it were the LABELS. Both were
   caught by checking that the instrument could distinguish its own outcomes.
 
-**Still open on the phone, deliberately:** no pinch, no two-finger pan, no
-long-press-as-right-click (right-click means *remove*, and a long press that
-razes is a trap). The move tool covers navigation and was verified doing it;
-gestures are the next rung if the owner wants them.
+**The gestures shipped the same day.** The owner, on the "deliberately not
+built" list: *"both of those are great additions to the mobile portion, you are
+greenlit for those."*
+
+- **Two-finger pan**, whatever tool is held. It is additive — the move tool is
+  untouched, and a mouse never has a second pointer, so none of it can fire on
+  the desktop.
+- **Pinch together = the whole garden**, tap to travel, pinch apart / tap away /
+  `Esc` / `M` to close. It is the corner minimap MAGNIFIED (2x on a phone, 3x on
+  a monitor) through one draw path, not a second picture of the same garden.
+  **Real zoom is architecturally closed** and should not be attempted: the
+  backing canvas is exactly the logical screen and the upscale is a whole number
+  (SPEC §2), so it would take a fractional canvas — smearing every pixel — or a
+  second art set at another tile size. The minimap already answers the question
+  a pinch is asking.
+- **The fault this uncovered, which was never about gestures:** placement
+  happened on `pointerdown`, and two fingers do not land together. Reaching for
+  the map with a tree in hand PLANTED A TREE — measured on the running build,
+  two objects became three, before the gesture had even begun. **On touch,
+  placing now waits for the release**; a mouse still places on the press. A
+  drag flushes the pending tile so painted ground keeps its first tile.
+
+**Still deliberately not built: long-press-as-right-click.** Right-click means
+*remove*, and a long press that razes what you were only looking at is a trap.
+
+**`M` was free, not taken.** The note beside the move tool claimed `M` is mute;
+`setMuted()` exists in js/audio.js but nothing has ever bound a key to it. If
+mute wants a key later it can have one, but it cannot have this one back
+silently.
 
 ---
 

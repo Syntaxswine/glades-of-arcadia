@@ -212,6 +212,55 @@ const EDGE_MARGIN = 10; // logical px from the viewport edge
 const DRAG_SLOP = 3; // logical px before a press counts as a drag
 const INTERNAL = Symbol('internal-tick');
 
+// ---------------------------------------------------------------------------
+// TWO FINGERS
+// ---------------------------------------------------------------------------
+//
+// The arithmetic of a two-finger gesture, as pure functions, so the decisions
+// can be tested in Node where there is no such thing as a finger. Only the
+// plumbing below them touches the DOM.
+//
+// WHY TWO-FINGER PAN EXISTS AT ALL, given the move tool already pans: because
+// the move tool costs you a TRIP TO THE TOOLBAR. One finger has to mean "use
+// the thing I am holding" — that is how you plant a hedge — so a player with a
+// hedge in their hand who wants to see somewhere else must put the hedge down,
+// pan, and pick it up again. Two fingers is the gesture every map on a phone
+// already has, and it means "move the map" no matter what is in your hand.
+//
+// It is ADDITIVE. The move tool keeps working exactly as it did, and on a
+// desktop mouse there is never a second pointer, so none of this can fire.
+
+/** How far the fingers must separate or close before it counts as a pinch. */
+export const PINCH_TRIGGER = 40;
+
+/** The centroid and separation of two points. */
+export function twoFinger(a, b) {
+  return {
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+    dist: Math.hypot(b.x - a.x, b.y - a.y),
+  };
+}
+
+/**
+ * Has this pinch travelled far enough to mean something, and which way?
+ *
+ * `'in'` — fingers CLOSED. Read as "show me everything", because that is what
+ * closing your fingers on a map means everywhere else: zoom out, see the whole
+ * thing. `'out'` — fingers OPENED: back to the garden.
+ *
+ * `null` until the trigger, so a two-finger PAN — where the separation wobbles
+ * by a few pixels because hands are not machines — never accidentally opens the
+ * overview mid-drag. 40 logical pixels is comfortably more than that wobble and
+ * comfortably less than a deliberate pinch.
+ */
+export function pinchVerdict(startDist, dist, trigger = PINCH_TRIGGER) {
+  const d = dist - startDist;
+  if (d <= -trigger) return 'in';
+  if (d >= trigger) return 'out';
+  return null;
+}
+
 /**
  * createInput(opts) -> input
  *
@@ -287,6 +336,27 @@ export function createInput(opts = {}) {
     facings: new Map(),
     /** The live terrain drag: { op, x0, y0, x1, y1 } or null. */
     terrain: null,
+    /** Every pointer currently down, by id. One entry is a mouse or a finger. */
+    touches: new Map(),
+    /** The live two-finger gesture: { startDist, cx, cy, fired } or null. */
+    gesture: null,
+    /**
+     * A touch press that has not been allowed to place anything yet: the tile
+     * it landed on, or null. See the long note at the paint branch in
+     * `onPointerDown` — this is what lets a second finger cancel a placement
+     * that a mouse would already have committed.
+     */
+    pending: null,
+    /**
+     * Set while a gesture is running and NOT cleared until every finger is up.
+     *
+     * This is the whole difference between a two-finger pan that works and one
+     * that plants a tree when you let go. Fingers do not leave the glass
+     * together: one lifts, and for a moment there is a single pointer down in
+     * the middle of the map, indistinguishable from a press. Without this the
+     * remaining finger becomes a fresh drag, and its release becomes a click.
+     */
+    suppress: false,
     lastSaid: null,
     disposed: false,
   };
@@ -1036,9 +1106,61 @@ export function createInput(opts = {}) {
 
   // ------------------------------------------------------------------ pointer --
 
+  /**
+   * Abandon whatever one finger had started, WITHOUT committing it, and take
+   * up the two-finger gesture instead.
+   *
+   * `state.terrain = null` rather than `doTerrain(...)` is the important line
+   * and it is the same choice `Escape` makes: a terrace half dragged out when
+   * the second finger lands was never asked for, and building it would be the
+   * gesture quietly editing the garden on its way past.
+   */
+  function beginGesture() {
+    const pts = [...state.touches.values()];
+    const r = twoFinger(pts[0], pts[1]);
+    state.terrain = null;
+    state.painting = false;
+    state.panning = false;
+    state.dragging = false;
+    state.lastPaint = null;
+    // THE LINE THE WHOLE DEFERRAL EXISTS FOR: the tree the first finger was
+    // about to plant is thrown away, because the hand turned out to be
+    // reaching for the map rather than for the meadow.
+    state.pending = null;
+    state.gesture = { startDist: r.dist, cx: r.cx, cy: r.cy, fired: false };
+    state.suppress = true;
+    refreshGhost();
+  }
+
+  /** Fingers closed = show me everything; fingers opened = back to the garden. */
+  function onPinch(dir) {
+    if (!minimap || typeof minimap.setExpanded !== 'function') return;
+    const open = dir === 'in';
+    if (minimap.expanded === open) return;
+    minimap.setExpanded(open);
+    if (ui && ui.announce) ui.announce(open ? 'the whole garden' : 'back to the glade');
+  }
+
   function onPointerDown(ev) {
     if (ui && ui.isModal && ui.isModal()) return;
     const p = toLogical(ev);
+
+    // Book the pointer FIRST, before any of the single-pointer reasoning below
+    // can act on it, so that the second finger is known to be down at the
+    // moment we decide what this press means.
+    state.touches.set(ev.pointerId, { x: p.x, y: p.y });
+    if (state.touches.size === 2) {
+      beginGesture();
+      ev.preventDefault();
+      return;
+    }
+    // A third finger, or a finger put back down while the others are still on
+    // the glass, is noise. Swallow it rather than let it start an edit.
+    if (state.touches.size > 2 || state.suppress) {
+      ev.preventDefault();
+      return;
+    }
+
     state.px = p.x;
     state.py = p.y;
     state.lastX = p.x;
@@ -1055,6 +1177,17 @@ export function createInput(opts = {}) {
       if (t) {
         centreOn(t.tx, t.ty);
         if (ui && ui.announce) ui.announce(`looking at ${t.tx}, ${t.ty}`);
+      }
+      // THE OVERVIEW CLOSES ON A TAP, whether or not the tap found a tile.
+      //
+      // It is a picture you opened to answer one question — where is the thing
+      // I want to look at — so it should get out of the way the moment it has
+      // answered, rather than making you dismiss it separately. A tap on the
+      // garden showing round its edge missed the map and simply closes: `hit`
+      // claims the whole view while it is open, precisely so that tap lands
+      // here instead of planting a tree through the picture.
+      if (minimap.expanded && typeof minimap.setExpanded === 'function') {
+        minimap.setExpanded(false);
       }
       return;
     }
@@ -1118,7 +1251,28 @@ export function createInput(opts = {}) {
     } else {
       state.panning = false;
       state.painting = true;
-      paintAt(t.tx, t.ty);
+      /**
+       * ON A FINGER, PLACING WAITS FOR THE RELEASE. On a mouse it does not.
+       *
+       * A mouse has exactly one pointer, so a press can only ever mean "do the
+       * thing" and doing it immediately is the crisper feel — that is the
+       * behaviour this game has always had and it is untouched.
+       *
+       * A finger cannot promise that. Two fingers do not land together: there
+       * are tens of milliseconds between them, and for that moment a
+       * two-finger pan is indistinguishable from a one-finger press. Planting
+       * on contact meant that reaching for the map with a tree in your hand
+       * PLANTED A TREE and then panned away from it — measured, on the running
+       * build, before this existed: two objects became three.
+       *
+       * Deferring to the release costs a touch player nothing they can feel (a
+       * tap is a hundred milliseconds) and it lets `beginGesture` simply throw
+       * the pending placement away. Dragging to paint ground still works: the
+       * pending tile is flushed by the first move that passes DRAG_SLOP, so a
+       * drag paints from where it started rather than from where it noticed.
+       */
+      if (ev.pointerType === 'touch') state.pending = { tx: t.tx, ty: t.ty };
+      else paintAt(t.tx, t.ty);
     }
 
     canvas.focus({ preventScroll: true });
@@ -1134,6 +1288,33 @@ export function createInput(opts = {}) {
 
   function onPointerMove(ev) {
     const p = toLogical(ev);
+
+    // THE GESTURE OWNS THE MOVE. Pan by how far the CENTROID travelled, which
+    // is what keeps the map under two fingers the same way `dragBy` keeps it
+    // under one, and leaves the map still when the fingers only spread.
+    if (state.touches.has(ev.pointerId)) state.touches.set(ev.pointerId, { x: p.x, y: p.y });
+    if (state.gesture && state.touches.size >= 2) {
+      const pts = [...state.touches.values()];
+      const r = twoFinger(pts[0], pts[1]);
+      dragBy(-(r.cx - state.gesture.cx), -(r.cy - state.gesture.cy));
+      state.gesture.cx = r.cx;
+      state.gesture.cy = r.cy;
+      // Once per gesture. A pinch that has already spoken must not keep
+      // toggling the overview as the fingers carry on moving.
+      if (!state.gesture.fired) {
+        const verdict = pinchVerdict(state.gesture.startDist, r.dist);
+        if (verdict) {
+          state.gesture.fired = true;
+          onPinch(verdict);
+        }
+      }
+      ev.preventDefault();
+      return;
+    }
+    // A finger still down after its partner left: it moves nothing and picks
+    // nothing until the glass is clear.
+    if (state.suppress) return;
+
     const dx = p.x - state.lastX;
     const dy = p.y - state.lastY;
     state.lastX = p.x;
@@ -1169,7 +1350,17 @@ export function createInput(opts = {}) {
       const razing = state.button === 2 || (ui && ui.tool && ui.tool() === 'raze');
       // Only ground paints continuously. Dragging a tree across the glade
       // planting one on every tile is not what anybody meant.
-      if (razing || paintable(item)) paintAt(t.tx, t.ty);
+      if (razing || paintable(item)) {
+        // A touch drag has now travelled far enough to be a stroke rather than
+        // the first half of a pinch, so the tile it STARTED on is painted
+        // before the one it has reached. Without this a dragged path would be
+        // missing its first tile — the one the player actually aimed at.
+        if (state.pending) {
+          paintAt(state.pending.tx, state.pending.ty);
+          state.pending = null;
+        }
+        paintAt(t.tx, t.ty);
+      }
     }
 
     if (changed && typeof on.hover === 'function') on.hover(t.tx, t.ty);
@@ -1177,6 +1368,26 @@ export function createInput(opts = {}) {
   }
 
   function onPointerUp(ev) {
+    state.touches.delete(ev.pointerId);
+
+    // Coming out of a gesture. The remaining finger — and its eventual release
+    // — must do nothing at all: no pan, no tile, no "take me there". See
+    // `state.suppress`, which is why this stays true until the glass is clear
+    // rather than until the gesture ends.
+    if (state.gesture || state.suppress) {
+      if (state.touches.size < 2) state.gesture = null;
+      if (state.touches.size === 0) state.suppress = false;
+      state.dragging = false;
+      state.panning = false;
+      state.painting = false;
+      state.terrain = null;
+      state.pending = null;
+      state.button = -1;
+      state.lastPaint = null;
+      refreshGhost();
+      return;
+    }
+
     if (state.dragging && ev.pointerId != null && canvas.releasePointerCapture) {
       try {
         canvas.releasePointerCapture(ev.pointerId);
@@ -1194,6 +1405,15 @@ export function createInput(opts = {}) {
     if (state.panning && (ui && ui.tool && ui.tool()) === 'move' && state.moved <= DRAG_SLOP) {
       centreOn(state.tx, state.ty);
       if (ui && ui.announce) ui.announce(`looking at ${state.tx}, ${state.ty}`);
+    }
+    // THE TAP LANDS HERE. A touch press that never became a drag and never
+    // became a gesture is what a mouse would have committed on the way down;
+    // this is the same placement, a hundred milliseconds later, and the only
+    // moment at which it is finally certain that one finger is all there was.
+    if (state.pending) {
+      const q = state.pending;
+      state.pending = null;
+      paintAt(q.tx, q.ty);
     }
     // The terrain drag lands here, once, as a single undoable edit. A press with
     // no movement is a one-tile region, which is the ordinary click.
@@ -1305,6 +1525,12 @@ export function createInput(opts = {}) {
         return;
       case 'Escape':
         ev.preventDefault();
+        // The overview is the outermost thing on screen, so it is the first
+        // thing Esc takes off — the same order the journal already follows.
+        if (minimap && minimap.expanded && typeof minimap.setExpanded === 'function') {
+          minimap.setExpanded(false);
+          return;
+        }
         // A terrain drag in progress is abandoned rather than committed — Esc
         // has always meant "never mind", and it must not quietly build a
         // terrace on the way out.
@@ -1422,9 +1648,31 @@ export function createInput(opts = {}) {
         ev.preventDefault();
         if (ui && ui.toggleJournal) ui.toggleJournal();
         return;
-      // The move tool. `X` because `M` is mute, `V` reads as "view" but is one
-      // letter from the categories' alphabet, and X is the only free key that
-      // nothing else in the game wants.
+      /**
+       * THE WHOLE GARDEN. What a pinch opens, on a keyboard.
+       *
+       * It is here because a gesture must never be the ONLY way to reach
+       * something: a phone is not the only place this game runs, and a control
+       * with no keyboard route is a control a keyboard player does not have.
+       * Every other tool in the game obeys that rule and this one does too.
+       *
+       * `M` for map. The note beside the move tool below used to say `M` is
+       * mute — `setMuted()` exists in js/audio.js but NOTHING HAS EVER BOUND A
+       * KEY TO IT, so the letter was reserved for a control that does not
+       * exist. If mute ever wants a key it can have one; it cannot have this
+       * one back without saying so.
+       */
+      case 'm':
+      case 'M':
+        ev.preventDefault();
+        if (minimap && typeof minimap.toggleExpanded === 'function') {
+          const open = minimap.toggleExpanded();
+          if (ui && ui.announce) ui.announce(open ? 'the whole garden' : 'back to the glade');
+        }
+        return;
+      // The move tool. `V` reads as "view" but is one letter from the
+      // categories' alphabet, and X is the only other free key that nothing
+      // else in the game wants.
       case 'x':
       case 'X':
         ev.preventDefault();
@@ -1514,6 +1762,15 @@ export function createInput(opts = {}) {
     // Losing focus mid-drag abandons the terrain edit rather than committing a
     // region the player never finished choosing.
     state.terrain = null;
+    // A window that loses focus mid-gesture never sees those pointers come up,
+    // so the book has to be closed here or the next tap arrives to find two
+    // fingers still down and is swallowed as noise for ever.
+    state.touches.clear();
+    state.gesture = null;
+    state.suppress = false;
+    // A deferred placement whose release will never arrive is not placed. Same
+    // reasoning as the terrain drag above: the player did not finish asking.
+    state.pending = null;
   }
 
   // --------------------------------------------------------------------- loop --
@@ -1572,6 +1829,10 @@ export function createInput(opts = {}) {
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
+  // A touch the browser takes back — a system edge-swipe, a call arriving —
+  // fires `pointercancel` and NEVER `pointerup`. Without this the finger stays
+  // on the books for ever and every later tap is swallowed as a third finger.
+  window.addEventListener('pointercancel', onPointerUp);
   canvas.addEventListener('pointerleave', onPointerLeave);
   canvas.addEventListener('contextmenu', onContextMenu);
   canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -1631,6 +1892,7 @@ export function createInput(opts = {}) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('wheel', onWheel);
