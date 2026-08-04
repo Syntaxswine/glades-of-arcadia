@@ -60,6 +60,7 @@ import {
   slab,
   slabFace,
   slabBackEdge,
+  slabEndFace,
   linearJoins,
   axialJoins,
 } from './format.js';
@@ -3319,7 +3320,24 @@ function drystoneGrid(gate = false) {
   );
 
   if (gate) {
-    // 2 · The passage. A hole cut in a wall that shows the GRASS behind it
+    // 2 · THE OUTER PIER'S CUT END, where it steps back down to the wall. It is
+    // the one face of this gateway that nothing was drawing: `slab` gives a box
+    // its top and `slabFace` its near long side, and a plain bar never needs the
+    // short face across the run because its neighbours cut it. A pier does.
+    // Sixty-six pixels of lawn lived in the wedge between the pier's cap and the
+    // wall's — two thirds of everything the "draw it closed" pass left behind.
+    // format.js §slabEndFace.
+    //
+    // ONE STEP DARKER THAN THE COURSES BESIDE IT. This face turns to +tx, which
+    // in this projection is down-RIGHT and away from the light, while `slabFace`
+    // draws the near face turned down-left toward it. Shading both the same is
+    // what makes a box read as a folded ribbon.
+    slabEndFace(g, X0, TOP, D, CX + HALF_GAP + PIER, RISE, (b, h, x, y) => {
+      const k = course(x - X0 + 2 * D, RISE - h, y);
+      return STONE[Math.max(0, STONE.indexOf(k) - 1)];
+    });
+
+    // 3 · The passage. A hole cut in a wall that shows the GRASS behind it
     // reads as damage — decor.js's lesson on the hedge arch, in stone — so the
     // opening is filled with the dark of the way through, from just under the
     // lintel down to the ground.
@@ -3330,7 +3348,7 @@ function drystoneGrid(gate = false) {
       const foot = TOP + LINE_DROP(i) + D + faceH(i);
       for (let y = top; y <= foot; y++) put(g, fx, y, nz(fx, y) > 0.84 ? STONE[1] : STONE[0]);
     }
-    // 3 · The piers: this wall, built higher, their faces carried to the foot.
+    // 4 · The piers: this wall, built higher, their faces carried to the foot.
     slabBackEdge(g, X0, TOP - RISE, LINE_W, STONE[0], (i) => raised(i) && !opening(i));
     slab(g, X0, TOP - RISE, LINE_W, D, (a, b) =>
       raised(a * 2) && !opening(a * 2) ? coping(a * 2, b) : null
@@ -3340,7 +3358,7 @@ function drystoneGrid(gate = false) {
         ? course(i, k, TOP + LINE_DROP(i) - RISE + D + 1 + k)
         : null
     );
-    // 4 · The lintel: one long stone laid over the opening, drawn as a short
+    // 5 · The lintel: one long stone laid over the opening, drawn as a short
     // section of wall so it is the same masonry rather than a bar.
     slabBackEdge(g, X0, TOP - RISE, LINE_W, STONE[0], opening);
     slab(g, X0, TOP - RISE, LINE_W, D, (a, b) => (opening(a * 2) ? coping(a * 2, b) : null));

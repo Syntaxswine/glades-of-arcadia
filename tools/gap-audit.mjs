@@ -160,6 +160,16 @@ if (MAP) {
     set(x - c.minX + 1, y - c.minY + 1, 45, 60, 45);
   }
   for (const [x, y] of found) set(x - c.minX + 1, y - c.minY + 1, 255, 0, 200);
+  // WITHOUT THIS LINE THE MAP IS BLANK, and blank is the worst possible
+  // failure for this particular tool. `createImageData` hands back a DETACHED
+  // buffer; painting into it and then encoding the CANVAS writes the canvas,
+  // which nothing has touched. Every --map PNG written before this fix was
+  // 100% transparent — and a fully transparent PNG opens as a white page,
+  // which is indistinguishable from "there are no gaps" to anyone looking at
+  // it. An instrument that fails silently in the direction of GOOD NEWS is
+  // worse than no instrument. Found by an agent that decoded the output and
+  // counted the pixels instead of trusting the picture.
+  ctx.putImageData(img, 0, 0);
   mkdirSync(dirname(resolve(MAP)), { recursive: true });
   writeFileSync(resolve(MAP), encodePNG(zoom(cv, 6)));
   console.log(`${MAP}  ${W}x${H}  ${wall} + ${gate}  ${found.length} gap px (magenta)`);

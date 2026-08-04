@@ -71,6 +71,7 @@ import {
   slabFace,
   slabBackEdge,
   slabBackEdgeY,
+  slabEndFace,
   linearJoins,
   axialJoins,
 } from './format.js';
@@ -1925,7 +1926,17 @@ function hedgeArchGrid() {
   slab(g, X0, TOP, LINE_W, D, (a, b, x, y) => top(b, x, y));
   slabFace(g, X0, TOP, LINE_W, D, H, (i, k) => face(i, H - 1 - k));
 
-  // 2 · The crown over the doorway, RISE proud of it, carried down to the foot.
+  // 2 · The crown's CUT END, where it steps back down to the hedge. It is a
+  // real surface — the clipped end of a squared crown, turned to +tx and so
+  // away from the light — and until it was drawn, the eighteen pixels between
+  // the crown's end and the hedge's cap were lawn. format.js §slabEndFace.
+  slabEndFace(g, X0, TOP, D, MID + CROWN, RISE, (b, h, x, y) => {
+    let v = n - 1; // a step under the top, which the light reaches and this does not
+    if (hash(x, y, 94) < 0.25) v -= 1;
+    return YEW[clamp(v, 0, n)];
+  });
+
+  // 3 · The crown over the doorway, RISE proud of it, carried down to the foot.
   slabBackEdge(g, X0, TOP - RISE, LINE_W, YEW[0], crowned);
   slab(g, X0, TOP - RISE, LINE_W, D, (a, b, x, y) => (crowned(a * 2) ? top(b, x, y) : null));
   slabFace(g, X0, TOP - RISE, LINE_W, D, H + RISE, (i, k) =>
@@ -1933,12 +1944,27 @@ function hedgeArchGrid() {
   );
 
   // Nicks. A clipped edge is straight but not machined; one pixel, no more —
-  // and it has to come off the TOPMOST pixel, which is the back edge, or it
-  // punches out the row below and leaves that stroke floating over a hole.
+  // and it has to come off the TOPMOST pixel, or it punches out the row below
+  // and leaves that stroke floating over a hole.
+  //
+  // ONLY WHERE THERE IS SKY ABOVE IT, which arithmetic alone cannot promise.
+  // On a piece drawn at TWO heights the back edge is the topmost pixel of its
+  // own stretch and not of its column: the crown's top face is a parallelogram
+  // that leans 2*D columns further up-run than the crown's back edge reaches,
+  // so for the columns either side of the crown it lies OVER the hedge's back
+  // edge — and a nick aimed there bit a pixel clean out of the middle of the
+  // foliage. One pixel, and the gap audit counted it, correctly: grass through
+  // a hedge is grass through a hedge however small it is.
+  //
+  // So ask the grid instead of trusting the sum. A nick is a bite out of the
+  // SILHOUETTE, which is the honest statement of what it is anyway.
   for (let i = 0; i < LINE_W; i++) {
-    if (hash(X0 + i, 0, 96) < 0.1) {
-      put(g, X0 + i, slabBackEdgeY(TOP - (crowned(i) ? RISE : 0), i), '.');
-    }
+    if (hash(X0 + i, 0, 96) >= 0.1) continue;
+    const x = X0 + i;
+    const y = slabBackEdgeY(TOP - (crowned(i) ? RISE : 0), i);
+    let sky = true;
+    for (let yy = y - 1; yy >= 0 && sky; yy--) if (peek(g, x, yy) !== '.') sky = false;
+    if (sky) put(g, x, y, '.');
   }
   return { g, ax: X0 + MID - D, ay: TOP + LINE_DROP(MID) + D + H + 1 };
 }

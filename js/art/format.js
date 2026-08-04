@@ -514,6 +514,62 @@ export function slabBackEdge(g, x0, yTop, len, key, keep) {
 /** Where `slabBackEdge` puts its stroke: one pixel above the slab's far edge. */
 export const slabBackEdgeY = (yTop, i) => yTop + Math.ceil(i / 2) - 1;
 
+/**
+ * THE CUT END OF A RAISED SECTION — where a gateway's crown or its piers step
+ * back down to the height of the run they stand in.
+ *
+ * A GATEWAY IS A BAR WITH A TALLER BIT IN THE MIDDLE, AND A TALLER BIT HAS
+ * ENDS. Between them `slab` and `slabFace` draw a box's TOP and its near (+ty)
+ * long face. Nothing drew the SHORT face across the run, and nothing needed to
+ * while every bar ran the full tile: a plain bar's ends are buried in its
+ * neighbours and never seen. A raised section's ends are in the middle of the
+ * run, and the +tx one faces the camera.
+ *
+ * THE GEOMETRY, because it is worth being able to check. The raised top face
+ * is the body's parallelogram lifted by `rise` and cut at a line of constant
+ * run position: y = yTop - rise + iEnd - u/2, falling as u grows. The body's
+ * top face BEGINS at its own far edge, y = yTop + u/2, rising. The two cross at
+ * u = iEnd - rise, and past that column the raised end sits ABOVE the body's
+ * far edge. The wedge between them is transparent, it grows one row per column,
+ * and it is grass seen through a wall.
+ *
+ * Measured, with the body already drawn closed underneath: 18 px on the hedge
+ * arch (rise 6) and 66 px on the drystone gateway (rise 12). The stone's is
+ * larger for exactly one reason — its piers stand twice as proud.
+ *
+ * Only the +tx end needs this. The -tx end points away from the camera and the
+ * raised section's own top face covers every pixel of it, which is why the
+ * fault was one-sided and why looking at one end of a gateway proves nothing
+ * about the other.
+ *
+ * A PLAIN COLUMN LOOP, NOT A MEMBERSHIP TEST, and that is deliberate: this face
+ * is VERTICAL, so it has one contiguous run of pixels per screen column and
+ * cannot alias. `b` steps by a HALF unit so every one of the `2 * depth + 1`
+ * columns is written — stepping it by 1 would move x by 2 and comb the surface,
+ * which is the same aliasing that made a hand-rolled cap come out as wire mesh.
+ *
+ * `keyFn(b, h, x, y)` paints it in its own coordinates: `b` across the run from
+ * the far edge, `h` up from where the raised part meets the run. It is the
+ * RIGHT face of a box in this projection — its normal points down-right, away
+ * from the light — so it wants to sit a step DARKER than the near face
+ * `slabFace` draws. Shading the two the same is what makes a solid read as
+ * folded paper.
+ *
+ * Draw it AFTER the body and BEFORE the raised part: it stands in front of the
+ * body's cap and behind the raised part's own top and near face.
+ */
+export function slabEndFace(g, x0, yTop, depth, iEnd, rise, keyFn) {
+  for (let s = 0; s <= 2 * depth; s++) {
+    const b = s / 2;
+    const x = x0 + iEnd - s;
+    const foot = yTop + iEnd / 2 + b; // where the raised part meets the run
+    for (let h = 0; h <= rise; h++) {
+      const k = keyFn(b, h, Math.round(x), Math.round(foot - h));
+      if (k) put(g, x, foot - h, k);
+    }
+  }
+}
+
 
 // ---------------------------------------------------------------------------
 // JOINING — the sixteen ways a linear piece can meet its neighbours.
