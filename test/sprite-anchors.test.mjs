@@ -283,7 +283,11 @@ const KNOWN_UNDERSIZED = new Set([
   'tiered-fountain', // 2x2 claimed: 32px short
   'ancient-oak', // 2x2 claimed: 32px short
   'sleeping-satyr', // 2x1 claimed, 52px wide: 25px short
-  'ruined-arch', // 2x1 claimed: 25px short
+  // `ruined-arch` was here at "2x1 claimed: 25px short", and the exemption was
+  // measuring the FOOTPRINT, not the art. The sprite was a flat 32 px picture
+  // of an arch on a plot 2 tiles long — nothing was ever going to fill that. It
+  // is a barrel vault on one tile now and covers its plot outright. Check what
+  // a piece CLAIMS before granting it room to be small.
   'level-bridge', // 2x1 claimed: 23px short
   'fern-grotto', // 2x1 claimed: 22px short — 15 of its 17px of reach was shadow
   // 'ground' is its GROUP, but it has no `ground:` key, so it is not a painter:

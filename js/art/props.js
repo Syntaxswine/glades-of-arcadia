@@ -513,61 +513,21 @@ export const BROKEN_COLUMN = sprite(
 );
 
 /**
- * A ruined arch: one springing intact, the other broken away. Voussoirs are
- * drawn as separate stones with their own joints, which is what stops an arch
- * from reading as a bent pipe.
+ * A RUINED ARCH USED TO BE DRAWN HERE, as a flat 32 px picture face-on to the
+ * viewer, and it is the sprite the catalogue actually served. The owner:
+ *
+ *   *"ruined archway still has outdated graphics that are not in isometric
+ *   perspective."*
+ *
+ * It is a barrel vault now, built by sweeping a ring across the +ty axis so the
+ * INTRADOS shows through the opening — js/art/decor.js §archwayGrid, which
+ * makes the whole archway from the same generator. Deleted rather than left to
+ * be shadowed: `tools/registry-audit.mjs` reported it the moment decor.js
+ * claimed the name, and two drawings of one object is how they drift.
+ *
+ * (There was a THIRD, decor.js's `ruined-archway`, unreachable since it was
+ * written because the catalogue asks for `ruined-arch`. That one is gone too.)
  */
-export const RUINED_ARCH = sprite(
-  'ruined-arch',
-  [0, 1],
-  [
-    '...........AABBBBBBBAA..........',
-    '.........ABBCCCCCCCCCBBA........',
-    '........ABCDDDDDDDDDDDCCBA......',
-    '.......ABDDDEEEDDDEEEDDDCBA.....',
-    '......ABDDEEEEDDDDDEEEDDCCBA....',
-    '.....ABDDEEDDCBBBBBBCDDDDCCBA...',
-    '....ABDDEEDCBA.....ABCDDDCCBBA..',
-    '....ADDEEDCA.........ABCDDCCBBA.',
-    '...ABDEEDCA...........ABCDDCCBA.',
-    '...ADDEEDA.............ACDDCCBBA',
-    '...ADEEDCA.............ACDDCCBBA',
-    '..ABDEEDCA..............ACDCCBBA',
-    '..ADDEEDA...............ACDCCBBA',
-    '..ADEEDCA...............ABCDCBBA',
-    '..ADEEDCA...............ABCDCBBA',
-    '..ADEEDCA...............ABCDCBBA',
-    '..ADEEDCA...............ABCDCBBA',
-    '..ADEEDCA...............ABBCCBBA',
-    '..ADEEDCA................AABBBAA',
-    '..ADEEDCA................ABBBAA.',
-    '..ADEEDCA...............ABBAA...',
-    '..ADEEDCA..............ABAA.....',
-    '..ADEEDCA.......................',
-    '..ADEEDCA.......................',
-    '..ADEEDCA.......................',
-    '..ADEEDCA.......................',
-    '..ADEEDCA.......................',
-    '..ADEEDCA.......................',
-    // The fallen side leaves a STUB, not nothing. Without it the sprite reads
-    // as a shepherd's crook — an arch needs two feet on the ground for the eye
-    // to complete the span that is missing.
-    '..ADEEDCA........AABBBBAA.......',
-    '..ADEEDCA.......ABCDDDDDCBA.....',
-    '.ABDEEDCBA......ACDDDDDDDCBA....',
-    '.ADDEEEDCBA.....ACDDDDDDDCCBA...',
-    'ABDDEEEDDCBA......ACDDDDDDCCBA..',
-    'ACDDDDDDDCCBA.....ACDDDDDDCCBA..',
-    'ACDDDDDDDCCBA.....ACDDDDDDCCBA..',
-    'ABCCCCCCBBBAA.....ABCCCCCCCBBA..',
-    'ABCCCCCBBBBAA.....ABCCCCCBBBBA..',
-    '.AAAAAAAAAAA......AABBBBBBBBAA..',
-    '.mmmmmmmmmmm.......AAAAAAAAAA...',
-    '..mmmmmmmmm........mmmmmmmmmm...',
-    '...mmmmmmm..........mmmmmmmm....',
-  ],
-  { tags: ['structure', 'marble', 'ruin', 'maturity', 'seclusion'] }
-);
 
 // ===========================================================================
 // Vessels — terracotta, the counterweight to all that marble
@@ -4524,7 +4484,6 @@ export const PROPS = {
   'marble-torso': MARBLE_TORSO,
   column: COLUMN,
   'broken-column': BROKEN_COLUMN,
-  'ruined-arch': RUINED_ARCH,
   krater: KRATER,
   urn: URN,
   'half-buried-pithos': HALF_BURIED_PITHOS,

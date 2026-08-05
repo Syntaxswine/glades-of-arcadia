@@ -77,7 +77,7 @@ import {
   linearJoins,
   axialJoins,
 } from './format.js';
-import { solidJoins, outline } from './solid.js';
+import { solidJoins, outline, extrudeInto } from './solid.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -1643,81 +1643,177 @@ export const PERGOLA_ARCH = spriteAt('pergola-arch', [21, 48], pergolaArchGrid()
 });
 
 /**
- * Ruined archway — the archaic register at full volume. Voussoirs drawn as
- * separate stones with their own joints (an arch drawn as a smooth band is a
- * bent pipe), one springing broken away, weathering and moss on the standing
- * side.
+ * AN ARCHWAY, BUILT AS A BARREL VAULT AND NOT AS A PICTURE OF ONE.
+ *
+ * ---------------------------------------------------------------------------
+ * The owner, looking at the one the catalogue actually served:
+ *
+ *   *"ruined archway still has outdated graphics that are not in isometric
+ *   perspective. there should probably also be a non ruined archway too."*
+ *
+ * Both true. `js/art/props.js` carried a flat 32 px `ruined-arch` drawn face-on
+ * — a croquet hoop standing in a garden that has depth everywhere else — and
+ * this file carried a second, better, flat one under the name `ruined-archway`,
+ * which the catalogue has never asked for and nothing has ever drawn. Two
+ * drawings of the same object, neither of them isometric, and the good one
+ * unreachable. `tools/registry-audit.mjs` had been saying so for weeks.
+ *
+ * An arch is the one common building form with no axis-aligned parts, so
+ * `box()` can only staircase it. `solid.js` §extrudeInto exists for exactly
+ * this: state the RING in the vertical (a, c) plane, sweep it across `b`, and
+ * every pixel walks its own view ray to the nearest stone. What that buys, and
+ * what no flat drawing can have, is the INTRADOS — the underside of the vault,
+ * seen through the opening on the left, receding. That surface is the whole
+ * difference between a hoop and something you walk through.
+ *
+ * ONE GENERATOR, TWO REGISTERS. The ruin is the whole arch with its ring broken
+ * away past a ragged angle and its stone weathered; the standing one is the
+ * same geometry dressed. Authoring them apart is how the two would drift, and
+ * they are supposed to be the same building at two ages.
+ *
+ * BOTH PIERS ALWAYS STAND, even on the ruin. The old note here was right and is
+ * kept: *"a ruined arch with one foot reads as a shepherd's crook, and the eye
+ * needs two feet to complete the missing span."*
+ * ---------------------------------------------------------------------------
  */
-function ruinedArchwayGrid() {
-  const W = 48;
-  const H = 56;
-  const g = grid(W, H);
-  const cx = 24;
-  const R = 15; // an arch STANDS UP, so it is a true circle on screen and not
-  const T = 6; //  foreshortened. Take one used an ellipse and got a banana.
-  const SPRING = 36;
+function archwayGrid({ ruined, ramp, seed }) {
+  // THE DEPTH IS SET BY WANTING TO SEE THROUGH IT, and the arithmetic is not
+  // negotiable. The view ray drops TWO units of height per unit of depth, so a
+  // vault `D` deep swallows `2D` of its own opening: enter at the springing on
+  // the axis and you leave at (AC - D, SPRING - 2D). At D = 8 that is 8 units
+  // off the axis against an opening 6 wide — solid stone, and the first pass
+  // came out a culvert. At 4 it is 4 against 6, and a band of daylight runs
+  // through the middle of the arch, which is the whole point of an arch.
+  //
+  // 8 px of tunnel is still enough to read as "briefly indoors".
+  const D = 4; //        how far the vault runs across the tile
+  const R = LINE_W / 2;
+  const AC = R / 2; //   the tile centre along the run: the arch's own axis
+  const SPRING = 24; //  where the ring springs from the piers
+  const RI = 6; //       the opening: 12 units of `a`, 24 px of screen run
+  const RO = 8.75; //    ...and the ring is 2.75 thick, which is the pier width
+  const H = SPRING + RO; // the crown, and therefore the piece's height
+  const PAD = 3;
+  const x0 = PAD + 2 * D;
+  const yTop = PAD;
+  const g = grid(x0 + Math.ceil(2 * R) + PAD, yTop + Math.ceil(R) + D + H + PAD);
+  const n = ramp.length - 1;
+  const key = (i) => ramp[clamp(Math.round(i), 0, n)];
 
-  // Piers. Both of them, full height: a ruined arch with one foot reads as a
-  // shepherd's crook, and the eye needs two feet to complete the missing span.
-  const pier = (px, top, rough) => {
-    for (let y = top; y <= SPRING + 14; y++) {
-      for (let dx = 0; dx < 10; dx++) {
-        let key = roundKey(dx - 4.5, 5.2, ROCK);
-        if (rough && hash(px + dx, y, 7) > 0.88) key = 'y';
-        else if (hash(px + dx, y, 9) > 0.9) key = 'y';
-        put(g, px + dx, y, key);
-      }
-      if ((y - top) % 5 === 0) hline(g, px, px + 9, y, 'w'); // bed joints
-      const jog = (Math.floor((y - top) / 5) % 2) * 5;
-      put(g, px + jog, y, 'v'); // perpends, staggered course to course
-      put(g, px, y, 'v');
-      put(g, px + 9, y, 'v');
-    }
+  // WHERE THE RING IS GONE. Ragged rather than clean, and it leaves a short
+  // stub standing on the springing — a break that stops exactly at the impost
+  // reads as a design, not as a collapse.
+  const BREAK = 1.15;
+  const gone = (th, r) => {
+    if (!ruined) return false;
+    const ragged = BREAK + (hash(Math.round(r * 3), Math.round(th * 20), seed + 3) - 0.5) * 0.3;
+    return th < ragged && th > 0.3;
   };
-  pier(cx - R - 7, SPRING - 4, false);
-  pier(cx + R - 2, SPRING - 4, true);
 
-  // Voussoirs. Rasterised over the annulus rather than swept along the arc, so
-  // there are no gaps, and the JOINTS are drawn as real radial lines: an arch
-  // whose stones are not separated is a bent pipe.
-  const BREAK = 1.15; // radians: everything below this angle on the right is gone
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const dx = x - cx;
-      const dy = SPRING - y;
-      const r = Math.hypot(dx, dy);
-      if (r < R || r > R + T || dy < -1) continue;
-      const th = Math.atan2(dy, dx); // 0 at the right springing, PI at the left
-      // The break: ragged, and it leaves a short springing stub on the right.
-      const ragged = BREAK + (hash(Math.round(r), Math.round(th * 20), 17) - 0.5) * 0.16;
-      if (th < ragged && th > 0.34) continue;
-      const seg = (th / Math.PI) * 11;
-      const joint = Math.abs(seg - Math.round(seg)) < 0.075;
-      // Weathered limestone, not basalt. Take one put the darkest rock on both
-      // faces of the ring AND on every joint, and against grass the whole arch
-      // read as a black hook. The joints stay one step above the bottom of the
-      // ramp and only the intrados — which really is in shade — goes dark.
-      let k = joint ? 'w' : roundKey(dx, R + T, ROCK);
-      if (!joint && hash(x, y, 41) > 0.86) k = 'y';
-      if (r > R + T - 1.1) k = 'w';
-      if (r < R + 1) k = 'v';
-      put(g, x, y, k);
+  const inside = (a, c) => {
+    if (c < 0 || c > H) return false;
+    const dA = a - AC;
+    if (c <= SPRING) {
+      const w = Math.abs(dA);
+      // THE IMPOST, and it is what stops this reading as a staple. A pier the
+      // same width as the ring it carries has no visible moment of "the arch
+      // starts here"; every real one is a projecting course at the springing
+      // over a pier slightly stouter than the arch. Two pixels of each.
+      const outer = c > SPRING - 2.5 ? RO + 1.1 : RO + 0.5;
+      if (w < RI || w > outer) return false;
+      // The ruin loses courses off the top of its broken pier, and both piers
+      // lose their arrises. Never below c = 3: a pier eaten at the ground reads
+      // as a floating stone rather than as a weathered one.
+      if (ruined && c > 3) {
+        const bite = hash(Math.round(c), dA > 0 ? 1 : 0, seed + 7);
+        if (dA > 0 && c > SPRING - 3 && bite > 0.55) return false;
+        if (w > RO - 0.8 && hash(Math.round(c * 2), Math.round(w * 2), seed + 11) > 0.86) {
+          return false;
+        }
+      }
+      return true;
+    }
+    const r = Math.hypot(dA, c - SPRING);
+    if (r < RI || r > RO) return false;
+    return !gone(Math.atan2(c - SPRING, dA), r);
+  };
+
+  const MID = (RI + RO) / 2;
+  const skin = (a, c, b, near, x, y) => {
+    const dA = a - AC;
+    const above = c > SPRING;
+    const r = above ? Math.hypot(dA, c - SPRING) : Math.abs(dA);
+    const th = above ? Math.atan2(c - SPRING, dA) : dA > 0 ? 0 : Math.PI;
+    let v;
+    if (near) {
+      // THE FACE — the part a flat drawing gets right, and it is still the
+      // biggest surface here. Voussoirs get their own joints: an arch whose
+      // stones are not separated is a bent pipe.
+      const seg = above ? (th / Math.PI) * 7 : c / 5;
+      const joint = Math.abs(seg - Math.round(seg)) < (above ? 0.11 : 0.13);
+      v = n - 1.1 - ((r - RI) / (RO - RI)) * 0.8;
+      if (joint) v -= 1.8;
+      if (r > RO - 0.9 || r < RI + 0.7) v -= 1; // the arrises
+    } else if (r > MID) {
+      // THE EXTRADOS. Lit by ANGLE, not by a constant: the light is upper left,
+      // +a runs down-right and +c is up, so a surface whose outward normal is
+      // (cos th, sin th) takes `sin th - cos th / 2`. Flat shading here made the
+      // whole ring one bright band and the first pass read as a rounded block
+      // rather than as masonry turning over.
+      v = n - 1 + (Math.sin(th) - Math.cos(th) / 2) * 1.5;
+    } else {
+      // THE INTRADOS. It faces down into the opening and never sees the light —
+      // and it is the surface that makes this an archway rather than a hoop.
+      v = 0.5 + Math.max(0, Math.sin(th)) * 0.5;
+    }
+    if (hash(x, y, seed) > 0.87) v -= 0.7; //          grain
+    if (ruined && hash(x, y, seed + 5) > 0.93) v -= 1; // pitting
+    return key(v);
+  };
+
+  extrudeInto(
+    g,
+    {
+      inside,
+      b0: 0,
+      b1: D,
+      skin,
+      aRange: [AC - RO - 1.2, AC + RO + 1.2],
+      cRange: [0, H],
+    },
+    { x0, yTop, lift: H }
+  );
+
+  // Moss in the shaded joints, on the ruin only. Archaic register: nothing here
+  // is allowed to be clean.
+  if (ruined) {
+    for (let y = 0; y < g.length; y++) {
+      for (let x = 0; x < g[0].length; x++) {
+        if (g[y][x] === ramp[0] && hash(x, y, seed + 31) > 0.82) g[y][x] = 'j';
+      }
     }
   }
-
-  // Moss in the joints on the shaded side, and a weathered crumble at the
-  // broken end. Archaic register: nothing here is allowed to be clean.
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (peek(g, x, y) === 'v' && hash(x, y, 31) > 0.88) put(g, x, y, 'j');
-      if (peek(g, x, y) === 'w' && hash(x, y, 37) > 0.95) put(g, x, y, 'k');
-    }
-  }
-  return g;
+  outline(g, ramp[0]);
+  return { g, ax: x0 + 16 - D, ay: yTop + LINE_DROP(16) + D + H + 1 };
 }
-export const RUINED_ARCHWAY = spriteAt('ruined-archway', [24, 51], ruinedArchwayGrid(), {
-  tags: ['decor', 'architecture', 'rock', 'ruin', 'archaic'],
-});
+
+{
+  const r = archwayGrid({ ruined: true, ramp: ROCK, seed: 17 });
+  // eslint-disable-next-line no-var
+  var RARCH = spriteAt('ruined-arch', [r.ax, r.ay], r.g, {
+    tags: ['decor', 'architecture', 'rock', 'ruin', 'archaic', 'arch'],
+  });
+  const w = archwayGrid({ ruined: false, ramp: ROCK, seed: 23 });
+  // eslint-disable-next-line no-var
+  var WARCH = spriteAt('archway', [w.ax, w.ay], w.g, {
+    tags: ['decor', 'architecture', 'rock', 'arch', 'dressed-stone'],
+  });
+}
+/** The ruin: one springing broken away, weathered, mossed. */
+export const RUINED_ARCH = RARCH;
+/** The same building young: the whole span, dressed and standing. */
+export const ARCHWAY = WARCH;
+
 
 /**
  * THOLOS — the small round temple folly, and the centrepiece of the set.
@@ -4025,7 +4121,7 @@ export const REGISTER = Object.freeze({
   ],
   archaic: [
     'exedra', 'amphora', 'krater-wide', 'cache-pot', 'broken-column',
-    'pergola-arch', 'ruined-archway', 'arbour-seat', 'gravel-walk',
+    'pergola-arch', 'ruined-arch', 'arbour-seat', 'gravel-walk',
     'stepping-stones', 'earth-ramp', 'rock-scramble',
     'rock-outcrop', 'cave-mouth-wooded', 'axe-marker',
   ],
@@ -4059,7 +4155,8 @@ export const DECOR = Object.freeze({
   colonnade: COLONNADE,
   balustrade: BALUSTRADE,
   'pergola-arch': PERGOLA_ARCH,
-  'ruined-archway': RUINED_ARCHWAY,
+  'ruined-arch': RUINED_ARCH,
+  archway: ARCHWAY,
   tholos: THOLOS,
   obelisk: OBELISK,
   // hedges

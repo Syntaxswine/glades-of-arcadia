@@ -202,6 +202,96 @@ export function renderInto(g, boxes, { x0, yTop, lift, zbuf: shared = null }) {
   return g;
 }
 
+/**
+ * AN EXTRUDED PROFILE — a shape stated in the vertical (a, c) plane and swept
+ * across `b`. A barrel vault, an arch, a moulding, a run of coping.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY A BOX IS NOT ENOUGH, and the owner found the case:
+ *
+ *   *"ruined archway still has outdated graphics that are not in isometric
+ *   perspective."*
+ *
+ * It was a flat 32 px picture of an arch drawn face-on to the viewer — a
+ * croquet hoop standing in a garden that has depth everywhere else. An arch is
+ * the one common building form with no axis-aligned parts: its ring is a
+ * circle, so `box()` can only staircase it, and drawing the three faces by hand
+ * is the exact mistake this module exists to stop anybody making again.
+ *
+ * So state the RING and let the sweep do the rest:
+ *
+ *   inside(a, c)   is there material at this point of the cross-section?
+ *   b0, b1         how far the vault runs across the tile
+ *   skin(a, c, b, near, x, y)   the palette key, or falsy for nothing
+ *
+ * `near` says the pixel is on the b = b1 end — the arch's own FACE, the part a
+ * flat drawing gets right. Everything else is the swept surface: the extrados
+ * where it turns to the sky, and the intrados seen through the opening on the
+ * left, which is the whole reason to do this at all. The skin is handed the
+ * cross-section coordinates, so an author who knows their own radius can shade
+ * by it without this module needing to.
+ *
+ * MARCHED, NOT SOLVED. `renderInto` inverts each face in closed form because a
+ * box has three flat ones; an arbitrary profile has no such inverse. So each
+ * screen pixel walks its view ray from near to far and stops at the first
+ * material — which is the same rule (largest `a + b + 2c` wins) arrived at by
+ * search instead of algebra, and it is still PER SCREEN PIXEL, so the surface
+ * still cannot come out with holes in it.
+ * ---------------------------------------------------------------------------
+ */
+export function extrudeInto(g, part, { x0, yTop, lift, zbuf: shared = null }) {
+  const { inside, b0, b1, skin, aRange, cRange, step = 0.25 } = part;
+  const H = g.length;
+  const W = g[0].length;
+  const zbuf = shared || new Float64Array(W * H).fill(-Infinity);
+
+  // The bounding box of the whole extrusion: the caller states how far its
+  // profile reaches, which is cheaper and safer than probing `inside`.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const a of aRange) {
+    for (const b of [b0, b1]) {
+      for (const c of cRange) {
+        const x = x0 + 2 * a - 2 * b;
+        const y = yTop + a + b + lift - c;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  minX = Math.max(0, Math.floor(minX) - 1);
+  maxX = Math.min(W - 1, Math.ceil(maxX) + 1);
+  minY = Math.max(0, Math.floor(minY) - 1);
+  maxY = Math.min(H - 1, Math.ceil(maxY) + 1);
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const h = (x - x0) / 2;
+      const v = y - yTop - lift;
+      for (let s = b1; s >= b0 - EPS; s -= step) {
+        const a = h + s;
+        const c = h + 2 * s - v;
+        if (!inside(a, c)) continue;
+        const depth = a + s + 2 * c;
+        const i = y * W + x;
+        if (depth > zbuf[i]) {
+          const key = skin(a, c, s, s > b1 - EPS, x, y);
+          if (key) {
+            zbuf[i] = depth;
+            g[y][x] = key;
+          }
+        }
+        break;
+      }
+    }
+  }
+  return g;
+}
+
 export function render(boxes, { hub = A_STEP / 2, pad = 2 } = {}) {
   let minX = Infinity;
   let maxX = -Infinity;

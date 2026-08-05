@@ -1927,7 +1927,12 @@ const STRUCTURE = [
     id: 'ruined-arch',
     name: 'Ruined arch',
     group: 'structure',
-    footprint: [2, 1],
+    // 1x1 SO IT CAN TURN. The art was rebuilt as a barrel vault — see
+    // js/art/decor.js §archwayGrid — and a vault has an axis, which makes this
+    // a FRONTED piece like the pergola and the wall fountain. At 2x1 it was
+    // barred from §TURNS below for the same reason the colonnade was, and the
+    // same answer applies: ask whether it wanted the footprint at all.
+    footprint: [1, 1],
     art: sprite('ruined-arch'),
     zone: ARCH,
     register: 'archaic',
@@ -1935,7 +1940,25 @@ const STRUCTURE = [
     deposits: dep({ maturity: 3, wildness: 2, seclusion: 1, order: -1 }),
     tags: ['arch', 'stone', 'ruin', 'archaic', 'old-growth', 'dense-cover'],
     unlockedBy: null,
-    blurb: 'One span of something larger, standing because arches are stubborn, with a small tree growing out of the top. Walk through it and you are briefly indoors.',
+    blurb: 'One span of something larger, standing because arches are stubborn. Walk through it and you are briefly indoors — you can see the underside of the vault from here, which is the part that tells you somebody built it.',
+  },
+  {
+    // THE SAME BUILDING YOUNG. The owner: *"there should probably also be a non
+    // ruined archway too."* One generator makes both, so the two cannot drift
+    // into being different buildings; what separates them is the break in the
+    // ring, the weathering and the register. The ruin is ARCHAIC and pays in
+    // maturity and wildness; this one is DRESSED and pays in order.
+    id: 'archway',
+    name: 'Archway',
+    group: 'structure',
+    footprint: [1, 1],
+    art: sprite('archway'),
+    zone: ARCH,
+    register: 'archaic',
+    deposits: dep({ order: 2, maturity: 1, seclusion: 2 }),
+    tags: ['arch', 'stone', 'dressed-stone', 'archaic', 'enclosure', 'shade'],
+    unlockedBy: null,
+    blurb: 'A whole span on two piers, the voussoirs still tight and every joint where the mason left it. An arch stands up by leaning on itself, which is why the ruined ones are still standing too.',
   },
   {
     id: 'tholos',
@@ -2406,6 +2429,12 @@ const TURNS = new Set([
   'stepped-terrace-wall',
   // fronted — it has a face, and a face belongs to a wall plane
   'hedge-arch',
+  // A BARREL VAULT HAS AN AXIS. Both of these were flat pictures of arches
+  // until the vault was built properly; `ruined-arch` was 2x1 and so refused
+  // outright, which read as "arches cannot turn" rather than "this drawing
+  // cannot".
+  'ruined-arch',
+  'archway',
   'pergola',
   'wall-fountain',
   'votive-shelf',
