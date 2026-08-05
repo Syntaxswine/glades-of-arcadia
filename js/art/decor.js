@@ -1499,7 +1499,21 @@ function colonnadeSolid() {
     // plinth naturally covers the far half of the plinth's top, and the near
     // half survives because the body does not reach those rows.
     const post = (t) => {
-      const [x, y] = project(...at(t), CAP_C);
+      const [x, y0] = project(...at(t), CAP_C);
+      // A CAPITAL IS DRAWN FROM ITS FAR CORNER, NOT ITS CENTRE, and the column
+      // stands on the run's CENTRE LINE — so the two must be reconciled or the
+      // whole column hangs half its own abacus down-right of the axis it is
+      // supposed to be on. `project` answers where the axis is; the abacus's
+      // top face then straddles a..a+S, b..b+S from there, which is `ABACUS_S`
+      // of screen drop and reads as the entablature floating up-left, behind
+      // its own columns, by about eight pixels. Shifting the drawing back by
+      // half the footprint in each of a and b is exactly `-ABACUS_S` in y and
+      // nothing in x, because the two halves cancel across the run.
+      // ROUNDED, because every member below is placed by adding an integer
+      // row count to it: a fractional origin lands the bell on one row and the
+      // shaft's head on the next but one, and the column shows a bright line
+      // of background straight through its own neck.
+      const y = Math.round(y0 - ABACUS_S);
       standOn(g, x, y + CAPH + COLH, 16, 0);
       shaft(g, x, y + CAPH, COLH, MARBLE);
       doricCapital(g, x, y, MARBLE);
@@ -1830,7 +1844,12 @@ function arcadeSolid() {
     if (!first) return;
     const hasTx = Boolean(mask & 5) || !(mask & 10);
     const hasTy = Boolean(mask & 10);
-    const [x, y] = project(hasTy ? C + Cb : C, hasTy && !hasTx ? Cb : D, CAP_C);
+    const [x, y0] = project(hasTy ? C + Cb : C, hasTy && !hasTx ? Cb : D, CAP_C);
+    // Same reconciliation as the colonnade's `post`: `project` answers where
+    // the column's AXIS is, and a capital is drawn from the far corner of its
+    // own footprint, so it must come back half that footprint in a and in b —
+    // `-ABACUS_S` in screen y — or the arcade rides up-left of its own columns.
+    const y = Math.round(y0 - ABACUS_S); // integer: see the colonnade's note
     // BOTTOM UP: base, shaft, capital. Higher is nearer.
     steppedBase(g, x, y + ARC_CAP_H + COLH);
     shaft(g, x, y + ARC_CAP_H, COLH, MARBLE);
