@@ -1,15 +1,21 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-05 (THIRTEENTH pass, §4s). The solids arc now has THREE
+Reconciled 2026-08-05 (FOURTEENTH pass, §4t). The solids arc now has FOUR
 handoffs and they are cumulative — read them in order:
 
-* **`HANDOFF-LAYERS-STUDS-AND-THE-VAULT-2026-08-05.md`** — the newest, and the
-  one to read if you are about to author scenery that is **not one slab from the
-  ground up** (a rail on posts, anything with air inside it) or that has **no
-  axis-aligned parts** (an arch). Carries `layers`, `studs`, `extrudeInto`, and
-  the two lessons that generalise past art: *a footprint can be a fact about one
-  sprite rather than about the object*, and *an exemption list can name a
-  symptom and hide its cause*.
+* **`HANDOFF-THE-ORDERS-AND-THE-ARCADE-2026-08-05.md`** — the newest. Read it
+  before touching a COLUMN of any kind, or before composing a sprite out of
+  stacked parts. Carries `slabSquare` / `standOn`, the rule that a square of
+  width `w` is `w / 2` tall here, *paint the stack bottom up because higher is
+  nearer*, and the `arcade` — the first family to need both halves of
+  `solid.js` at once.
+* **`HANDOFF-LAYERS-STUDS-AND-THE-VAULT-2026-08-05.md`** — read it if you are
+  about to author scenery that is **not one slab from the ground up** (a rail on
+  posts, anything with air inside it) or that has **no axis-aligned parts** (an
+  arch). Carries `layers`, `studs`, `extrudeInto`, and the two lessons that
+  generalise past art: *a footprint can be a fact about one sprite rather than
+  about the object*, and *an exemption list can name a symptom and hide its
+  cause*.
 * **`HANDOFF-SOLIDS-AND-THE-BENDING-RUN-2026-08-04.md`** — the keystone for
   **`js/art/solid.js`**: describing a piece as boxes and letting one rasteriser
   that knows the projection draw it. Read it before authoring or fixing ANY
@@ -578,6 +584,57 @@ into sprites … just add a skin to the geometric shape"* — and it landed the 
 day and then got used. **§4r below is the account.** This heading is kept only so
 the day reads in order: the idea arrived in the middle of the gateway work, as
 the answer to a fault list that was already five items long.
+
+## 4t · THE ORDERS, AND THE ARCADE ✅ (2026-08-05)
+
+Full write-up: **`HANDOFF-THE-ORDERS-AND-THE-ARCADE-2026-08-05.md`**.
+
+**THE OWNER NAMED THE FAULT BY ITS INSTRUMENT** — *"they should be trapezoids or
+ellipses instead of horizontal lines"*. The fault was `hline`. `plinth()` and
+all three capitals drew their SQUARE members as stacked horizontal bands: a
+square seen FACE ON, right for an elevation and flat in a projection where
+everything around it recedes. The shaft got away with it because a cylinder
+really does look the same from every horizontal direction. A square does not.
+And "or ellipses" is the other half — `drum()` had been in that file since the
+tholos and the capitals never reached for it.
+
+**THE ARITHMETIC IS NOT A TUNABLE:** a square of screen width `w` has
+`a = b = w / 4`, so **its top face is `w / 2` tall**. That is why an abacus 19 px
+across needs ten rows where five bands used to do, and why `plinthH` takes `w`.
+
+**I NEARLY STOPPED THE WORK ON A BAD MEASUREMENT.** The first cost estimate said
++5 to +12 rows across eleven objects — measured to the LOWEST PIXEL. To the
+ANCHOR it is +1 to +4, because an isometric base's own near half IS the ground
+diamond `foot()` was faking. *Measure to the thing that actually matters before
+letting a number veto the work.*
+
+**PAINT THE STACK BOTTOM UP.** Depth is `a + b + 2c`, so higher is NEARER:
+lowest first, highest last. Nine assemblies did the reverse, and the symptom was
+a plinth's top face covering the foot of the thing standing on it. Bottom-up
+needs NO second pass. One correct instance existed — `fountainJetGrid`, with the
+comment *"The plinth first, so the bowl draws over its cap"* — and nine did not.
+
+**THE ARCADE.** First family to need both halves of `solid.js` at once:
+`solidJoins` layers+studs for the columns and cornice, `extrudeInto` for the
+arched wall. `extrudeInto` gained `axis` (the open item from §4s). The column
+stands at the TILE CENTRE, which is what makes the joining work — adjacent
+columns one tile apart, so a bay's crown lands on the tile BOUNDARY and each
+tile draws two QUARTER-arches, one per arm. **An arcade is a wall with HOLES in
+it**; the ring alone read as thin bands with sky behind them.
+
+**THE RING IS ELLIPTICAL IN WORLD UNITS — a judgement call, flag it if you
+disagree.** A true semicircle here is four-to-one wide-to-tall, so a one-tile
+bay rises eight pixels and no radius fixes it. But the game's art already
+exaggerates height everywhere (a level is 16 units; a tall hedge is 30). One
+constant if it should stay strictly circular.
+
+**A REGRESSION THE TESTS DID NOT CATCH.** Making the hub ctx always available
+broke the balustrade's newel on masks 5 and 10. The byte-identity sha check
+against HEAD found it. Run that check on any change to `solid.js`.
+
+Open: the arcade's corner seam and its corner column; Doric where the reference
+is Corinthian; `stepped-terrace-wall` still cannot bend; the mirror's light
+inversion; the one-pixel elbow seam shared by hedge, balustrade and colonnade.
 
 ## 4s · LAYERS, STUDS, AND THE VAULT ✅ (2026-08-05)
 
