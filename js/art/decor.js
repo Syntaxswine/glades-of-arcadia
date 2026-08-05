@@ -1312,61 +1312,120 @@ function brokenColumnGrid() {
 export const BROKEN_COLUMN_FLUTED = BCOL;
 
 /**
- * Colonnade, 3 tiles. Four columns carrying an architrave, running along the
- * +tx axis so it butts into a longer run. The architrave is a slab(); the
- * columns are the same shaft() as the free-standing Doric.
+ * COLONNADE — and it runs, and it turns. The owner:
+ *
+ *   *"colonnade doesn't work like a fence or rotate"*
+ *
+ * It could do neither, and the two were the same fault. It was ONE SPRITE THREE
+ * TILES LONG: no join art, so a second one laid beside the first did not meet
+ * it; and a 3x1 footprint, which `js/catalog.js` §TURNS refuses outright —
+ *
+ *   *"ONLY SQUARE FOOTPRINTS. Mirroring the screen's x axis swaps the two tile
+ *   axes, so a 2x1 mirrors into a 1x2 … which is why `cave-mouth` (2x1) and
+ *   `colonnade` (3x1) are absent from a list they otherwise belong at the top
+ *   of."*
+ *
+ * That note was right about the mechanism and wrong about the remedy: the fix
+ * is not to teach the mirror about oblong footprints, it is to notice that a
+ * colonnade is a RUN. Nobody wants exactly three bays. So it becomes one tile
+ * that joins, like the wall and the hedge — and a player lays four of them, or
+ * eleven, and turns a corner at the end.
+ *
+ * IT IS THE BALUSTRADE BUILT TALL, which is why this costs almost nothing: a
+ * rail carried on posts. Same two layers, same stud pass, different heights.
+ *
+ *   entablature  c 48..53, a box with a dentil course in its face
+ *   columns      studs — one per tile at its start, one more where the run
+ *                stops, and one AT THE CORNER when it turns
+ *
+ * A run of three therefore stands four columns, exactly as the old one-shot
+ * sprite did, because the far column is drawn only where there is no next tile
+ * to carry it — the same rule the gateways and the cut ends follow.
  */
-function colonnadeGrid() {
-  const SPAN = 32; //   one tile step
-  const D = 5; //       the entablature's own width across the run
-  const OVER = 7; //    how far the cornice oversails the end columns
-  const RUN = SPAN * 3 + OVER * 2;
+function colonnadeSolid() {
+  const D = 6; //      the entablature's width across the run; even, so the
+  //                   columns sit at an integer b = D / 2
+  const X0 = 2 * D + 2;
+  const TOP = 6;
+  const R = LINE_W / 2;
   const COLH = 32;
   const CAPH = 9;
-  const X0 = 2 * D + 2;
-  const g = grid(X0 + RUN + 4, 124);
-  const TOP = 6;
+  // The column's capital tucks one row up under the entablature, and its plinth
+  // anchor lands on the ground plane: capital top + 9 + 32 + plinthH(0) = c 0.
+  // That fixes H at 53 and keeps the column exactly where the old sprite had
+  // it relative to the architrave — `under(i)` was `TOP + drop + D + 4` with
+  // D = 5, which is this same `+ 9`.
+  const H = 53;
+  const CAP_C = H - 6;
+  const PAD = Math.ceil(R) + 2;
+  const x0 = X0 + PAD;
+  const yTop = TOP + PAD;
 
-  // Take one drew the architrave as a flat 2 px beam spanning the whole sprite
-  // and hung the columns off it: the beam over-ran the end column by twenty
-  // pixels and the thing read as a handrail with pillars stuck under it. The
-  // entablature is a slab like everything else linear in this file, it stops
-  // seven pixels past the end columns, and the column tops are DERIVED from
-  // its underside so the two cannot drift apart.
-  const under = (i) => TOP + LINE_DROP(i) + D + 4;
+  // Architrave, then a cornice with its own oversail and a dentil course. The
+  // dentils have a period of 4 px in grid x and a tile step is 32, so they run
+  // on unbroken from one piece to the next in either axis.
+  const face = (k, x) => {
+    const r = Math.round(k) - 1;
+    if (r >= 4) return 'A';
+    if (r === 3) return (x & 3) < 2 ? 'C' : 'B'; // dentils
+    if (r === 2) return 'B'; //                    the shadow under the cornice
+    return r <= 0 ? 'D' : 'C';
+  };
+  const ENTABLATURE = {
+    top: (a, b) => (b < 1 ? 'D' : 'E'),
+    side: (a, k, x) => face(k, x),
+    // The cut end, one step darker: it turns down-right, away from the light.
+    end: (b, k, x) => ['C', 'B', 'B', 'A', 'A'][clamp(Math.round(k) - 1, 0, 4)],
+  };
 
-  const posts = [OVER, OVER + SPAN, OVER + SPAN * 2, OVER + SPAN * 3];
-  posts.forEach((i) => {
-    const cx = X0 + i - D;
-    const yTop = under(i) + CAPH;
-    shaft(g, cx, yTop, COLH, MARBLE);
-    doricCapital(g, cx, under(i), MARBLE);
-    stamp(g, plinth(16, 0, MARBLE), cx - 8, yTop + COLH);
-  });
+  const studs = (g, { axis, t0, t1, at, project, mask }) => {
+    const post = (t) => {
+      const [x, y] = project(...at(t), CAP_C);
+      doricCapital(g, x, y, MARBLE);
+      shaft(g, x, y + CAPH, COLH, MARBLE);
+      stamp(g, plinth(16, 0, MARBLE), x - 8, y + CAPH + COLH);
+    };
+    // A JUNCTION STANDS ITS COLUMN AT THE CORNER, and only there. A real
+    // colonnade that turns has a column ON the turn; adding the tile's own
+    // start column as well would put two of them half a tile apart.
+    const turning = Boolean(mask & 5) && Boolean(mask & 10);
+    if (axis === 'hub') return post(0); // `at` ignores t for a hub: it is a point
+    if (t0 < 1e-6 && !turning) post(0); // one per tile, at the tile's start
+    // ...and one more where the run STOPS, so a run of n stands n + 1 columns
+    // and a lone piece is a pair with a lintel rather than a single post.
+    if (t1 >= R - 1e-6 && !(mask & (axis === 'tx' ? 1 : 2))) post(R);
+  };
 
-  // Architrave, then a cornice with its own oversail and a dentil course.
-  slabBackEdge(g, X0, TOP, RUN, 'A');
-  slab(g, X0, TOP, RUN, D, (a, b) => (b < 1 ? 'D' : 'E'));
-  slabFace(g, X0, TOP, RUN, D, 5, (i, k) => {
-    if (k === 4) return 'A';
-    if (k === 2) return 'B'; //                the shadow under the cornice
-    if (k === 3) return i % 4 < 2 ? 'C' : 'B'; // dentils
-    return k === 0 ? 'D' : 'C';
-  });
-
-  const mid = OVER + Math.round(SPAN * 1.5);
-  return { g, ax: X0 + mid - D, ay: under(mid) + CAPH + COLH + plinthH(0) - 1 };
+  const spec = {
+    R,
+    D,
+    H,
+    x0,
+    yTop,
+    w: X0 + PAD + LINE_W + PAD + 3,
+    h: TOP + PAD + Math.ceil(R) + D + H + 14,
+    layers: [{ studs }, { c0: H - 5, c1: H, faces: ENTABLATURE }],
+  };
+  const tags = ['decor', 'architecture', 'marble', 'neoclassical', 'column'];
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) =>
+      defineSprite({
+        name: `colonnade@${m}`,
+        rows: outline(solidJoins(m, spec), MARBLE[0]).map((r) => r.join('')),
+        // THE GROUND IS UNDER THE COLUMN, not under the cornice. Every other
+        // linear piece here anchors at its near edge b = D, because it sits on
+        // the earth across its whole depth; a colonnade touches down only at
+        // its plinths, on the centre line.
+        anchor: [x0 + 16 - D, yTop + LINE_DROP(16) + D / 2 + H + 1],
+        footprint: [1, 1],
+        tags,
+      })
+    )
+  );
+  return defineSprite({ ...joins[0], name: 'colonnade', joins, tags });
 }
 
-{
-  const c = colonnadeGrid();
-  // eslint-disable-next-line no-var
-  var COLN = spriteAt('colonnade', [c.ax, c.ay], c.g, {
-    footprint: [3, 1],
-    tags: ['decor', 'architecture', 'marble', 'neoclassical', 'column'],
-  });
-}
-export const COLONNADE = COLN;
+export const COLONNADE = colonnadeSolid();
 
 /**
  * Balustrade — a low railing, and a weak nullifier. It reads by the RHYTHM of

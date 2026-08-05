@@ -254,8 +254,15 @@ two. Nothing in the save has to change when a back view is drawn. See
 tile axes, so a 2×1 would mirror into a 1×2 — which means transposing the
 footprint through `canPlace`, the collision test and the depth key. That work
 is not done, and the catalogue self-check **throws at import** rather than let
-it half-work. It is why `cave-mouth` (2×1) and `colonnade` (3×1) are missing
-from a list they otherwise belong at the top of.
+it half-work. It is why `cave-mouth` (2×1) is missing from a list it otherwise
+belongs at the top of.
+
+`colonnade` was the other name here, at 3×1, and it read as though the
+footprint were a fact about colonnades. It was a fact about one **sprite**. The
+owner asked why it neither ran nor turned, and both had the same answer: a
+colonnade is a **run**, and it had been drawn as a single object three tiles
+long. One bay that joins fixed the rotate and the run together. Before reaching
+for oblong-footprint mirroring, ask whether the thing wanted a footprint at all.
 
 **The save.** `SAVE_VERSION` is 3, and `facing` is written **only when it is
 non-zero** — so a garden in which nothing has been turned serialises byte for

@@ -1894,14 +1894,22 @@ const STRUCTURE = [
     id: 'colonnade',
     name: 'Colonnade',
     group: 'structure',
-    footprint: [3, 1],
+    // ONE BAY, AND IT JOINS. The owner: *"colonnade doesn't work like a fence
+    // or rotate"*. It was a single 3x1 sprite, which is why it could do
+    // neither — no join art, and §TURNS below refuses anything not square.
+    // Nobody wants exactly three bays; a colonnade is a RUN. Lay four of them.
+    //
+    // DEPOSITS ARE PER TILE, so they come down: what used to be one placement
+    // worth `order: 3` is now three placements, and leaving the number alone
+    // would have tripled a colonnade's effect in silence.
+    footprint: [1, 1],
     art: sprite('colonnade'),
     zone: NEO,
     register: 'neoclassical',
-    deposits: dep({ order: 3, maturity: 1, seclusion: 1, wildness: -1 }),
+    deposits: dep({ order: 2, maturity: 1, seclusion: 1, wildness: -1 }),
     tags: ['column', 'stone', 'dressed-stone', 'neoclassical', 'straight-edge', 'enclosure'],
     unlockedBy: null,
-    blurb: 'Three columns under a run of entablature, standing free with sky behind them. One of these turns a lawn into a garden that has an opinion about architecture.',
+    blurb: 'A column under a run of entablature, standing free with sky behind it. Put four in a row and a lawn becomes a garden that has an opinion about architecture; turn the corner and it has two.',
   },
   {
     id: 'pergola',
@@ -2377,8 +2385,14 @@ const DECOR = [
  * ONLY SQUARE FOOTPRINTS. Mirroring the screen's x axis swaps the two tile
  * axes, so a 2x1 mirrors into a 1x2 — see js/iso.js. The self-check below
  * refuses a non-square entry rather than letting it half-work, which is why
- * `cave-mouth` (2x1) and `colonnade` (3x1) are absent from a list they
- * otherwise belong at the top of.
+ * `cave-mouth` (2x1) is absent from a list it otherwise belongs at the top of.
+ *
+ * `colonnade` WAS THE OTHER NAME IN THAT SENTENCE, at 3x1, and the note read
+ * as though the footprint were a fact about colonnades. It was a fact about
+ * one SPRITE. The owner asked why it neither ran nor turned and the answer was
+ * the same for both: it is a run, and it was drawn as a single object three
+ * tiles long. One bay that joins fixes the rotate and the run together — the
+ * remedy was never to teach the mirror about oblong footprints.
  */
 const TURNS = new Set([
   // linear — it runs along a diagonal
@@ -2387,6 +2401,7 @@ const TURNS = new Set([
   'tall-hedge',
   'palisade-fence',
   'balustrade',
+  'colonnade',
   'stone-bench',
   'stepped-terrace-wall',
   // fronted — it has a face, and a face belongs to a wall plane
