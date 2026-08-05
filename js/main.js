@@ -945,7 +945,7 @@ function aliasComposer(name, params) {
   return [composer, p];
 }
 
-function createArtist(mods) {
+export function createArtist(mods) {
   const compose = bind(mods.grow, ['compose']);
   const COMPOSERS = (mods.grow && mods.grow.COMPOSERS) || {};
   const registry = new Map();
@@ -1189,7 +1189,7 @@ const WET = new Set(['water', 'marsh']);
  */
 const TURF = new Set(['grass', 'greensward', 'meadow', 'millefleurs']);
 
-function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
+export function createSceneBuilder({ world, fields, bestiary, cat, artist, mods }) {
   // fields.js normalises a SIGNED axis to 0.5 when nothing is there and an
   // unsigned one to 0. AXIS_META is where it says which is which.
   const AXIS_META = (mods.fields && mods.fields.AXIS_META) || {};
