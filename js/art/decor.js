@@ -1980,8 +1980,20 @@ function arcadeSolid() {
     w: X0 + PAD + LINE_W + PAD + 3,
     h: TOP + PAD + Math.ceil(R) + D + H + 14,
     layers: [
-      { studs: walls },
+      /**
+       * COLUMNS FIRST, WALL SECOND — the colonnade's cure, arrived at the
+       * same way. The owner: *"the sprite for the columns are still
+       * overlapping the entablature."* The wall is an `extrudeInto` sweep that
+       * honours the z-buffer; the column trio is raw `put`s that do not. Drawn
+       * columns-last, a capital always won, painting itself over the archivolt
+       * foot and the jamb that are supposed to LAND on it. Drawn columns-first,
+       * the wall's lower courses cover the abacus's top rows exactly where the
+       * springing sits over the shaft — which is what "the entablature sits on
+       * the column" means in paint. The shaft below stays visible because the
+       * wall owns nothing below CAP_C.
+       */
       { studs: columns },
+      { studs: walls },
       // Bottom up, and each course states its own projection.
       { c0: WALLTOP, c1: WALLTOP + 2, faces: ARCHITRAVE },
       { c0: WALLTOP + 2, c1: WALLTOP + 5, faces: FRIEZE, grow: -0.5 },
