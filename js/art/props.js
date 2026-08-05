@@ -827,41 +827,26 @@ export const PERGOLA_ELEVATION = sprite(
 );
 
 /**
- * A single-span stone bridge. It is drawn along the +tx axis like the wall, so
- * a stream crossing reads continuous; the water under the arch is authored in
- * the water ramp so it cycles with the pool it spans.
+ * THE BRIDGE HAS MOVED, and it is not coming back here.
+ *
+ * What stood at this line was a 32x24 hand-drawn ELEVATION — a parapet seen
+ * edge-on, a perfectly circular hole, and a disc of water cycling inside it —
+ * in a world that has depth everywhere else. A circle is the tell: a semicircle
+ * whose plane contains a ground axis is 4:1 wide to tall here, so anything
+ * round on screen is being seen from a viewpoint this game does not have. It
+ * was the same fault the owner named in the ruined arch, surviving in the one
+ * object of the set whose entire subject is an arch.
+ *
+ * `js/art/decor.js` -> `bridgeGrid` now builds it as a real barrel vault swept
+ * across the roadway's width, with a soffit the brook shows through. Its
+ * footprint went 2x1 -> 1x1 in the same pass, because a two-tile span puts its
+ * arch over the boundary BETWEEN its tiles and every stream here is one tile
+ * wide.
+ *
+ * Left as a tombstone rather than deleted silently: precedence would have kept
+ * this one compiling and rendering in probes while the other took the edits.
+ * `tools/registry-audit.mjs` reports exactly that case.
  */
-export const BRIDGE = sprite(
-  'bridge',
-  [0, 1],
-  [
-    '..........AAAAAAAAAAAA..........',
-    '.......AAADDDDDDDDDDDDAAA.......',
-    '....AAADDDDDDDDDDDDDDDDDDAAA....',
-    '..AADDDDDDDDDDDDDDDDDDDDDDDDAA..',
-    'AADDDDDDDDDDDDDDDDDDDDDDDDDDDDAA',
-    'ACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCA',
-    'ABBCCBBCCBBCCBBCCBBCCBBCCBBCCBBA',
-    'ABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
-    'ACCBBACCBBACCBBACCBBACCBBACCBBAA',
-    'ACCBBACCBBAAAAAAAACCBBACCBBAA...',
-    'ACCBBACCBAA......AACCBBACCBBA...',
-    'ACCBBACCBA........ACCBBACCBBA...',
-    'ACCBBACBA..........ACCBBACCBA...',
-    'ACCBBACA............ACCBBACBA...',
-    'ACCBBABA.....FFF.....ACCBBABA...',
-    'ACCBBABA...FFGGGF....ACCBBABA...',
-    'ACCBBABA..FGGHHGGF...ACCBBABA...',
-    'ACCBBABA.FGHHIIHHGF..ACCBBABA...',
-    'ACCBBABAFGHIIJJIIHGF.ACCBBABA...',
-    'AABBAAAAFGHIJJJJIHGFAAABBAAAA...',
-    '.AAAAA..FGHIJJJJIHGF..AAAAA.....',
-    'mmmmmmm.FFGHIIIIHGFF.mmmmmmm....',
-    'mmmmmmm..FFGGHHGGFF..mmmmmmm....',
-    '.mmmmm....FFFGGFFF....mmmmm.....',
-  ],
-  { tags: ['structure', 'marble', 'order', 'moisture'], cycle: { ramp: 'water', rate: 5 } }
-);
 
 /** A marble sundial: a fluted stub column with an inclined gnomon on a disc. */
 export const SUNDIAL = sprite(
@@ -4496,7 +4481,7 @@ export const PROPS = {
   'drystone-gateway': DRYSTONE_GATEWAY,
   bench: BENCH,
   pergola: PERGOLA,
-  bridge: BRIDGE,
+  // `bridge` now comes from js/art/decor.js — see the tombstone above.
   sundial: SUNDIAL,
   altar: ALTAR,
   'syrinx-post': SYRINX_POST,

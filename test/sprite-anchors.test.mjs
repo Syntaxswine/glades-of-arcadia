@@ -288,7 +288,13 @@ const KNOWN_UNDERSIZED = new Set([
   // of an arch on a plot 2 tiles long — nothing was ever going to fill that. It
   // is a barrel vault on one tile now and covers its plot outright. Check what
   // a piece CLAIMS before granting it room to be small.
-  'level-bridge', // 2x1 claimed: 23px short
+  // `level-bridge` was here at "2x1 claimed: 23px short" — and that is TWICE
+  // now that this list has named a symptom whose cause was the footprint. The
+  // bridge was a flat 32px elevation on a plot two tiles long, and no drawing
+  // was ever going to fill it. It is a barrel vault on ONE tile now, because
+  // every stream in this game is one tile wide and a two-tile span puts its
+  // arch over the boundary between its tiles. Check what a piece CLAIMS before
+  // granting it room to be small.
   'fern-grotto', // 2x1 claimed: 22px short — 15 of its 17px of reach was shadow
   // 'ground' is its GROUP, but it has no `ground:` key, so it is not a painter:
   // it is placed as a 2x2 object drawn 1x1. 17px short.

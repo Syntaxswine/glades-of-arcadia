@@ -2285,6 +2285,195 @@ export const RUINED_ARCH = RARCH;
 /** The same building young: the whole span, dressed and standing. */
 export const ARCHWAY = WARCH;
 
+/**
+ * A BRIDGE — a single masonry span, and not a picture of one.
+ *
+ * ---------------------------------------------------------------------------
+ * The owner: *"the bridge could use that Giovanni Battista Piranesi update."*
+ *
+ * What it replaced was `js/art/props.js`'s 32x24 `BRIDGE`: a little ELEVATION
+ * drawing — a parapet seen edge-on, a perfectly circular hole, and a disc of
+ * water cycling inside it — pasted flat into a world that has depth everywhere
+ * else. Exactly the fault the owner named in the ruined arch, surviving in the
+ * one object of the set whose whole subject is an arch. A circle is the tell:
+ * a semicircle whose plane contains a ground axis is 4:1 wide to tall here, so
+ * anything round on screen is being seen from a viewpoint this game does not
+ * have.
+ *
+ * IT IS `archwayGrid` TURNED NINETY DEGREES, and that is the entire idea.
+ * There, the ring stands in the (a, c) plane and you walk THROUGH the hole
+ * along b. Here the same hole carries the WATER along b while the deck runs
+ * over the top of it along a — which is what a bridge is: an archway you cross
+ * rather than enter.
+ *
+ * SO THE INTRADOS IS THE POINT AGAIN. The old sprite drew its own water
+ * because a flat hole has nothing behind it. This one has a real soffit
+ * receding into shade, and the brook the player laid is what shows through
+ * it — the game's own water, moving at the game's own rate, because the vault
+ * is genuinely open. `cycle: {ramp:'water'}` is gone and nothing replaces it.
+ *
+ * TWO TILES OF RUN, one arch. The catalogue has always said `[2, 1]` and the
+ * old art was one tile wide, which is why a bridge never looked like it
+ * reached either bank.
+ * ---------------------------------------------------------------------------
+ */
+function bridgeGrid({ ramp, seed }) {
+  const R = LINE_W / 2;
+
+  /**
+   * ONE TILE, ONE SPAN — and the footprint changed to say so.
+   *
+   * The catalogue had always called this `[2, 1]` and the first rebuild
+   * believed it. A two-tile bridge puts its arch over the BOUNDARY between its
+   * two tiles, and every stream in this game is one tile wide (`brook` is
+   * 1x1), so the arch could never once be centred on the water it crossed:
+   * placed over a brook it stood with one abutment in the channel and its span
+   * over the bank. Two bays instead of one would fix the centring and cost the
+   * arches their opening — a pier between them is 3 px at this scale.
+   *
+   * So: one arch, centred on its own tile, and the deck OVERHANGS onto both
+   * banks. That is what a footbridge is, and it is the same lesson the
+   * colonnade and the ruined arch both taught — the footprint is a fact about
+   * one sprite, not about the building.
+   */
+  const AC = R / 2; //   the crown, over the middle of the tile
+  const OVER = 4; //     how far the roadway reaches past the tile, onto the banks
+  const A0 = -OVER;
+  const A1 = R + OVER;
+
+  // THE ROADWAY'S WIDTH, and it is the archway's arithmetic again: the view ray
+  // drops two units of height per unit of depth, so a vault D deep swallows 2D
+  // of its own opening. At D = 5 against an opening of 2 * RI = 11 there is
+  // daylight left under the crown, which is the only reason to build an arch
+  // rather than a culvert.
+  const D = 5;
+  const SPRING = 9; //   low: this crosses a brook, not a gorge
+  const RI = 5.5;
+  const RO = 8.25; //    a ring 2.75 thick, out to the tile's own edge
+  const CROWN = SPRING + RO;
+  const DECK = 3;
+  const PARA = 6;
+  const DECK_C = CROWN + DECK;
+  const H = DECK_C + PARA;
+  const PAD = 3;
+  const x0 = PAD + 2 * D + 2 * OVER;
+  const yTop = PAD;
+  const g = grid(x0 + Math.ceil(2 * (A1 - A0)) + PAD, yTop + Math.ceil(A1 - A0) + D + H + PAD);
+  const n = ramp.length - 1;
+  const key = (i) => ramp[clamp(Math.round(i), 0, n)];
+
+  /**
+   * THE PARAPET IS ON THE FAR EDGE ONLY, and that is a decision rather than an
+   * omission. A bridge is a PATH — the player walks it — and a near parapet at
+   * b = D stands between the eye and the roadway, hiding the one surface the
+   * object exists to offer. Every real bridge has two; every isometric bridge
+   * that keeps both is a trough. The far one reads as the pair, because the eye
+   * completes it — the same borrowing that lets the ruined arch keep two feet.
+   */
+  const PARA_B = 2;
+
+  const inside = (a, c) => {
+    if (c < 0 || c > DECK_C) return false;
+    if (a < A0 || a > A1) return false;
+    const dA = a - AC;
+    const w = Math.abs(dA);
+    if (c >= CROWN) return true; //                        the roadway, end to end
+    if (c <= SPRING) return w >= RI; //                    abutments, arch cut out
+    const r = Math.hypot(dA, c - SPRING);
+    if (r < RI) return false;
+    return true; //                                        ring, and spandrel above it
+  };
+
+  const MID = (RI + RO) / 2;
+  const skin = (a, c, b, near, x, y) => {
+    const dA = a - AC;
+    const above = c > SPRING && c < CROWN;
+    const r = above ? Math.hypot(dA, c - SPRING) : Math.abs(dA);
+    const th = above ? Math.atan2(c - SPRING, dA) : dA > 0 ? 0 : Math.PI;
+    let v;
+    if (c >= CROWN) {
+      // THE ROADWAY. Its top face is the brightest thing here and it is what
+      // the object is FOR; the band under it is a step down, so the deck reads
+      // as a slab with a thickness rather than as paint on the extrados.
+      v = c >= DECK_C - 1 ? n : n - 2.4;
+    } else if (near) {
+      // VOUSSOIRS over the arch, ASHLAR over the haunch, coursed differently on
+      // purpose: a face carrying one bond throughout stops reading as a ring
+      // carrying a wall, and the span becomes a line painted on masonry.
+      if (above && r < RO) {
+        const seg = (th / Math.PI) * 9;
+        const joint = Math.abs(seg - Math.round(seg)) < 0.1;
+        v = n - 1.1 - ((r - RI) / (RO - RI)) * 0.8;
+        if (joint) v -= 1.8;
+        if (r > RO - 0.9 || r < RI + 0.7) v -= 1; //                 the arrises
+      } else {
+        const course = Math.floor(c / 4);
+        v = n - 1.9;
+        if (c % 4 < 0.9) v -= 1.1; //                                bed joints
+        if ((Math.round(a) + course * 4) % 9 === 0) v -= 0.9; //     perpends
+        // THE SHADOW THE RING THROWS ON ITS OWN SPANDREL. Without it the haunch
+        // and the ring are one flat field, and the arch reads as drawn on.
+        if (Math.hypot(dA, c - SPRING) < RO + 2 && c > SPRING) v -= 1.2;
+      }
+    } else if (r > MID) {
+      v = n - 1 + (Math.sin(th) - Math.cos(th) / 2) * 1.5; //        extrados
+    } else {
+      // THE SOFFIT, and the whole reason to rebuild this. It faces down into
+      // the water, never sees the light, and RECEDES — which is the difference
+      // between a bridge and a hole with a disc of blue painted behind it. The
+      // old sprite cycled its own water because a flat hole has nothing behind
+      // it; this one shows the brook the player actually laid.
+      v = 0.4 + Math.max(0, Math.sin(th)) * 0.5;
+    }
+    if (hash(x, y, seed) > 0.87) v -= 0.7; //                          grain
+    if (hash(x, y, seed + 5) > 0.94) v -= 1; //                        pitting
+    return key(v);
+  };
+
+  const frame = {
+    x0,
+    yTop,
+    lift: H,
+    zbuf: new Float64Array(g[0].length * g.length).fill(-Infinity),
+  };
+  extrudeInto(
+    g,
+    { inside, b0: 0, b1: D, skin, aRange: [A0 - 1, A1 + 1], cRange: [0, DECK_C] },
+    frame
+  );
+
+  // The far parapet, on the SAME z-buffer so the deck it stands on resolves
+  // against it instead of being painted over. Bottom-up is already satisfied:
+  // the sweep above laid the deck, and this stands on top of it.
+  renderInto(
+    g,
+    [
+      box(A0, A1, 0, PARA_B, DECK_C, H, {
+        top: (a, b) => (b < 1 ? ramp[n - 1] : ramp[n]),
+        side: (a, k) => (Math.round(k) - 1 <= 0 ? ramp[n - 1] : ramp[n - 2]),
+        end: (b, k) => ramp[clamp(n - 2 - Math.round(k), 0, n)],
+      }),
+    ],
+    frame
+  );
+
+  outline(g, ramp[0]);
+  // The contact patch is the two abutments, at b 0..D over the tile — so the
+  // ground centre is (AC, D / 2). The deck's overhang is deliberately not in
+  // this: it hangs over the banks and touches nothing.
+  return { g, ax: Math.round(x0 + 2 * AC - D), ay: Math.round(yTop + AC + D / 2 + H + 1) };
+}
+
+{
+  const b = bridgeGrid({ ramp: ROCK, seed: 41 });
+  // eslint-disable-next-line no-var
+  var BRIDGE_SOLID = spriteAt('bridge', [b.ax, b.ay], b.g, {
+    tags: ['decor', 'architecture', 'rock', 'arch', 'path', 'traffic'],
+  });
+}
+/** One masonry span, and a soffit you can see the brook running under. */
+export const BRIDGE = BRIDGE_SOLID;
+
 
 /**
  * THOLOS — the small round temple folly, and the centrepiece of the set.

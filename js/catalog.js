@@ -2051,7 +2051,12 @@ const STRUCTURE = [
     id: 'level-bridge',
     name: 'Bridge',
     group: 'structure',
-    footprint: [2, 1],
+    // ONE TILE. It was [2, 1] and could never centre its arch on the water: every
+    // stream here is one tile wide, so a two-tile span crossed the boundary
+    // between its tiles and stood with one abutment in the channel. The deck
+    // overhangs onto both banks — reaching the banks is the sprite's job, not
+    // the footprint's. See the note over bridgeGrid in js/art/decor.js.
+    footprint: [1, 1],
     art: sprite('bridge'),
     zone: NONE,
     register: 'archaic',
