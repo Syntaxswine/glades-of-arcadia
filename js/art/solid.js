@@ -121,10 +121,17 @@ const EPS = 1e-6;
  * FIRST when converting a family, and the check that tells you the frame is
  * right before any of the interesting shapes are attempted.
  */
-export function renderInto(g, boxes, { x0, yTop, lift }) {
+export function renderInto(g, boxes, { x0, yTop, lift, zbuf: shared = null }) {
   const H = g.length;
   const W = g[0].length;
-  const zbuf = new Float64Array(W * H).fill(-Infinity);
+  // ONE Z-BUFFER FOR THE WHOLE PIECE, if the caller keeps it. A family drawn in
+  // several passes — rails at two heights with turned balusters between them —
+  // must resolve depth ACROSS the passes, or the top rail stops hiding what is
+  // behind it the moment the two are rendered separately. Passing the buffer
+  // back in also lets a pass that does not use this renderer at all (a
+  // `revolve`, say) sit between two that do: it writes with a plain put, leaves
+  // the buffer alone, and a later solid still wins wherever it has a surface.
+  const zbuf = shared || new Float64Array(W * H).fill(-Infinity);
   const put = (x, y, depth, key) => {
     if (!key) return;
     const px = Math.round(x);
@@ -304,7 +311,7 @@ export function render(boxes, { hub = A_STEP / 2, pad = 2 } = {}) {
  *   faces       { top, side, end } in the family's own vocabulary
  */
 export function solidJoins(mask, spec) {
-  const { R, D, H, x0, yTop, w, h, faces } = spec;
+  const { R, D, H, x0, yTop, w, h, faces, layers } = spec;
   const g = Array.from({ length: h }, () => new Array(w).fill('.'));
 
   const C = R / 2; // the tile centre along the run
@@ -323,20 +330,29 @@ export function solidJoins(mask, spec) {
   //
   //   `end`  is the face at a = a1, turned +tx (down-right)
   //   `side` is the face at b = b1, turned +ty (down-left)
+  //
+  // EACH ARM ALSO CARRIES ITS OWN RUN PARAMETER `t`, and that is what makes a
+  // post, a baluster or a column land in the right place on a piece that BENDS.
+  // `t` runs 0..R across the tile whichever way the arm points, so a family
+  // states its rhythm ONCE — "a column every eight units" — and every one of the
+  // sixteen states places them by filtering that rhythm to the arms it has.
+  // Indexing by screen run position instead is what put the balusters of a bent
+  // balustrade along the +tx axis only, and a corner with posts down one leg and
+  // a bare rail down the other is the second half of reading as a ribbon.
   const ARM = {
     // +tx: its far end is outer only where the run STOPS.
-    1: [C, R, 0, D, { end: !(mask & 1), side: true }],
+    1: [C, R, 0, D, { end: !(mask & 1), side: true }, 'tx', C, R],
     // +ty: turned, so its far end is the `side`. Same rule, other axis.
-    2: [C - Cb, C + Cb, Cb, Cb + HALF, { end: true, side: !(mask & 2) }],
+    2: [C - Cb, C + Cb, Cb, Cb + HALF, { end: true, side: !(mask & 2) }, 'ty', C, R],
     // -tx: its +tx face always abuts the hub or the +tx arm. Never drawn.
-    4: [0, C, 0, D, { end: false, side: true }],
+    4: [0, C, 0, D, { end: false, side: true }, 'tx', 0, C],
     // -ty: likewise its +ty face.
-    8: [C - Cb, C + Cb, Cb - HALF, Cb, { end: true, side: false }],
+    8: [C - Cb, C + Cb, Cb - HALF, Cb, { end: true, side: false }, 'ty', 0, C],
   };
   // The block at the crossing. Without it a bend is two arms that only touch at
   // a line, and the outer corner has nothing in it. Its two outward faces are
   // covered exactly when the arm that would cover them is present.
-  const HUB = [C - Cb, C + Cb, 0, D, { end: !(mask & 1), side: !(mask & 2) }];
+  const HUB = [C - Cb, C + Cb, 0, D, { end: !(mask & 1), side: !(mask & 2) }, 'hub', C, C];
 
   const bits = [1, 2, 4, 8].filter((b) => mask & b);
   let use;
@@ -348,6 +364,44 @@ export function solidJoins(mask, spec) {
   } else {
     use = [HUB, ...bits.map((b) => ARM[b])];
   }
+
+  /**
+   * WHERE A RUN ACTUALLY TURNS, as opposed to merely having a hub box in it.
+   *
+   * Mask 5 is +tx and -tx: a mid-run piece. It uses the hub block, because the
+   * hub is what makes its two arms one bar — but nothing about it turns, and a
+   * newel post dropped at its centre would sit off the family's own rhythm and
+   * make a piece in the middle of a straight run differ from a piece standing
+   * alone. Only a mask holding a bit from BOTH axes has a corner to mark.
+   */
+  const turning = Boolean(mask & 5) && Boolean(mask & 10);
+
+  const project = (a, b, c) => [x0 + 2 * a - 2 * b, yTop + a + b + H - c];
+  const ctxOf = ([a0, a1, b0, b1, , axis, t0, t1]) => ({
+    axis,
+    a0,
+    a1,
+    b0,
+    b1,
+    t0,
+    t1,
+    mask,
+    R,
+    D,
+    C,
+    /**
+     * The centre line of this arm at run position `t`, in world (a, b).
+     *
+     * The hub is a POINT, not a run, so it answers its own centre whatever it
+     * is asked — a stud pass that hands it a `t` meant for an arm would
+     * otherwise get `Cb - C`, which is half a tile out along +ty. That put the
+     * corner newel outside the rail it is supposed to hold up, and it took a
+     * probe that keyed each stud to its own character to see which of the two
+     * things standing there was the misplaced one.
+     */
+    at: (t) => (axis === 'hub' ? [C, Cb] : axis === 'tx' ? [t, Cb] : [C, Cb + t - C]),
+    project,
+  });
 
   /**
    * A CAP ONLY WHERE THERE IS NOTHING TO CUT IT.
@@ -363,17 +417,55 @@ export function solidJoins(mask, spec) {
    * So a cap appears exactly where the run STOPS — the same rule, seen from
    * the other side, that makes a lone piece and the end of a run identical.
    */
-  renderInto(
-    g,
-    use.map(([a0, a1, b0, b1, show]) =>
-      box(a0, a1, b0, b1, 0, H, {
-        top: faces.top,
-        side: show.side ? faces.side : null,
-        end: show.end ? faces.end : null,
-      })
-    ),
-    { x0, yTop, lift: H }
-  );
+  /**
+   * LAYERS — because not everything linear is one slab from the ground up.
+   *
+   * A hedge is; a wall is. A BALUSTRADE is a rail at ankle height, a rail at
+   * hand height, and turned stone between them, and a COLONNADE is the same
+   * object built tall: posts carrying an entablature. Given only a single box
+   * from c = 0 to c = H, those two can be drawn as solid walls or not at all,
+   * which is why the balustrade was still composed from flat half-bars long
+   * after everything around it had volume — and why it still read as a ribbon
+   * at a bend when nothing else did.
+   *
+   * A layer is either
+   *   { c0, c1, faces }   a box extruded along the plan, at its own height
+   *   { studs(g, arm) }   a pass invoked ONCE PER ARM, for members that are
+   *                       turned rather than extruded
+   *
+   * Balusters and column shafts are objects of revolution: they look the same
+   * from every horizontal direction, so a bend does not need new art for them,
+   * only new POSITIONS — which is exactly what the arm context hands over.
+   *
+   * The z-buffer is shared across every layer, so a top rail hides what stands
+   * behind it whether that thing was drawn by this renderer or stamped in by a
+   * stud pass. Order is the caller's: bottom up, studs where they belong.
+   */
+  const parts = layers || [{ c0: 0, c1: H, faces }];
+  const zbuf = new Float64Array(w * h).fill(-Infinity);
+  const frame = { x0, yTop, lift: H, zbuf };
+  for (const part of parts) {
+    if (part.studs) {
+      for (const arm of use) {
+        const ctx = ctxOf(arm);
+        if (ctx.axis === 'hub' && !turning) continue;
+        part.studs(g, ctx);
+      }
+      continue;
+    }
+    const skin = part.faces || faces;
+    renderInto(
+      g,
+      use.map(([a0, a1, b0, b1, show]) =>
+        box(a0, a1, b0, b1, part.c0, part.c1, {
+          top: skin.top,
+          side: show.side ? skin.side : null,
+          end: show.end ? skin.end : null,
+        })
+      ),
+      frame
+    );
+  }
   return g;
 }
 

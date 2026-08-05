@@ -62,11 +62,20 @@ const arg = (f, d) => {
 };
 const ART = { ...PROPS, ...(EXTRAS.EXTRAS || {}), ...DECOR };
 
-/** Every gate the catalogue sets into a wall, and the wall it belongs to. */
+/**
+ * Every gate the catalogue sets into a wall, and the wall it belongs to.
+ *
+ * A wall with no gate is listed with a null: the census is about RUNS, and
+ * three of the five run families were missing from it because the tool was
+ * written the day the gateways were, and gateways were the question that day.
+ * A family absent from an instrument reads exactly like a family that passed.
+ */
 const PAIRS = [
   ['hedge-tall', 'hedge-arch'],
   ['drystone-wall', 'drystone-gateway'],
   ['palisade-fence', 'palisade-gate'],
+  ['balustrade', null],
+  ['colonnade', null],
 ];
 
 /**
@@ -81,6 +90,8 @@ const PAIRS = [
  */
 const SEE_THROUGH = new Map([
   ['palisade-fence', 'pickets with daylight between them — the gaps ARE the object'],
+  ['balustrade', 'turned stone with air between it — a solid band with lines on it is a wall'],
+  ['colonnade', 'columns carrying an entablature, and the sky between them is the point'],
 ]);
 
 /**

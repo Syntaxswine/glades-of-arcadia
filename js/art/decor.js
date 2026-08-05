@@ -1373,52 +1373,152 @@ export const COLONNADE = COLN;
  * its balusters against the gap between them, so the gaps have to be genuinely
  * transparent: a balustrade drawn as a solid band with lines on it is a wall.
  */
-function balustradeGrid() {
-  const DEPTH = 4;
-  const X0 = 2 * DEPTH + 2;
-  // TALL ENOUGH TO HOLD ITS OWN NEAR END. The owner: *"the balustrade is
-  // cropped on the bottom."* At 34 it was not: the bottom rail's face reaches
-  // `TOP + 15 + LINE_DROP(LINE_W) + DEPTH + 2` = 40 at the near end of the run,
-  // so the last seven rows were cut off by the edge of the grid — which is why
-  // it only showed at the DOWN-RUN end and looked like a shading fault rather
-  // than a missing seven pixels. A grid is only as tall as the tallest thing in
-  // it, and for a linear piece that is measured at the near end, not the hub.
-  const g = grid(X0 + LINE_W + 3, 46);
+/**
+ * IT BENDS LIKE A SOLID NOW. The owner, after the hedges and the wall were put
+ * on boxes and it was not:
+ *
+ *   *"the balustrade is cropped on the bottom and ribbons in the < and >
+ *   directions but not the top or bottom corners."*
+ *
+ * The crop was the grid: 34 rows for a bar whose bottom rail reaches row 40 at
+ * the near end. That one is gone.
+ *
+ * THE RIBBON WAS STRUCTURAL, and it is why this family was last. `solidJoins`
+ * extrudes ONE box from the ground to H, which is the whole truth about a hedge
+ * and about a wall — and false about a balustrade, which is two rails with air
+ * between them. So it stayed on `linearJoins`, composing a bend from two flat
+ * half-bars, and a bend made of half-bars has no corner mass: exactly the fault
+ * the owner had already named on the hedges, surviving in the one family the
+ * fix could not reach.
+ *
+ * `solid.js` grew LAYERS for it (a box at its own height) and STUDS (a pass per
+ * ARM, for members that are turned rather than extruded). Which is the whole
+ * object, said plainly:
+ *
+ *   rail at c 0..2 · balusters between · rail at c 14..17
+ *
+ * The GAPS are still the object — a balustrade drawn as a solid band with lines
+ * on it is a wall — so the balusters stay narrow and the spacing stays wide.
+ */
+function balustradeSolid() {
+  const D = 4;
+  const X0 = 2 * D + 2;
   const TOP = 3;
-  // Bottom rail, then balusters, then the top rail over their heads. The GAPS
-  // are the object: a balustrade drawn as a solid band with lines on it is a
-  // wall, so the balusters are narrow and the spacing is wide.
-  slab(g, X0, TOP + 15, LINE_W, DEPTH, (a, b) => (b < 1 ? 'C' : 'D'));
-  slabFace(g, X0, TOP + 15, LINE_W, DEPTH, 2, (i, k) => (k === 1 ? 'A' : 'C'));
-  for (let i = 2; i < LINE_W - 2; i += 6) {
-    const bx = X0 + i - DEPTH;
-    const by = TOP + LINE_DROP(i) + Math.round(DEPTH / 2) + 4;
-    revolve(g, bx, by, [2, 1, 1, 1, 2, 2, 2, 1, 1, 2], { ramp: MARBLE });
-  }
-  slabBackEdge(g, X0, TOP, LINE_W, 'A');
-  slab(g, X0, TOP, LINE_W, DEPTH, (a, b) => (b < 1 ? 'D' : 'E'));
-  slabFace(g, X0, TOP, LINE_W, DEPTH, 3, (i, k) => (k === 2 ? 'A' : k === 0 ? 'D' : 'B'));
-  // THE HUB, DERIVED RATHER THAN WRITTEN DOWN. It used to be the literal
-  // `[10, 29]`, which is X0 — the FAR LEFT of the bar, not its middle — and 4 px
-  // clear of its own lowest ink. A linear piece anchors at the tile centre, at
-  // the ground, or it stands somewhere other than where the game thinks it does.
-  return { g, ax: X0 + 16 - DEPTH, ay: TOP + 15 + LINE_DROP(16) + DEPTH + 3 };
+  const R = LINE_W / 2;
+  // c = 0 IS THE LOWEST INK ROW and the anchor sits one below it, which is the
+  // convention every solid family here already uses. H is then fixed by the
+  // hand-built bar: its bottom rail's face ends at TOP + 15 + drop + D + 2.
+  const H = 17;
+  const PAD = Math.ceil(R) + 2; // room for the +ty arm, which swings left of x0
+  const x0 = X0 + PAD;
+  const yTop = TOP + PAD;
+  const n = MARBLE.length - 1;
+  const step = (k, d) => MARBLE[clamp(MARBLE.indexOf(k) + d, 0, n)];
+
+  /**
+   * A RAIL. `slabFace` numbers its rows from the first row BELOW the near edge;
+   * a box numbers them from the near edge itself, which the top face wins on a
+   * tie. So the face key at box row k is the old face key at k - 1 — and with
+   * that, the frame was proven before a single corner was written:
+   *
+   *   the two rails as boxes vs the straight bar that ships
+   *     both 740 · hand-only 117 · SOLID-ONLY 0
+   *
+   * The 117 are the balusters and the back-edge stroke, neither of which `slab`
+   * ever drew. So a straight built here IS the straight that shipped.
+   *
+   * `k` IS NOT AN INTEGER ON ODD COLUMNS, and a face keyed by `face[k - 1]`
+   * therefore asked for `face[0.5]`, got `undefined`, and `put` skipped it —
+   * a one-pixel hole down every second column of both rails. The same class of
+   * fault as the wire mesh and the detached back edge: an index derived from
+   * the projection, used as if the projection were integral.
+   */
+  const row = (keys, k) => keys[clamp(Math.round(k) - 1, 0, keys.length - 1)];
+  const rail = (far, near, face, cut) => ({
+    top: (a, b) => (b < 1 ? far : near),
+    side: (a, k) => row(face, k),
+    // The cut end turns down-RIGHT, away from the light, where the near face
+    // turns down-left toward it. Its own ramp rather than the near face's
+    // shifted: the handrail's face carries a hard B-to-A line under the nosing,
+    // and darkening THAT gives an end that is two-thirds black.
+    end: (b, k) => row(cut, k),
+  });
+
+  /**
+   * A BALUSTER, PLACED PER ARM. It is turned on a wheel, so it looks the same
+   * from every horizontal direction and a bend needs no new art for it — only
+   * new POSITIONS, which is exactly what the arm hands over. Indexed by screen
+   * run position, as it was, a bent balustrade got balusters down its +tx leg
+   * and a bare rail down the other.
+   *
+   * It stands ON the bottom rail (c = 2) and disappears UNDER the top one
+   * (c = 13). The hand version put its x at mid-depth and its y at the far
+   * edge, which floated it two pixels clear of the rail it is supposed to stand
+   * on; stated in world coordinates that cannot happen.
+   */
+  /**
+   * IT RUNS UP INTO THE RAIL, not up to it. `revolve` sweeps a silhouette in
+   * SCREEN space, so a baluster two pixels wide is two pixels of screen at ONE
+   * world point — and the rail above it is a sheared parallelogram, not a
+   * rectangle. Stopping the head one unit under the rail left the outer columns
+   * of the head sticking out past the rail's silhouette on a +ty arm, where the
+   * near face is not drawn at all because it abuts the hub.
+   *
+   * So the shaft carries on to c = 17, the rail's own top. The upper half is
+   * never seen — a plain 3 px shaft, deliberately narrower than the turned part
+   * so it cannot reach past anything — and the turned profile is the eight rows
+   * that actually show under the handrail.
+   */
+  const HIDDEN = [1, 1, 1, 1, 1, 1, 1, 1]; //          c 17..10, up inside the rail
+  const TURNED = [1, 1, 2, 2, 2, 1, 1, 2]; //          c  9.. 2, neck belly waist base
+  const PROFILE = [...HIDDEN, ...TURNED];
+  const NEWEL = [...HIDDEN, 2, 2, 3, 3, 3, 2, 2, 3]; // stouter: a corner post
+  const studs = (g, { axis, t0, t1, at, project }) => {
+    if (axis === 'hub') {
+      revolve(g, ...project(...at(0), 17), NEWEL, { ramp: MARBLE });
+      return;
+    }
+    // ONE RHYTHM FOR THE WHOLE RUN, filtered to this arm. A straight piece's
+    // two arms cover [0, C] and [C, R] between them, so the positions come out
+    // where the hand version put them and no position is drawn twice.
+    for (let t = 1; t < R - 1; t += 3) {
+      if (t < t0 - 1e-6 || t >= t1 - 1e-6) continue;
+      revolve(g, ...project(...at(t), 17), PROFILE, { ramp: MARBLE });
+    }
+  };
+
+  const spec = {
+    R,
+    D,
+    H,
+    x0,
+    yTop,
+    w: X0 + PAD + LINE_W + PAD + 3,
+    h: TOP + PAD + Math.ceil(R) + D + H + 10,
+    layers: [
+      { c0: 0, c1: 2, faces: rail('C', 'D', ['C', 'A'], ['B', 'A']) }, // plinth
+      { studs }, //                                                     turned stone
+      { c0: 14, c1: 17, faces: rail('D', 'E', ['D', 'B', 'A'], ['C', 'B', 'A']) }, // handrail
+    ],
+  };
+  const tags = ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'];
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) =>
+      defineSprite({
+        name: `balustrade@${m}`,
+        // `outline`, not `slabBackEdge`: a stroke indexed by run position stops
+        // meaning anything the moment the plan can turn a corner. The topmost
+        // ink per column follows a straight, an L, a T and a cross for nothing.
+        rows: outline(solidJoins(m, spec), MARBLE[0]).map((r) => r.join('')),
+        anchor: [x0 + 16 - D, yTop + LINE_DROP(16) + D + H + 1],
+        tags,
+      })
+    )
+  );
+  return defineSprite({ ...joins[0], name: 'balustrade', joins, tags });
 }
 
-/**
- * IT BENDS NOW. The owner: *"the balistrade does not bend like the other
- * fences."*
- *
- * It could not: `js/catalog.js` declares `joins: 'balustrade'`, which puts it in
- * a run group and makes its neighbours reach for it, but the ART was never put
- * through `linearJoins` — so it carried no sixteen states and every piece drew
- * the straight bar whatever it was standing next to. A join group is a promise
- * made in the catalogue that only the art can keep, and nothing checked that
- * the two agreed. `test/joining.test.mjs` now does.
- */
-export const BALUSTRADE = linearJoins('balustrade', balustradeGrid(), {
-  tags: ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'],
-});
+export const BALUSTRADE = balustradeSolid();
 
 /**
  * Pergola / trellis arch — a WALK-THROUGH, so the opening is the object. Timber
