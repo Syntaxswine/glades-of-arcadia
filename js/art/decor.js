@@ -1703,23 +1703,34 @@ function arcadeSolid() {
     // is nothing on the other side to complete the span, and half an arch
     // standing in air is not a ruin, it is a mistake.
     const ty = axis === 'ty';
-    const far = t1 >= R - 1e-6;
-    const bay = Boolean(mask & (ty ? (far ? 2 : 8) : far ? 1 : 4));
     const [p0, p1] = ty ? [b0, b1] : [a0, a1];
-    // The opening is centred on the arm's OUTER end — the tile boundary, where
-    // this half-bay meets its neighbour's and the two make one arch.
-    const hub = far ? p1 : p0;
+    /**
+     * PIRANESI, ON A LONE ARCADE: *"A single column holding up a floating red
+     * crate by one corner — this is not an arcade, it is an accident awaiting
+     * a lawsuit... until the load has two feet, this piece is a lie."*
+     *
+     * He was right, and the cause was the RHYTHM. The opening used to be
+     * centred on the tile BOUNDARY, with the column at the tile centre — so a
+     * piece with neighbours made an arch out of two half-bays, but a piece
+     * standing ALONE had no boundary to share and came out a solid block
+     * cantilevered off one shaft. It also put the column in front of the
+     * opening rather than under a pier, which is why the run read as columns
+     * standing in front of an arcade instead of carrying it.
+     *
+     * So the bay is now INSIDE ONE TILE: opening at the tile centre, columns
+     * at the tile's two ends. That is the colonnade's rule exactly — one per
+     * tile at its start, one more where the run stops — and it means a lone
+     * arcade is one complete bay standing on two feet, which is what an arcade
+     * is. `bay` is gone with it: every piece has an arch, and the wall either
+     * side of the opening is the pier.
+     */
+    const hub = ty ? Cb : C;
     extrudeInto(
       g,
       {
         axis,
         inside: (p, c) => {
           if (p < p0 - 0.01 || p > p1 + 0.01 || c < CAP_C || c > WALLTOP) return false;
-          // WHERE THE RUN STOPS, AN ABUTMENT. There is nothing on the other
-          // side to complete the span, so this arm is solid wall — an arcade
-          // ends on a pier, and a cornice hanging over open air with half an
-          // arch under it is not an end, it is an unfinished one.
-          if (!bay) return true;
           const d = Math.abs(p - hub);
           if (c < SPRING) return d >= WX; //   jambs either side of the doorway
           return Math.hypot(d / WX, (c - SPRING) / WY) >= 1; // ring + spandrel
@@ -1793,10 +1804,15 @@ function arcadeSolid() {
    * shaft's foot to the anchor — which is what `plinthH(16, 0)` was, so no
    * other number in this family moves.
    */
+  // Trimmed 14/17/20 -> 12/15/18 when the pier moved from the tile CENTRE to
+  // the tile BOUNDARY. A member standing on a boundary is SHARED: half of it
+  // reaches into the neighbour's tile, and test/joining.test.mjs measures
+  // exactly that reach — 20 was 20.4% against a 20% ceiling. 18 is 17.9%, and
+  // three courses against a shaft this slim were always a little bandy.
   const BASE = [
-    [14, 2],
-    [17, 3],
-    [20, 3],
+    [12, 2],
+    [15, 3],
+    [18, 3],
   ];
   const steppedBase = (g, cx, seatY) => {
     let y = seatY;
@@ -1840,11 +1856,18 @@ function arcadeSolid() {
     slabSquare(g, cx, y + ABACUS_S, ABACUS_W, 3, MARBLE);
   };
 
-  const columns = (g, { first, mask, project }) => {
-    if (!first) return;
-    const hasTx = Boolean(mask & 5) || !(mask & 10);
-    const hasTy = Boolean(mask & 10);
-    const [x, y0] = project(hasTy ? C + Cb : C, hasTy && !hasTx ? Cb : D, CAP_C);
+  /**
+   * ONE PIER AT EACH END OF THE BAY, which is the colonnade's rule and for the
+   * same reason: a run of n stands n + 1 piers, and a lone piece is a pair
+   * carrying an arch rather than a block balanced on a stick.
+   *
+   * AND ON THE WALL'S CENTRE LINE, `at(t)` giving b = Cb — not at b = D, the
+   * near face, where it used to stand. A column at the near face is a column
+   * standing IN FRONT of the arcade; a column on the centre line is the pier
+   * the arch actually springs from, and the wall above it is its load.
+   */
+  const pier = (g, project, ab) => {
+    const [x, y0] = project(...ab, CAP_C);
     // Same reconciliation as the colonnade's `post`: `project` answers where
     // the column's AXIS is, and a capital is drawn from the far corner of its
     // own footprint, so it must come back half that footprint in a and in b —
@@ -1854,6 +1877,13 @@ function arcadeSolid() {
     steppedBase(g, x, y + ARC_CAP_H + COLH);
     shaft(g, x, y + ARC_CAP_H, COLH, MARBLE);
     arcadeCapital(g, x, y);
+  };
+
+  const columns = (g, { axis, t0, t1, at, project, mask, turning }) => {
+    if (axis === 'hub') return turning ? pier(g, project, at(0)) : undefined;
+    if (t0 < 1e-6 && !turning) pier(g, project, at(0)); // one per tile
+    // ...and one more where the run STOPS, so a lone bay has a pier at each end.
+    if (t1 >= R - 1e-6 && !(mask & (axis === 'tx' ? 1 : 2))) pier(g, project, at(R));
   };
 
   const spec = {
