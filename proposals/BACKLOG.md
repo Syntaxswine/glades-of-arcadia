@@ -1,8 +1,15 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-04 (TWELFTH pass, §4q and §4r) against the two handoffs
-written that day. The day had two halves and they split by subject:
+Reconciled 2026-08-05 (THIRTEENTH pass, §4s). The solids arc now has THREE
+handoffs and they are cumulative — read them in order:
 
+* **`HANDOFF-LAYERS-STUDS-AND-THE-VAULT-2026-08-05.md`** — the newest, and the
+  one to read if you are about to author scenery that is **not one slab from the
+  ground up** (a rail on posts, anything with air inside it) or that has **no
+  axis-aligned parts** (an arch). Carries `layers`, `studs`, `extrudeInto`, and
+  the two lessons that generalise past art: *a footprint can be a fact about one
+  sprite rather than about the object*, and *an exemption list can name a
+  symptom and hide its cause*.
 * **`HANDOFF-SOLIDS-AND-THE-BENDING-RUN-2026-08-04.md`** — the keystone for
   **`js/art/solid.js`**: describing a piece as boxes and letting one rasteriser
   that knows the projection draw it. Read it before authoring or fixing ANY
@@ -571,6 +578,56 @@ into sprites … just add a skin to the geometric shape"* — and it landed the 
 day and then got used. **§4r below is the account.** This heading is kept only so
 the day reads in order: the idea arrived in the middle of the gateway work, as
 the answer to a fault list that was already five items long.
+
+## 4s · LAYERS, STUDS, AND THE VAULT ✅ (2026-08-05)
+
+Full write-up: **`HANDOFF-LAYERS-STUDS-AND-THE-VAULT-2026-08-05.md`**.
+
+Three owner sightings, and each one turned out to be a LIMIT IN THE TOOL rather
+than a mistake in the art — which is worth saying, because from outside all
+three read as neglect.
+
+**THE BALUSTRADE RIBBONED AT `<` AND `>`** because `solidJoins` extruded one box
+from the ground to `H`. True of a hedge, true of a wall, false of two rails with
+air between them — so it stayed on `linearJoins`, and a bend built from flat
+half-bars has no corner mass. `solid.js` grew **`layers`** (a box at its own
+height) and **`studs`** (a pass per ARM, for members that are TURNED rather than
+extruded). Each arm now carries its own run parameter `t`, so a family states
+its rhythm ONCE and all sixteen states filter it. Masks 9 and 6 — the owner's
+`<` and `>` exactly — gain the most ink, and it is the corner mass.
+
+**THE COLONNADE COULD NEITHER RUN NOR ROTATE, and it was one fault.** One sprite
+three tiles long: no join art, and a 3×1 footprint that §TURNS refuses. The note
+in §TURNS *named it by hand* and read as though 3×1 were a fact about
+colonnades. It was a fact about one SPRITE. It is the balustrade built tall —
+same two layer kinds, different heights — and a run of three still stands four
+columns because the far one is drawn only where the run stops.
+*Before teaching a mirror about oblong footprints, ask whether the thing wanted
+a footprint at all.*
+
+**THE ARCHES WERE FLAT PICTURES OF ARCHES,** and there were THREE drawings of
+one object: the flat 32 px `ruined-arch` the catalogue served, a second flat one
+in decor.js unreachable since the day it was written, and nothing isometric
+anywhere. New **`extrudeInto`** sweeps a profile stated in the `(a, c)` plane
+across `b` — MARCHED, not solved, because an arbitrary profile has no closed-form
+inverse — and what it buys is the **INTRADOS**, which is the difference between
+an archway and a croquet hoop. Both old sprites deleted; one generator makes the
+ruin and the new whole `archway`.
+
+**THE DEPTH OF A VAULT IS ARITHMETIC.** The view ray drops two units of height
+per unit of depth, so a vault `D` deep swallows `2D` of its own opening. At
+`D = 8` the first pass came out a culvert.
+
+`KNOWN_UNDERSIZED` loses `ruined-arch`: *"2x1 claimed: 25px short"* was measuring
+the PLOT, not the art. Second exemption list in two days that named a symptom
+and hid its cause. `gap-audit` listed three run families of five — a family
+absent from an instrument reads exactly like a family that passed.
+
+Open, and now the only run family not on solids: **`stepped-terrace-wall` still
+cannot bend.** Also open: the mirror still inverts the light on every mirrored
+piece; `gap-audit` composes straight runs only; `extrudeInto` has no
+`solidJoins` equivalent, so a swept profile cannot yet take part in a run; and
+the one-pixel elbow seam that `hedge-low` and the balustrade now share.
 
 ## 4r · SOLIDS, AND A RUN THAT BENDS ✅ (2026-08-04, second half)
 
