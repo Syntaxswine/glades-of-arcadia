@@ -1598,7 +1598,7 @@ export const COLONNADE = colonnadeSolid();
 function arcadeSolid() {
   // EVEN, so the column sits at an integer b = D / 2 and the anchor lands on a
   // whole row. D = 5 gave an anchor y of 93.5, which is not a pixel.
-  const D = 6; //          the arcade's thickness across the run
+  const D = 4; //          the arcade's thickness across the run
   const X0 = 2 * D + 2;
   const TOP = 3;
   const R = LINE_W / 2;
