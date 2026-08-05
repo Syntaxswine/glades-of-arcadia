@@ -351,6 +351,15 @@ function plinth(w, dieH, ramp = MARBLE, flutes = 0) {
   slabSquare(g, cx, S + 2 + dieH, w, 2, ramp); //     the base slab
   slabSquare(g, cx, S + 2, w - 4, dieH + 2, ramp); // the die, oversailed both ends
   slabSquare(g, cx, S, w, 2, ramp); //                the cap slab
+  // THE TORUS, and it is ROUND — so a `drum`, not a fourth square.
+  //
+  // A real attic base is square courses stepping up to a circular cushion, and
+  // the cushion is what the shaft actually lands on. Without it a fluted
+  // cylinder meets a sharp-cornered slab with nothing between them, and the two
+  // read as separate objects stacked rather than as one worked base. It is the
+  // second half of the owner's *"trapezoids or ellipses"*: the square courses
+  // are the trapezoids, this is the ellipse.
+  drum(g, cx, S, Math.max(4, Math.round(w / 2) - 4), 2, { ramp, rim: true });
   return g.map((r) => r.join(''));
 }
 
