@@ -2073,6 +2073,26 @@ const STRUCTURE = [
     unlockedBy: null,
     blurb: 'Planks and a handrail across the water, wide enough for one. For now it likes both banks at the same height; a real span over a gorge is still being worked out.',
   },
+  {
+    id: 'bridge-ramp',
+    name: 'Bridge ramp',
+    group: 'structure',
+    footprint: [1, 1],
+    art: sprite('bridge-ramp'),
+    zone: NONE,
+    register: 'archaic',
+    flatFooting: false,
+    // NOT a connector and NOT in the bridge's join group, on purpose. A
+    // connector changes the tile's level, which this does not — the deck
+    // height is the bridge sprite's fact, not the terrain's. And joining
+    // would zero the facing the moment it touched a bridge, when the facing
+    // is exactly what aims the climb at the deck. It turns with the wheel,
+    // like every other ramp.
+    deposits: dep({ order: 2, maturity: 1 }),
+    tags: ['path', 'stone', 'traffic', 'archaic'],
+    unlockedBy: null,
+    blurb: 'A masonry approach rising a whole deck in one tile, coped to match the bridge it serves. Set one against either end of a span and the road no longer ends in mid-air.',
+  },
 ];
 
 // ---------------------------------------------------------------------------

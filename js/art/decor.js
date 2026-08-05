@@ -2444,7 +2444,7 @@ export const ARCHWAY = WARCH;
  * reached either bank.
  * ---------------------------------------------------------------------------
  */
-function bridgeGrid({ ramp, seed }) {
+function bridgeGrid({ ramp, seed, mask = 0 }) {
   const R = LINE_W / 2;
 
   /**
@@ -2453,20 +2453,55 @@ function bridgeGrid({ ramp, seed }) {
    * The catalogue had always called this `[2, 1]` and the first rebuild
    * believed it. A two-tile bridge puts its arch over the BOUNDARY between its
    * two tiles, and every stream in this game is one tile wide (`brook` is
-   * 1x1), so the arch could never once be centred on the water it crossed:
-   * placed over a brook it stood with one abutment in the channel and its span
-   * over the bank. Two bays instead of one would fix the centring and cost the
-   * arches their opening — a pier between them is 3 px at this scale.
+   * 1x1), so the arch could never once be centred on the water it crossed.
+   * One arch, centred on its own tile, deck overhanging onto the banks.
    *
-   * So: one arch, centred on its own tile, and the deck OVERHANGS onto both
-   * banks. That is what a footbridge is, and it is the same lesson the
-   * colonnade and the ruined arch both taught — the footprint is a fact about
-   * one sprite, not about the building.
+   * AND NOW IT JOINS, because the owner: *"I'm ok with that bridge design
+   * because it allows a modular structure to pass over any amount of water,
+   * but there should be a way to make it twice as wide and put a ramp up to
+   * either end of it."* Three rules, all read off the mask:
+   *
+   *   ALONG the run     a neighbour trims the deck's overhang on that side, so
+   *                     spans BUTT instead of burying each other — and the two
+   *                     abutments meeting at the shared boundary read as one
+   *                     pier, which is how a real viaduct is built.
+   *   ACROSS the run    a neighbour on the PARAPET side means this deck is the
+   *                     interior of a wider roadway, so the parapet is not
+   *                     drawn: two bridges laid side by side merge into one
+   *                     deck twice as wide, with a rail only at the outer edge.
+   *   ORIENTATION       the masks are absolute, so a run laid along ty gets
+   *                     genuinely ty-swept geometry, not a mirror. Whichever
+   *                     axis holds more neighbours wins; a tie keeps tx.
    */
+  const nTx = (mask & 1 ? 1 : 0) + (mask & 4 ? 1 : 0);
+  const nTy = (mask & 2 ? 1 : 0) + (mask & 8 ? 1 : 0);
+  const ty = nTy > nTx;
+  // The run parameter p runs 0..R along the deck. Low-p side is -tx (bit 4)
+  // when the deck runs tx, and -ty (bit 8) when it runs ty.
+  const loBit = ty ? 8 : 4;
+  const hiBit = ty ? 2 : 1;
+  // The parapet stands on the deck's FAR edge: b = 0 (the -ty side) for a tx
+  // deck, a = 0 (the -tx side) for a ty one. A neighbour standing there means
+  // another deck continues the roadway, and a rail down the middle of a road
+  // is exactly what the widening exists to remove.
+  const paraDropBit = ty ? 4 : 8;
+
   const AC = R / 2; //   the crown, over the middle of the tile
   const OVER = 4; //     how far the roadway reaches past the tile, onto the banks
-  const A0 = -OVER;
-  const A1 = R + OVER;
+  const P0 = mask & loBit ? 0 : -OVER;
+  const P1 = R + (mask & hiBit ? 0 : OVER);
+  /**
+   * WIDENING IS AN EXTENSION, NOT AN ADJACENCY. The deck is 5 units deep on a
+   * 16.5-unit tile, so two bridges laid side by side are eleven units of open
+   * air apart and nothing about drawing them next to each other merges them.
+   * A neighbour on the NEAR side (the non-parapet side) means this piece's
+   * vault runs on across its own tile to meet that neighbour's deck — the
+   * sweep deepens from D to R, the soffit lengthens, and the opening goes
+   * properly dark, which is what the underside of a road actually looks like.
+   * The neighbour still draws its own 5 units, and the two together are one
+   * continuous deck with a rail only at the outer edge.
+   */
+  const extBit = ty ? 1 : 2;
 
   // THE ROADWAY'S WIDTH, and it is the archway's arithmetic again: the view ray
   // drops two units of height per unit of depth, so a vault D deep swallows 2D
@@ -2474,6 +2509,7 @@ function bridgeGrid({ ramp, seed }) {
   // daylight left under the crown, which is the only reason to build an arch
   // rather than a culvert.
   const D = 5;
+  const SWEEP = mask & extBit ? R : D; // see WIDENING above
   const SPRING = 9; //   low: this crosses a brook, not a gorge
   const RI = 5.5;
   const RO = 8.25; //    a ring 2.75 thick, out to the tile's own edge
@@ -2483,26 +2519,31 @@ function bridgeGrid({ ramp, seed }) {
   const DECK_C = CROWN + DECK;
   const H = DECK_C + PARA;
   const PAD = 3;
-  const x0 = PAD + 2 * D + 2 * OVER;
-  const yTop = PAD;
-  const g = grid(x0 + Math.ceil(2 * (A1 - A0)) + PAD, yTop + Math.ceil(A1 - A0) + D + H + PAD);
+  // One canvas arithmetic for both orientations: x runs to +2a and -2b, so a
+  // tx deck reaches right by its run and a ty one reaches left by it.
+  const x0 = ty ? PAD + 2 * Math.ceil(P1) : PAD + 2 * Math.ceil(SWEEP) + 2 * OVER;
+  const yTop = PAD + OVER; // an overhang's parapet corner tops out above yTop
+  const g = grid(
+    x0 + Math.ceil(2 * (P1 - P0)) + 2 * Math.ceil(SWEEP) + PAD,
+    yTop + Math.ceil(P1 + SWEEP) + H + PAD
+  );
   const n = ramp.length - 1;
   const key = (i) => ramp[clamp(Math.round(i), 0, n)];
 
   /**
    * THE PARAPET IS ON THE FAR EDGE ONLY, and that is a decision rather than an
-   * omission. A bridge is a PATH — the player walks it — and a near parapet at
-   * b = D stands between the eye and the roadway, hiding the one surface the
-   * object exists to offer. Every real bridge has two; every isometric bridge
-   * that keeps both is a trough. The far one reads as the pair, because the eye
+   * omission. A bridge is a PATH — the player walks it — and a near parapet
+   * stands between the eye and the roadway, hiding the one surface the object
+   * exists to offer. Every real bridge has two; every isometric bridge that
+   * keeps both is a trough. The far one reads as the pair, because the eye
    * completes it — the same borrowing that lets the ruined arch keep two feet.
    */
   const PARA_B = 2;
 
-  const inside = (a, c) => {
+  const inside = (p, c) => {
     if (c < 0 || c > DECK_C) return false;
-    if (a < A0 || a > A1) return false;
-    const dA = a - AC;
+    if (p < P0 || p > P1) return false;
+    const dA = p - AC;
     const w = Math.abs(dA);
     if (c >= CROWN) return true; //                        the roadway, end to end
     if (c <= SPRING) return w >= RI; //                    abutments, arch cut out
@@ -2512,8 +2553,8 @@ function bridgeGrid({ ramp, seed }) {
   };
 
   const MID = (RI + RO) / 2;
-  const skin = (a, c, b, near, x, y) => {
-    const dA = a - AC;
+  const skin = (p, c, s, near, x, y) => {
+    const dA = p - AC;
     const above = c > SPRING && c < CROWN;
     const r = above ? Math.hypot(dA, c - SPRING) : Math.abs(dA);
     const th = above ? Math.atan2(c - SPRING, dA) : dA > 0 ? 0 : Math.PI;
@@ -2537,7 +2578,7 @@ function bridgeGrid({ ramp, seed }) {
         const course = Math.floor(c / 4);
         v = n - 1.9;
         if (c % 4 < 0.9) v -= 1.1; //                                bed joints
-        if ((Math.round(a) + course * 4) % 9 === 0) v -= 0.9; //     perpends
+        if ((Math.round(p) + course * 4) % 9 === 0) v -= 0.9; //     perpends
         // THE SHADOW THE RING THROWS ON ITS OWN SPANDREL. Without it the haunch
         // and the ring are one flat field, and the arch reads as drawn on.
         if (Math.hypot(dA, c - SPRING) < RO + 2 && c > SPRING) v -= 1.2;
@@ -2547,9 +2588,7 @@ function bridgeGrid({ ramp, seed }) {
     } else {
       // THE SOFFIT, and the whole reason to rebuild this. It faces down into
       // the water, never sees the light, and RECEDES — which is the difference
-      // between a bridge and a hole with a disc of blue painted behind it. The
-      // old sprite cycled its own water because a flat hole has nothing behind
-      // it; this one shows the brook the player actually laid.
+      // between a bridge and a hole with a disc of blue painted behind it.
       v = 0.4 + Math.max(0, Math.sin(th)) * 0.5;
     }
     if (hash(x, y, seed) > 0.87) v -= 0.7; //                          grain
@@ -2565,41 +2604,174 @@ function bridgeGrid({ ramp, seed }) {
   };
   extrudeInto(
     g,
-    { inside, b0: 0, b1: D, skin, aRange: [A0 - 1, A1 + 1], cRange: [0, DECK_C] },
+    {
+      axis: ty ? 'ty' : 'tx',
+      inside,
+      b0: 0,
+      b1: SWEEP,
+      skin,
+      aRange: [P0 - 1, P1 + 1],
+      cRange: [0, DECK_C],
+    },
     frame
   );
 
   // The far parapet, on the SAME z-buffer so the deck it stands on resolves
-  // against it instead of being painted over. Bottom-up is already satisfied:
-  // the sweep above laid the deck, and this stands on top of it.
-  renderInto(
-    g,
-    [
-      box(A0, A1, 0, PARA_B, DECK_C, H, {
-        top: (a, b) => (b < 1 ? ramp[n - 1] : ramp[n]),
-        side: (a, k) => (Math.round(k) - 1 <= 0 ? ramp[n - 1] : ramp[n - 2]),
-        end: (b, k) => ramp[clamp(n - 2 - Math.round(k), 0, n)],
-      }),
-    ],
-    frame
-  );
+  // against it instead of being painted over — and only where no neighbouring
+  // deck continues the roadway across it.
+  if (!(mask & paraDropBit)) {
+    const faces = {
+      top: () => ramp[n],
+      side: (a2, k) => (Math.round(k) - 1 <= 0 ? ramp[n - 1] : ramp[n - 2]),
+      end: (b2, k) => ramp[clamp(n - 2 - Math.round(k), 0, n)],
+    };
+    renderInto(
+      g,
+      [
+        ty
+          ? box(0, PARA_B, P0, P1, DECK_C, H, faces)
+          : box(P0, P1, 0, PARA_B, DECK_C, H, faces),
+      ],
+      frame
+    );
+  }
 
   outline(g, ramp[0]);
-  // The contact patch is the two abutments, at b 0..D over the tile — so the
-  // ground centre is (AC, D / 2). The deck's overhang is deliberately not in
-  // this: it hangs over the banks and touches nothing.
+  // The contact patch is the two abutments over the tile — ground centre at
+  // (AC, D/2) for a tx deck and (D/2, AC) for a ty one. The overhang is
+  // deliberately not in this: it hangs over the banks and touches nothing.
+  // The anchor does NOT move with the sweep, although the extended abutments
+  // genuinely touch ground out there: the renderer requires one anchor height
+  // across all sixteen states (test: "every joining family keeps one hub"),
+  // and the extension is reaching ink — the widened deck leaning toward its
+  // neighbour's tile — exactly as the overhang is. Contact stays (AC, D/2).
+  const ax = ty ? x0 + D - 2 * AC : x0 + 2 * AC - D;
+  return { g, ax: Math.round(ax), ay: Math.round(yTop + AC + D / 2 + H + 1) };
+}
+
+{
+  const tags = ['decor', 'architecture', 'rock', 'arch', 'path', 'traffic'];
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) => {
+      const r = bridgeGrid({ ramp: ROCK, seed: 41, mask: m });
+      return defineSprite({
+        name: `bridge@${m}`,
+        rows: r.g.map((row) => row.join('')),
+        anchor: [r.ax, r.ay],
+        tags,
+      });
+    })
+  );
+  // eslint-disable-next-line no-var
+  var BRIDGE_SOLID = defineSprite({ ...joins[0], name: 'bridge', joins, tags });
+}
+/** One masonry span, a soffit the brook runs under — and it joins: end to end
+ * into a viaduct, side by side into a double-width deck. */
+export const BRIDGE = BRIDGE_SOLID;
+
+/**
+ * THE BRIDGE RAMP — a masonry approach that climbs from the turf to the
+ * bridge's roadway in one tile, so a span does not end in a jump.
+ *
+ * The owner asked for *"a ramp up to either end of it"*, and this is that
+ * piece: place it on the bank against a bridge's end and its top lands exactly
+ * at the deck (DECK_C = 24, the bridge's SPRING 9 + ring 12 + deck 3 — change
+ * one and you must change the other). The bridge's 4-unit overhang laps onto
+ * the ramp's high end, which is precisely what a deck bearing on an abutment
+ * looks like.
+ *
+ * It TURNS with the wheel, not with joins — the four directions are the same
+ * two drawings every connector uses: this one climbing away (+tx), a `back`
+ * variant climbing toward the viewer, and the facing mirror for the ty pair.
+ * Joins would zero the facing the moment it touched the bridge, and a ramp
+ * that cannot point at what it serves is furniture.
+ */
+function bridgeRampGrid({ ramp, seed, near = false }) {
+  const R = LINE_W / 2;
+  const AC = R / 2;
+  const D = 5; //        the roadway's width: the bridge's, exactly
+  const DECK_C = 24; //  the bridge's deck height: SPRING + RO + DECK
+  const PARA = 6;
+  const PARA_B = 2;
+  const H = DECK_C + PARA;
+  const PAD = 3;
+  const x0 = PAD + 2 * D;
+  const yTop = PAD;
+  const g = grid(x0 + Math.ceil(2 * R) + PAD, yTop + Math.ceil(R) + D + H + PAD);
+  const n = ramp.length - 1;
+  const key = (i) => ramp[clamp(Math.round(i), 0, n)];
+
+  // The roadway line. `near` is the toward-the-viewer climb: high end at the
+  // -tx edge, which is the drawing the facing wheel cannot make by mirroring.
+  const slope = (p) => (near ? DECK_C * (1 - p / R) : DECK_C * (p / R));
+
+  const wedge = {
+    inside: (p, c) => p >= 0 && p <= R && c >= 0 && c <= slope(p),
+    b0: 0,
+    b1: D,
+    aRange: [-1, R + 1],
+    cRange: [0, DECK_C],
+    skin: (p, c, s, isNear, x, y) => {
+      let v;
+      if (c >= slope(p) - 0.9) {
+        // THE ROADWAY, climbing. Bright like the bridge's deck, with a worn
+        // line down its middle where the feet go.
+        v = Math.abs(s - D / 2) < 1 ? n - 0.6 : n;
+      } else if (isNear) {
+        // The flank: coursed ashlar, the bridge's own bond.
+        const course = Math.floor(c / 4);
+        v = n - 1.9;
+        if (c % 4 < 0.9) v -= 1.1; //                              bed joints
+        if ((Math.round(p) + course * 4) % 9 === 0) v -= 0.9; //   perpends
+      } else {
+        // The tall cut at the high end, turned away from the light.
+        v = n - 2.6;
+      }
+      if (hash(x, y, seed) > 0.87) v -= 0.7;
+      return key(v);
+    },
+  };
+
+  // The parapet follows the climb — a box cannot slope, so it is a second
+  // swept profile on the same z-buffer, sitting on the roadway line.
+  const parapet = {
+    inside: (p, c) => p >= 0 && p <= R && c > slope(p) - 0.5 && c <= slope(p) + PARA,
+    b0: 0,
+    b1: PARA_B,
+    aRange: [-1, R + 1],
+    cRange: [0, H],
+    skin: (p, c, s, isNear, x, y) => {
+      if (c >= slope(p) + PARA - 1.2) return ramp[n]; //           the coping
+      let v = isNear ? n - 1 : n - 2.2;
+      if (hash(x, y, seed + 9) > 0.88) v -= 0.7;
+      return key(v);
+    },
+  };
+
+  const frame = {
+    x0,
+    yTop,
+    lift: H,
+    zbuf: new Float64Array(g[0].length * g.length).fill(-Infinity),
+  };
+  extrudeInto(g, wedge, frame);
+  extrudeInto(g, parapet, frame);
+
+  outline(g, ramp[0]);
   return { g, ax: Math.round(x0 + 2 * AC - D), ay: Math.round(yTop + AC + D / 2 + H + 1) };
 }
 
 {
-  const b = bridgeGrid({ ramp: ROCK, seed: 41 });
+  const tags = ['decor', 'architecture', 'rock', 'path', 'traffic', 'ramp'];
+  const nearR = bridgeRampGrid({ ramp: ROCK, seed: 47, near: true });
   // eslint-disable-next-line no-var
-  var BRIDGE_SOLID = spriteAt('bridge', [b.ax, b.ay], b.g, {
-    tags: ['decor', 'architecture', 'rock', 'arch', 'path', 'traffic'],
-  });
+  var BRAMP_NEAR = spriteAt('bridge-ramp-near', [nearR.ax, nearR.ay], nearR.g, { tags });
+  const r = bridgeRampGrid({ ramp: ROCK, seed: 47 });
+  // eslint-disable-next-line no-var
+  var BRAMP = spriteAt('bridge-ramp', [r.ax, r.ay], r.g, { tags, back: BRAMP_NEAR });
 }
-/** One masonry span, and a soffit you can see the brook running under. */
-export const BRIDGE = BRIDGE_SOLID;
+export const BRIDGE_RAMP = BRAMP;
+export const BRIDGE_RAMP_NEAR = BRAMP_NEAR;
 
 
 /**
@@ -4943,6 +5115,12 @@ export const DECOR = Object.freeze({
   'broken-column': BROKEN_COLUMN_FLUTED,
   colonnade: COLONNADE,
   arcade: ARCADE,
+  // In the TABLE, not only exported: test/joining.test.mjs finds its families
+  // by scanning these tables, and a joining sprite that is a bare export is a
+  // family no guard has ever seen — the drystone lesson, third time round.
+  bridge: BRIDGE,
+  'bridge-ramp': BRIDGE_RAMP,
+  'bridge-ramp-near': BRIDGE_RAMP_NEAR,
   balustrade: BALUSTRADE,
   'pergola-arch': PERGOLA_ARCH,
   'ruined-arch': RUINED_ARCH,
