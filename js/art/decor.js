@@ -63,7 +63,6 @@
 import {
   defineSprite,
   padToAnchor,
-  foot,
   groundFoot,
   LINE_W,
   LINE_DROP,
@@ -77,7 +76,7 @@ import {
   linearJoins,
   axialJoins,
 } from './format.js';
-import { solidJoins, outline, extrudeInto } from './solid.js';
+import { solidJoins, outline, extrudeInto, renderInto, box } from './solid.js';
 import { variant } from '../palette.js';
 import { LEVEL_H, GROUND_ELLIPSE } from '../iso.js';
 
@@ -325,32 +324,55 @@ function drum(g, cx, cy, rx, h, opts = {}) {
  * and the object stands exactly where it did. The foot hangs below it, which is
  * what the front half of a diamond does.
  */
+/**
+ * ...AND IT IS BUILT OF THREE SQUARE SLABS, because it is three square slabs.
+ *
+ * The owner: *"if a column is in isometric perspective the base and the capital
+ * should be in isometric perspective instead of viewed straight on. so they
+ * should be trapezoids or ellipses instead of horizontal lines."*
+ *
+ * This used to be seven `hline`-style rows — a square seen FACE ON, which is
+ * right for an elevation drawing and flat in a projection where everything
+ * around it recedes. The docblock above already knew the base was a DIAMOND;
+ * only the foot beneath it was drawn as one.
+ *
+ * THE FOOT IS GONE, AND NOT BY OVERSIGHT: the base slab's own near half IS the
+ * front of the ground diamond. `foot()` existed to fake exactly that under a
+ * flat drawing. A real solid does not need a picture of its own contact.
+ *
+ * Painted bottom up, and that ordering IS the occlusion: a higher slab is a
+ * nearer slab (`depth = a + b + 2c`), so a later one covering an earlier one is
+ * correct and no shared z-buffer is needed between them.
+ */
 function plinth(w, dieH, ramp = MARBLE, flutes = 0) {
-  const R = ramp;
-  const n = R.length - 1;
-  const body = (ww, fl) => {
-    let s = '';
-    for (let x = 0; x < ww; x++) s += roundKey(x - (ww - 1) / 2, ww / 2, R, fl);
-    return R[0] + s.slice(1, -1) + R[0];
-  };
-  const inset = (row, k) => '.'.repeat(k) + row + '.'.repeat(k);
-  const out = [];
-  out.push(inset(R[0] + R[n].repeat(w - 2) + R[0], 0)); // cap top face
-  out.push(R[0] + body(w - 2, 0).slice(1, -1) + R[0]);
-  out.push(R[0] + R[2].repeat(w - 4) + R[1] + R[1] + R[0]); // cap underside
-  for (let i = 0; i < dieH; i++) out.push(inset(body(w - 4, flutes), 2));
-  out.push(inset(R[0] + R[n].repeat(w - 4) + R[0], 2));
-  out.push(R[0] + body(w - 2, 0).slice(1, -1) + R[0]);
-  out.push(R[0] + R[1].repeat(w - 2) + R[0]);
-  out.push(...foot(w - 2, R, 1));
-  return out;
+  const S = Math.round(w / 4);
+  const cx = Math.round(w / 2);
+  const g = grid(cx * 2 + 1, 2 * S + dieH + 6);
+  slabSquare(g, cx, S + 2 + dieH, w, 2, ramp); //     the base slab
+  slabSquare(g, cx, S + 2, w - 4, dieH + 2, ramp); // the die, oversailed both ends
+  slabSquare(g, cx, S, w, 2, ramp); //                the cap slab
+  return g.map((r) => r.join(''));
 }
 
 /**
- * Rows of plinth(w, dieH) DOWN TO THE ANCHOR: cap (3) + die + base (4).
- * Callers stack on this, and the foot hangs below it — see `plinth`.
+ * Rows from a plinth's TOP FACE down to the anchor — and it needs `w` now,
+ * because the height of a square is a function of its width here: a slab `w`
+ * across has a top face `w / 2` tall, so `w / 4` of it lies below its own seat.
+ *
+ * The anchor is still the CENTRE of the base diamond rather than its lowest
+ * pixel, exactly as before; what changed is that the diamond is now the solid's
+ * own bottom instead of a foot drawn under a flat stack.
  */
-const plinthH = (dieH) => 3 + dieH + 4;
+const plinthH = (w, dieH) => Math.round(w / 4) + 4 + dieH;
+
+/**
+ * Stand something on a moulded base. `seatY` is where the thing's own foot
+ * sits, which is the CENTRE of the plinth's top face — so the base straddles
+ * it: the far half behind, the near half in front.
+ */
+function standOn(g, cx, seatY, w, dieH, ramp = MARBLE, flutes = 0) {
+  stamp(g, plinth(w, dieH, ramp, flutes), cx - Math.round(w / 2), seatY - Math.round(w / 4));
+}
 
 /**
  * Stamp a row array into a grid at (x, y), '.' meaning leave alone.
@@ -829,8 +851,8 @@ function amphoraGrid(withPlinth) {
   }
   const base = AMPHORA_PROFILE.length + 1;
   if (withPlinth) {
-    stamp(g, plinth(20, 5, MARBLE), cx - 9, base);
-    return { g, cx, ay: base + plinthH(5) - 1 };
+    standOn(g, cx, base, 20, 5);
+    return { g, cx, ay: base + plinthH(20, 5) - 1 };
   }
   // A small ring stand — a pointed amphora will not stand on grass by itself,
   // and drawing it leaning is a different object.
@@ -930,8 +952,8 @@ function flutedUrnGrid() {
   hline(g, cx - 7, cx + 7, 8, 'B'); // the lid joint — an urn with no seam has no lid
   hline(g, cx - 8, cx + 8, 9, 'E');
   const base = 4 + URN_PROFILE.length;
-  stamp(g, plinth(18, 3, MARBLE), cx - 8, base);
-  return { g, cx, ay: base + plinthH(3) - 1 };
+  standOn(g, cx, base, 18, 3);
+  return { g, cx, ay: base + plinthH(18, 3) - 1 };
 }
 {
   const u = flutedUrnGrid();
@@ -972,8 +994,8 @@ function sundialGrid() {
     put(g, cx - 5 + k * 0.5, 11 - k, 'T');
   }
   const base = 35;
-  stamp(g, plinth(20, 4, MARBLE), cx - 9, base);
-  return { g, cx, ay: base + plinthH(4) - 1 };
+  standOn(g, cx, base, 20, 4);
+  return { g, cx, ay: base + plinthH(20, 4) - 1 };
 }
 {
   const s = sundialGrid();
@@ -1001,8 +1023,8 @@ function birdbathGrid() {
   }
   hline(g, cx - 5, cx + 2, 9, 'K'); // one glint, upper left
   const base = 31;
-  stamp(g, plinth(20, 3, MARBLE), cx - 9, base);
-  return { g, cx, ay: base + plinthH(3) - 1 };
+  standOn(g, cx, base, 20, 3);
+  return { g, cx, ay: base + plinthH(20, 3) - 1 };
 }
 {
   const b = birdbathGrid();
@@ -1128,6 +1150,53 @@ export const ARBOUR_SEAT = spriteAt('arbour-seat', [18, 46], arbourSeatGrid(), {
 
 const SHAFT_HW = 6; // half-width at the foot; entasis narrows it going up
 
+/**
+ * A SQUARE SLAB — an abacus, a plinth's cap, a die. The owner, on the columns:
+ *
+ *   *"if a column is in isometric perspective the base and the capital should
+ *   be in isometric perspective instead of viewed straight on. so they should
+ *   be trapezoids or ellipses instead of horizontal lines."*
+ *
+ * Exactly right, and it names the fault by its instrument: `hline`. The three
+ * capitals and `plinth` drew their square members as stacked horizontal bands,
+ * which is a square seen FACE ON — correct for a front elevation and flat in a
+ * projection where everything around it recedes. The shaft got away with it
+ * because a cylinder genuinely does look the same from every horizontal
+ * direction; a square does not.
+ *
+ * ROUND members already have their primitive and it is `drum()` — a 2:1
+ * elliptical top face over a cylindrical band, which is the "ellipses" half of
+ * the owner's sentence. This is the "trapezoids" half.
+ *
+ * THE ARITHMETIC THAT DECIDES EVERYTHING: a square of screen width `w` has
+ * a = b = w / 4, so its top face is **w / 2 tall**. That is not a tunable — it
+ * is what a square is here — and it is why an abacus 19 px across needs ten
+ * rows where five flat bands used to do. Narrow the member if that is too
+ * much; do not flatten it.
+ *
+ * `seatY` is where the CENTRE of the top face sits, so the slab straddles it:
+ * the far half behind whatever stands on it, the near half in front.
+ */
+function slabSquare(g, cx, seatY, w, hgt, ramp = MARBLE, zbuf = null, inset = 0) {
+  const S = w / 4;
+  const n = ramp.length - 1;
+  const k = (i) => ramp[clamp(Math.round(i), 0, n)];
+  renderInto(
+    g,
+    [
+      box(inset, S - inset, inset, S - inset, 0, hgt, {
+        top: (a, b) => k(n - (b > S - inset - 0.9 ? 1 : 0)),
+        side: (a, c) => k(n - 1.2 - c * 0.55),
+        // The cut end turns down-right, away from the light. An `end` as bright
+        // as the `side` is the fastest way to make a solid read as folded paper.
+        end: (b, c) => k(n - 2 - c * 0.55),
+      }),
+    ],
+    { x0: cx, yTop: seatY - S, lift: hgt, zbuf }
+  );
+  return S;
+}
+
 /** The fluted shaft. Every column, pilaster and colonnade post uses this. */
 function shaft(g, cx, yTop, h, ramp = MARBLE) {
   for (let i = 0; i < h; i++) {
@@ -1141,20 +1210,40 @@ function shaft(g, cx, yTop, h, ramp = MARBLE) {
   return SHAFT_HW;
 }
 
-/** Doric: a plain flaring echinus under a square abacus. No base. */
+/**
+ * Doric: a plain flaring echinus under a square abacus. No base.
+ *
+ * THE ABACUS IS SQUARE AND THE ECHINUS IS ROUND, and until now both were drawn
+ * as `hline` — five stacked horizontal bands, which is a square seen FACE ON.
+ * Correct for a front elevation; flat in a projection where everything around
+ * it recedes. The shaft got away with it because a cylinder really does look
+ * the same from every horizontal direction. A square does not.
+ *
+ * So the abacus is a `slabSquare` (a rhombus) and the echinus is a `drum` (a
+ * 2:1 ellipse over a cylindrical band) — the two primitives this file already
+ * had, reached for at last.
+ *
+ * IT IS TALLER, and that is not a choice: a square 19 px across is 9.5 px tall
+ * here. `CAPITAL_H` below is derived from that rather than written down, so the
+ * three orders and the colonnade all move together.
+ */
+const ABACUS_W = 19;
+const ABACUS_S = ABACUS_W / 4; //  a = b = w/4, so the top face is 2S = w/2 tall
 function doricCapital(g, cx, y, ramp = MARBLE) {
-  hline(g, cx - 9, cx + 9, y, ramp[0]);
-  hline(g, cx - 9, cx + 9, y + 1, ramp[4]);
-  hline(g, cx - 9, cx + 9, y + 2, ramp[3]);
-  hline(g, cx - 8, cx + 8, y + 3, ramp[2]);
-  hline(g, cx - 8, cx + 8, y + 4, ramp[1]);
-  for (let k = 0; k < 3; k++) {
-    const w = 7 - k;
-    for (let dx = -w; dx <= w; dx++) put(g, cx + dx, y + 5 + k, roundKey(dx, w + 0.5, ramp));
-  }
-  hline(g, cx - 5, cx + 5, y + 8, ramp[1]);
-  return y + 9;
+  // The echinus is a SOLID OF REVOLUTION, so it is a `revolve` flare — one
+  // silhouette that is honest from every horizontal direction. Two stacked
+  // `drum`s were tried first and read as a pair of ears: a drum states a
+  // circular TOP FACE, and the echinus's top is covered by the abacus, so all
+  // that showed was two elliptical rims sticking out either side.
+  //
+  // Drawn first, so the abacus's near half stands in front of it.
+  const eTop = Math.round(y + 2 * ABACUS_S);
+  revolve(g, cx, eTop, [8, 8, 8, 7, 7, 6], { ramp });
+  slabSquare(g, cx, y + ABACUS_S, ABACUS_W, 3, ramp);
+  return eTop + 6;
 }
+/** Rows from a capital's top face down to where the shaft begins. */
+const CAPITAL_H = Math.round(2 * ABACUS_S + 6);
 
 /**
  * Ionic: the same abacus, with a volute scrolling out either side.
@@ -1229,15 +1318,15 @@ function columnGrid(capital, name) {
   const H = 62;
   const g = grid(26, H);
   const cx = 12;
-  const capH = capital === doricCapital ? 9 : capital === ionicCapital ? 11 : 14;
+  const capH = capital === doricCapital ? CAPITAL_H : capital === ionicCapital ? 11 : 14;
   const yCap = 1;
   const shaftTop = yCap + capH;
   const shaftH = H - shaftTop - 13;
   shaft(g, cx, shaftTop, shaftH, MARBLE);
   capital(g, cx, yCap, MARBLE);
   const base = shaftTop + shaftH;
-  stamp(g, plinth(18, 1, MARBLE), cx - 8, base);
-  return { g, cx, ay: base + plinthH(1) - 1, name };
+  standOn(g, cx, base, 18, 1);
+  return { g, cx, ay: base + plinthH(18, 1) - 1, name };
 }
 {
   const d = columnGrid(doricCapital, 'doric-column');
@@ -1273,7 +1362,7 @@ function brokenColumnGrid() {
     put(g, cx + dx, top + 2, 'A');
   }
   const base = 5 + H;
-  stamp(g, plinth(18, 1, MARBLE), cx - 8, base);
+  standOn(g, cx, base, 18, 1);
   // The fallen drum beside it. It has to lie DOWN: a horizontal cylinder with
   // one circular end face turned toward the viewer and the flutes running
   // along its length. Take one used drum(), which draws an upright cylinder,
@@ -1300,7 +1389,7 @@ function brokenColumnGrid() {
   // ONE shadow, and it is centred on the ANCHOR rather than on the standing
   // stump: this sprite is a broken column AND the drum fallen beside it, so
   // the ground it touches is the whole pair. r 13 against a 26px foot.
-  return { g, cx, ay: base + plinthH(1) - 1 };
+  return { g, cx, ay: base + plinthH(18, 1) - 1 };
 }
 {
   const b = brokenColumnGrid();
@@ -1349,7 +1438,7 @@ function colonnadeSolid() {
   const TOP = 6;
   const R = LINE_W / 2;
   const COLH = 32;
-  const CAPH = 9;
+  const CAPH = CAPITAL_H;
   // The column's capital tucks one row up under the entablature, and its plinth
   // anchor lands on the ground plane: capital top + 9 + 32 + plinthH(0) = c 0.
   // That fixes H at 53 and keeps the column exactly where the old sprite had
@@ -1383,7 +1472,7 @@ function colonnadeSolid() {
       const [x, y] = project(...at(t), CAP_C);
       doricCapital(g, x, y, MARBLE);
       shaft(g, x, y + CAPH, COLH, MARBLE);
-      stamp(g, plinth(16, 0, MARBLE), x - 8, y + CAPH + COLH);
+      standOn(g, x, y + CAPH + COLH, 16, 0);
     };
     // A JUNCTION STANDS ITS COLUMN AT THE CORNER, and only there. A real
     // colonnade that turns has a column ON the turn; adding the tile's own
@@ -1954,8 +2043,8 @@ function obeliskGrid() {
     put(g, cx + hw, 8 + i, 'A');
   }
   const base = 8 + H;
-  stamp(g, plinth(20, 6, MARBLE), cx - 9, base);
-  return { g, cx, ay: base + plinthH(6) - 1 };
+  standOn(g, cx, base, 20, 6);
+  return { g, cx, ay: base + plinthH(20, 6) - 1 };
 }
 {
   const o = obeliskGrid();
@@ -2539,7 +2628,7 @@ function wallFountainGrid() {
       put(g, x, y, k);
     }
   }
-  stamp(g, plinth(30, 0, MARBLE), 3, 0);
+  standOn(g, 3 + 15, 0 + 8, 30, 0);
   // The niche: a round-headed recess. DARK, so the mascaron can be LIGHT
   // against it — take one carved a light face into a light wall and it
   // vanished. A recess is read from its inside corner, so the left cheek keeps
@@ -2651,7 +2740,7 @@ function fountainJetGrid() {
   const BOWL = 26; // the bowl's centre row
 
   // The plinth first, so the bowl draws over its cap.
-  stamp(g, plinth(28, 4, MARBLE), cx - 14, BOWL + 3);
+  standOn(g, cx, BOWL + 3, 28, 4);
 
   // The bowl: a drum with a real moulded rim — a lit top annulus, a dark
   // reveal under it, then the bowl's own wall. Three rows of moulding is the
@@ -2704,7 +2793,7 @@ function fountainJetGrid() {
 }
 // The anchor is the plinth's own foot: 26 (the bowl) + 3 + plinthH(4) = 40,
 // stated as arithmetic so adding a moulding cannot silently move its feet.
-export const FOUNTAIN_JET = spriteAt('fountain-jet', [22, 26 + 3 + plinthH(4)], fountainJetGrid(), {
+export const FOUNTAIN_JET = spriteAt('fountain-jet', [22, 26 + 3 + plinthH(28, 4)], fountainJetGrid(), {
   tags: ['decor', 'fountain', 'marble', 'neoclassical', 'water', 'dressed-stone'],
   cycle: { ramp: 'water', rate: 4 },
 });
