@@ -76,6 +76,7 @@ const PAIRS = [
   ['palisade-fence', 'palisade-gate'],
   ['balustrade', null],
   ['colonnade', null],
+  ['arcade', null],
 ];
 
 /**
@@ -92,6 +93,7 @@ const SEE_THROUGH = new Map([
   ['palisade-fence', 'pickets with daylight between them — the gaps ARE the object'],
   ['balustrade', 'turned stone with air between it — a solid band with lines on it is a wall'],
   ['colonnade', 'columns carrying an entablature, and the sky between them is the point'],
+  ['arcade', 'the bays are ARCHES — you are supposed to see the garden through them'],
 ]);
 
 /**

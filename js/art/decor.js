@@ -1508,7 +1508,9 @@ function colonnadeSolid() {
     // colonnade that turns has a column ON the turn; adding the tile's own
     // start column as well would put two of them half a tile apart.
     const turning = Boolean(mask & 5) && Boolean(mask & 10);
-    if (axis === 'hub') return post(0); // `at` ignores t for a hub: it is a point
+    // `solidJoins` offers the hub ctx on every mask now and lets the family
+    // choose; this family only wants it at a real corner.
+    if (axis === 'hub') return turning ? post(0) : undefined;
     if (t0 < 1e-6 && !turning) post(0); // one per tile, at the tile's start
     // ...and one more where the run STOPS, so a run of n stands n + 1 columns
     // and a lone piece is a pair with a lintel rather than a single post.
@@ -1545,6 +1547,243 @@ function colonnadeSolid() {
 }
 
 export const COLONNADE = colonnadeSolid();
+
+/**
+ * ARCADE — columns carrying ARCHES, which is the piece the owner's reference
+ * render actually shows.
+ *
+ * ---------------------------------------------------------------------------
+ * A colonnade is TRABEATED: posts and a straight beam, and the beam is the
+ * limit — stone spans badly in tension, so a Greek intercolumniation is short.
+ * An arcade is ARCUATED: each bay is an arch, which carries in compression, so
+ * the bays go wide and the thing marches. They are different buildings and both
+ * belong in the catalogue; this is not a replacement for `colonnade`.
+ *
+ * IT IS THE FIRST FAMILY TO NEED BOTH HALVES OF solid.js AT ONCE, and closing
+ * that was the work:
+ *
+ *   the columns and the cornice   `solidJoins` layers and studs
+ *   the voussoir ring             `extrudeInto`, a profile swept across depth
+ *
+ * `extrudeInto` could only state its profile in the (a, c) plane, so it could
+ * build an arch spanning +tx and had no idea how to build one spanning +ty —
+ * fine for a free-standing archway, which simply mirrors, and useless for a run
+ * that turns. It takes an `axis` now. That was named as open in
+ * HANDOFF-LAYERS-STUDS-AND-THE-VAULT §9 and an arcade is what paid for it.
+ *
+ * THE COLUMN STANDS AT THE TILE CENTRE, not at its start, and that one choice
+ * makes the joining work. Adjacent columns are then exactly one tile apart, so
+ * a bay's arch has span R and radius R/2 — and its CROWN lands on the tile
+ * BOUNDARY. Which means each tile draws two QUARTER-arches, one per arm,
+ * springing from its own column and rising to the edge, where they meet the
+ * neighbour's. The arm structure is already exactly this shape: half a tile,
+ * outward from the hub. A corner gets two quarter-arches at right angles from
+ * one column, which is what a real arcade does at a corner.
+ * ---------------------------------------------------------------------------
+ */
+function arcadeSolid() {
+  // EVEN, so the column sits at an integer b = D / 2 and the anchor lands on a
+  // whole row. D = 5 gave an anchor y of 93.5, which is not a pixel.
+  const D = 6; //          the arcade's thickness across the run
+  const X0 = 2 * D + 2;
+  const TOP = 3;
+  const R = LINE_W / 2;
+  const C = R / 2;
+  const Cb = D / 2;
+  const COLH = 18;
+  const PH = plinthH(16, 0);
+  const CAP_C = CAPITAL_H + COLH + PH; // the abacus top: derived, not written
+  /**
+   * IT IS A STILTED ARCH, and that is geometry, not taste.
+   *
+   * A semicircle whose plane contains a ground axis is FOUR TO ONE wide-to-tall
+   * here — a unit of `a` is 2 px of screen x while a unit of `c` is 1 px of y —
+   * so a bay one tile wide rises only eight pixels. The first pass sprang
+   * straight off the abacus and the arches came out as hairline swoops between
+   * the columns; there is no radius that fixes it, because the flatness IS the
+   * projection.
+   *
+   * So the ring stands on JAMBS: a straight vertical band from the capital up to
+   * the springing, and the curve on top of that. The height comes from the part
+   * that is genuinely vertical, which is what a stilted arch is for and what
+   * every real arcade with this problem does.
+   */
+  const JAMB = 4;
+  const SPRING = CAP_C + JAMB;
+  /**
+   * THE RING IS ELLIPTICAL IN WORLD UNITS, and this is a considered choice
+   * rather than a shortcut, so it is worth saying why.
+   *
+   * A true semicircle here is FOUR TO ONE wide-to-tall: a unit of `a` is 2 px
+   * of screen x and a unit of `c` is 1 px of y. A one-tile bay would rise eight
+   * pixels — a hairline swoop, which is what the first two passes drew, and no
+   * radius fixes it because the flatness IS the projection.
+   *
+   * But this game's art already exaggerates height everywhere: a level is 16
+   * units and a tall hedge is 30, a column 50. Nothing here is drawn at the
+   * height its ground footprint would imply. Matching the arch to the vertical
+   * scale the rest of the art actually uses is CONSISTENCY, not a cheat — and
+   * the alternative is the only arch in the game that obeys a rule no other
+   * object does.
+   *
+   * WX/WY is the opening, EX/EY the extrados; the band between them is the
+   * archivolt. Centred on the column, so the pier lands on its own post.
+   */
+  const WX = C - 2; //  the opening: 6.25 units of run either side of the crown
+  const WY = 13; //     ...and it rises thirteen, against the projection's four
+  const EX = WX + 3;
+  const EY = WY + 3;
+  const RI = WX; //     kept for the skin's arris test
+  const RO = EX;
+  const WALLTOP = Math.ceil(SPRING + EY) + 3;
+  const H = WALLTOP + 5; //  the spandrel wall, plus a cornice over it
+  const PAD = Math.ceil(R) + 2;
+  const x0 = X0 + PAD;
+  const yTop = TOP + PAD;
+  const n = MARBLE.length - 1;
+  const key = (i) => MARBLE[clamp(Math.round(i), 0, n)];
+
+  const CORNICE = {
+    top: (a, b) => (b < 1 ? 'D' : 'E'),
+    side: (a, k, x) => {
+      const r = Math.round(k) - 1;
+      if (r >= 4) return 'A';
+      if (r === 3) return (x & 3) < 2 ? 'C' : 'B'; // dentils
+      if (r === 2) return 'B'; //                    the shadow under the cornice
+      return r <= 0 ? 'D' : 'C';
+    },
+    end: (b, k) => ['C', 'B', 'B', 'A', 'A'][clamp(Math.round(k) - 1, 0, 4)],
+  };
+
+  /**
+   * AN ARCADE IS A WALL WITH HOLES IN IT, and that is the whole reading.
+   *
+   * The first pass drew the voussoir RING alone and left the spandrels open, so
+   * the arches read as thin bands hung between the columns with sky behind
+   * them. An arch is only legible against solid: it is the ABSENCE that the eye
+   * names, not the ring. Filling the spandrel — which is what the owner's
+   * reference has, in a different coloured brick — turns a swoop into a bay.
+   *
+   * So `inside` describes the WALL, and the opening is where it says no: a
+   * straight-sided doorway up to the springing and a semicircle above it.
+   */
+  const walls = (g, ctx) => {
+    const { axis, t1, mask, frame, a0, a1, b0, b1 } = ctx;
+    if (axis === 'hub') return;
+    // A BAY ONLY WHERE THERE IS A NEIGHBOUR TO MEET. Where the run stops there
+    // is nothing on the other side to complete the span, and half an arch
+    // standing in air is not a ruin, it is a mistake.
+    const ty = axis === 'ty';
+    const far = t1 >= R - 1e-6;
+    const bay = Boolean(mask & (ty ? (far ? 2 : 8) : far ? 1 : 4));
+    const [p0, p1] = ty ? [b0, b1] : [a0, a1];
+    // The opening is centred on the arm's OUTER end — the tile boundary, where
+    // this half-bay meets its neighbour's and the two make one arch.
+    const hub = far ? p1 : p0;
+    extrudeInto(
+      g,
+      {
+        axis,
+        inside: (p, c) => {
+          if (p < p0 - 0.01 || p > p1 + 0.01 || c < CAP_C || c > WALLTOP) return false;
+          // WHERE THE RUN STOPS, AN ABUTMENT. There is nothing on the other
+          // side to complete the span, so this arm is solid wall — an arcade
+          // ends on a pier, and a cornice hanging over open air with half an
+          // arch under it is not an end, it is an unfinished one.
+          if (!bay) return true;
+          const d = Math.abs(p - hub);
+          if (c < SPRING) return d >= WX; //   jambs either side of the doorway
+          return Math.hypot(d / WX, (c - SPRING) / WY) >= 1; // ring + spandrel
+        },
+        b0: ty ? a0 : b0,
+        b1: ty ? a1 : b1,
+        aRange: [p0, p1],
+        cRange: [CAP_C, WALLTOP],
+        skin: (p, c, s, near) => {
+          const dt = Math.abs(p - hub);
+          const dc = Math.max(0, c - SPRING);
+          // `r` is now the ELLIPTIC radius against the extrados: < 1 is inside
+          // the archivolt band, >= 1 is spandrel.
+          const r = dc > 0 ? Math.hypot(dt / EX, dc / EY) : dt / EX;
+          if (!near) {
+            // The swept surface you actually see is the INTRADOS, through the
+            // opening on the left. Everything else is behind the near face.
+            return key(r < 1 ? 0.7 : n - 1.5);
+          }
+          if (r < 1) {
+            // THE ARCHIVOLT: the ring of voussoirs around the opening. An arch
+            // whose stones are not separated is a bent pipe.
+            const th = Math.atan2(dc / EY, dt / EX);
+            const seg = (th / (Math.PI / 2)) * 5;
+            const joint = Math.abs(seg - Math.round(seg)) < 0.11;
+            const inner = Math.hypot(dt / WX, dc / WY); // < 1 is the opening
+            let v = n - 0.9 - (1 - inner) * 0.7;
+            if (joint) v -= 1.7;
+            if (inner < 1.09) v -= 1.1; // the arris at the opening's edge
+            return key(v);
+          }
+          // Plain ashlar over the spandrel: bed joints every five courses and
+          // perpends staggered between them.
+          const course = Math.floor((WALLTOP - c) / 5);
+          let v = n - 1.5;
+          if ((WALLTOP - c) % 5 === 0) v -= 1;
+          if ((Math.round(p * 2) + course * 3) % 9 === 0) v -= 0.8;
+          return key(v);
+        },
+      },
+      frame
+    );
+  };
+
+  /**
+   * ENGAGED COLUMNS, drawn AFTER the wall so their near half stands proud of
+   * it. The Colosseum's motif exactly: the arcade carries the load and the
+   * order is applied to its face.
+   *
+   * Where the column stands depends on which way the piece runs — on the wall's
+   * NEAR face, at the tile's centre along the run — so a tx bay puts it at
+   * (C, D) and a ty bay at (C + Cb, Cb). A corner has both walls, and their
+   * near faces meet at (C + Cb, D), which is the outer corner: the one place a
+   * column belongs on a turn.
+   */
+  const columns = (g, { first, mask, project }) => {
+    if (!first) return;
+    const hasTx = Boolean(mask & 5) || !(mask & 10);
+    const hasTy = Boolean(mask & 10);
+    const [x, y] = project(hasTy ? C + Cb : C, hasTy && !hasTx ? Cb : D, CAP_C);
+    standOn(g, x, y + CAPITAL_H + COLH, 16, 0); // BOTTOM UP: base, shaft, cap
+    shaft(g, x, y + CAPITAL_H, COLH, MARBLE);
+    doricCapital(g, x, y, MARBLE);
+  };
+
+  const spec = {
+    R,
+    D,
+    H,
+    x0,
+    yTop,
+    w: X0 + PAD + LINE_W + PAD + 3,
+    h: TOP + PAD + Math.ceil(R) + D + H + 14,
+    layers: [{ studs: walls }, { studs: columns }, { c0: WALLTOP, c1: H, faces: CORNICE }],
+  };
+  const tags = ['decor', 'architecture', 'marble', 'arch', 'column', 'enclosure'];
+  const joins = Object.freeze(
+    Array.from({ length: 16 }, (_, m) =>
+      defineSprite({
+        name: `arcade@${m}`,
+        rows: outline(solidJoins(m, spec), MARBLE[0]).map((r) => r.join('')),
+        // Under the COLUMN, as the colonnade's is: an arcade touches the earth
+        // at its piers and nowhere else.
+        anchor: [x0 + 16 - D, yTop + LINE_DROP(16) + D / 2 + H + 1],
+        footprint: [1, 1],
+        tags,
+      })
+    )
+  );
+  return defineSprite({ ...joins[0], name: 'arcade', joins, tags });
+}
+
+export const ARCADE = arcadeSolid();
 
 /**
  * Balustrade — a low railing, and a weak nullifier. It reads by the RHYTHM of
@@ -1651,9 +1890,15 @@ function balustradeSolid() {
   const TURNED = [1, 1, 2, 2, 2, 1, 1, 2]; //          c  9.. 2, neck belly waist base
   const PROFILE = [...HIDDEN, ...TURNED];
   const NEWEL = [...HIDDEN, 2, 2, 3, 3, 3, 2, 2, 3]; // stouter: a corner post
-  const studs = (g, { axis, t0, t1, at, project }) => {
+  const studs = (g, { axis, t0, t1, at, project, turning }) => {
     if (axis === 'hub') {
-      revolve(g, ...project(...at(0), 17), NEWEL, { ramp: MARBLE });
+      // ONLY WHERE IT REALLY TURNS. `solidJoins` used to gate this and now
+      // offers the hub on every mask so an arcade can put its column there, so
+      // the family states its own rule. Masks 5 and 10 carry a hub BOX — that
+      // is what makes their two arms one bar — and no corner: a newel dropped
+      // at their centre sits off the rhythm and makes a mid-run piece differ
+      // from a lone one.
+      if (turning) revolve(g, ...project(...at(0), 17), NEWEL, { ramp: MARBLE });
       return;
     }
     // ONE RHYTHM FOR THE WHOLE RUN, filtered to this arm. A straight piece's
@@ -4274,6 +4519,7 @@ export const DECOR = Object.freeze({
   'corinthian-column': CORINTHIAN_COLUMN,
   'broken-column': BROKEN_COLUMN_FLUTED,
   colonnade: COLONNADE,
+  arcade: ARCADE,
   balustrade: BALUSTRADE,
   'pergola-arch': PERGOLA_ARCH,
   'ruined-arch': RUINED_ARCH,

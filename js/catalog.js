@@ -1912,6 +1912,25 @@ const STRUCTURE = [
     blurb: 'A column under a run of entablature, standing free with sky behind it. Put four in a row and a lawn becomes a garden that has an opinion about architecture; turn the corner and it has two.',
   },
   {
+    // THE OTHER WAY TO CARRY A ROOF. A colonnade is TRABEATED — posts and a
+    // straight beam — and the beam is the limit, because stone spans badly in
+    // tension. An arcade is ARCUATED: each bay is an arch, which carries in
+    // compression, so the bays go wide and the thing marches. Different
+    // buildings; both belong here.
+    id: 'arcade',
+    name: 'Arcade',
+    group: 'structure',
+    footprint: [1, 1],
+    art: sprite('arcade'),
+    zone: NEO,
+    register: 'neoclassical',
+    blocks: true,
+    deposits: dep({ order: 3, seclusion: 2, maturity: 1, wildness: -1 }),
+    tags: ['arch', 'column', 'stone', 'dressed-stone', 'neoclassical', 'enclosure', 'shade'],
+    unlockedBy: null,
+    blurb: 'Arches on columns, one bay to a step, with the spandrels filled in above them. It encloses without shutting anything out — you walk beside it in shade and see the garden through it the whole way.',
+  },
+  {
     id: 'pergola',
     name: 'Pergola',
     group: 'structure',
@@ -2425,6 +2444,7 @@ const TURNS = new Set([
   'palisade-fence',
   'balustrade',
   'colonnade',
+  'arcade',
   'stone-bench',
   'stepped-terrace-wall',
   // fronted — it has a face, and a face belongs to a wall plane

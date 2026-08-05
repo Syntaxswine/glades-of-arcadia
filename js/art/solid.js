@@ -239,8 +239,26 @@ export function renderInto(g, boxes, { x0, yTop, lift, zbuf: shared = null }) {
  * still cannot come out with holes in it.
  * ---------------------------------------------------------------------------
  */
+/**
+ * ...AND IT KNOWS WHICH PLANE IT IS IN.
+ *
+ * A profile stated in (a, c) and swept across `b` builds an arch spanning +tx
+ * and has no idea how to build one spanning +ty. That was fine while the only
+ * customer was a free-standing archway, which simply mirrors; it is not fine
+ * for an ARCADE, where a bay must be able to run either way and meet its
+ * neighbour. So the sweep axis is a parameter:
+ *
+ *   axis 'tx'   profile(a, c), swept across b.   a = h + s,  c = h + 2s - v
+ *   axis 'ty'   profile(b, c), swept across a.   b = s - h,  c = 2s - h - v
+ *
+ * Both fall out of the same two equations — x gives a - b = h, y gives
+ * a + b - c = v — solved for whichever of the pair is the sweep parameter `s`.
+ * Depth rises with `s` either way (3h + 6s - 2v and 6s - 3h - 2v), so the march
+ * runs from b1/a1 down and stops at the first material in both.
+ */
 export function extrudeInto(g, part, { x0, yTop, lift, zbuf: shared = null }) {
-  const { inside, b0, b1, skin, aRange, cRange, step = 0.25 } = part;
+  const { inside, b0, b1, skin, aRange, cRange, step = 0.25, axis = 'tx' } = part;
+  const ty = axis === 'ty';
   const H = g.length;
   const W = g[0].length;
   const zbuf = shared || new Float64Array(W * H).fill(-Infinity);
@@ -251,9 +269,13 @@ export function extrudeInto(g, part, { x0, yTop, lift, zbuf: shared = null }) {
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
-  for (const a of aRange) {
-    for (const b of [b0, b1]) {
+  // `aRange` is the profile's own reach and `b0..b1` the sweep, whichever pair
+  // of world axes those refer to — so swap them when the plane is (b, c).
+  for (const p of aRange) {
+    for (const q of [b0, b1]) {
       for (const c of cRange) {
+        const a = ty ? q : p;
+        const b = ty ? p : q;
         const x = x0 + 2 * a - 2 * b;
         const y = yTop + a + b + lift - c;
         if (x < minX) minX = x;
@@ -273,13 +295,15 @@ export function extrudeInto(g, part, { x0, yTop, lift, zbuf: shared = null }) {
       const h = (x - x0) / 2;
       const v = y - yTop - lift;
       for (let s = b1; s >= b0 - EPS; s -= step) {
-        const a = h + s;
-        const c = h + 2 * s - v;
-        if (!inside(a, c)) continue;
-        const depth = a + s + 2 * c;
+        // 'tx': sweep b = s, so a = h + s and c = a + b - v = h + 2s - v.
+        // 'ty': sweep a = s, so b = s - h and c = a + b - v = 2s - h - v.
+        const p = ty ? s - h : h + s;
+        const c = ty ? 2 * s - h - v : h + 2 * s - v;
+        if (!inside(p, c)) continue;
+        const depth = ty ? s + p + 2 * c : p + s + 2 * c;
         const i = y * W + x;
         if (depth > zbuf[i]) {
-          const key = skin(a, c, s, s > b1 - EPS, x, y);
+          const key = skin(p, c, s, s > b1 - EPS, x, y);
           if (key) {
             zbuf[i] = depth;
             g[y][x] = key;
@@ -467,7 +491,7 @@ export function solidJoins(mask, spec) {
   const turning = Boolean(mask & 5) && Boolean(mask & 10);
 
   const project = (a, b, c) => [x0 + 2 * a - 2 * b, yTop + a + b + H - c];
-  const ctxOf = ([a0, a1, b0, b1, , axis, t0, t1]) => ({
+  const ctxOf = ([a0, a1, b0, b1, , axis, t0, t1], first, zbuf) => ({
     axis,
     a0,
     a1,
@@ -479,6 +503,22 @@ export function solidJoins(mask, spec) {
     R,
     D,
     C,
+    Cb,
+    HALF,
+    /** True when this piece actually TURNS — see `turning` above. */
+    turning: Boolean(mask & 5) && Boolean(mask & 10),
+    /**
+     * True for the FIRST arm only, so a family can draw its one-per-tile parts
+     * — an arcade's column stands at the tile centre whatever arms the piece
+     * has, and `at(C)` is that centre on either axis.
+     */
+    first,
+    /**
+     * Everything an `extrudeInto` needs to join this piece's own z-buffer, so a
+     * stud pass can sweep a profile — an arch — and have it resolve against the
+     * boxes around it instead of painting over them.
+     */
+    frame: { x0, yTop, lift: H, zbuf },
     /**
      * The centre line of this arm at run position `t`, in world (a, b).
      *
@@ -536,10 +576,16 @@ export function solidJoins(mask, spec) {
   const frame = { x0, yTop, lift: H, zbuf };
   for (const part of parts) {
     if (part.studs) {
+      // THE HUB CTX IS ALWAYS OFFERED NOW, and the family decides. A colonnade
+      // wants a post at the crossing only where the run TURNS; an arcade wants
+      // its column at the tile centre on every mask, because that is where the
+      // arch springs from. `ctx.turning` and `ctx.first` are how each says so —
+      // gating it here served the first customer and would have refused the
+      // second.
+      let first = true;
       for (const arm of use) {
-        const ctx = ctxOf(arm);
-        if (ctx.axis === 'hub' && !turning) continue;
-        part.studs(g, ctx);
+        part.studs(g, ctxOf(arm, first, zbuf));
+        first = false;
       }
       continue;
     }
