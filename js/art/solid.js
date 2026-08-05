@@ -590,10 +590,16 @@ export function solidJoins(mask, spec) {
       continue;
     }
     const skin = part.faces || faces;
+    // `grow` swells a layer outward on every face — POSITIVE for a course that
+    // oversails the one under it, NEGATIVE for one that is recessed. An
+    // entablature is architrave, frieze and corona precisely BECAUSE they do
+    // not sit flush: the corona projects and bites the frieze with its shadow,
+    // and a cornice drawn as one flush slab is a shelf, not a cornice.
+    const G = part.grow || 0;
     renderInto(
       g,
       use.map(([a0, a1, b0, b1, show]) =>
-        box(a0, a1, b0, b1, part.c0, part.c1, {
+        box(a0 - G, a1 + G, b0 - G, b1 + G, part.c0, part.c1, {
           top: skin.top,
           side: show.side ? skin.side : null,
           end: show.end ? skin.end : null,

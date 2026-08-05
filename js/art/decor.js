@@ -1590,9 +1590,14 @@ function arcadeSolid() {
   const R = LINE_W / 2;
   const C = R / 2;
   const Cb = D / 2;
-  const COLH = 18;
+  // PIRANESI, FAULT I: *"You have built an aqueduct for dwarves!"* The shaft
+  // was 18 against an arch ring of 16 — the eye found no VERTICAL, and without
+  // vertical there is no awe. Now ~3x the ring, which is what the reference
+  // holds. It makes the piece 100 units tall against a world ceiling of 112:
+  // an arcade is SUPPOSED to be the tallest thing in the garden.
+  const COLH = 48;
   const PH = plinthH(16, 0);
-  const CAP_C = CAPITAL_H + COLH + PH; // the abacus top: derived, not written
+  const CAP_C = Math.round(2 * ABACUS_S + 9) + COLH + PH; // ARC_CAP_H, below
   /**
    * IT IS A STILTED ARCH, and that is geometry, not taste.
    *
@@ -1635,25 +1640,35 @@ function arcadeSolid() {
   const EY = WY + 3;
   const RI = WX; //     kept for the skin's arris test
   const RO = EX;
-  const WALLTOP = Math.ceil(SPRING + EY) + 3;
-  const H = WALLTOP + 5; //  the spandrel wall, plus a cornice over it
+  // PIRANESI, FAULT III: *"A spandrel is a broad triangular FIELD; yours is a
+  // pinstripe."* Three units of wall above the crown left the red surviving
+  // only as a ribbon squeezed under the cornice. Ten gives it area, and the
+  // warm mass finally registers as brick rather than as a line.
+  const WALLTOP = Math.ceil(SPRING + EY) + 10;
+  const H = WALLTOP + 8; //  the spandrel wall, plus a THREE-course cornice
   const PAD = Math.ceil(R) + 2;
   const x0 = X0 + PAD;
   const yTop = TOP + PAD;
   const n = MARBLE.length - 1;
   const key = (i) => MARBLE[clamp(Math.round(i), 0, n)];
+  const t = TERRA.length - 1;
+  const tk = (i) => TERRA[clamp(Math.round(i), 0, t)];
 
-  const CORNICE = {
-    top: (a, b) => (b < 1 ? 'D' : 'E'),
-    side: (a, k, x) => {
-      const r = Math.round(k) - 1;
-      if (r >= 4) return 'A';
-      if (r === 3) return (x & 3) < 2 ? 'C' : 'B'; // dentils
-      if (r === 2) return 'B'; //                    the shadow under the cornice
-      return r <= 0 ? 'D' : 'C';
-    },
+  /**
+   * PIRANESI, FAULT III: *"A single slab laid on top is not a cornice; it is a
+   * shelf."* Three courses, and they do not sit flush — that is the whole
+   * point of an entablature. The frieze is RECESSED and a step darker, so the
+   * corona above it bites; the corona OVERSAILS and is the brightest thing in
+   * the piece. `grow` on the layer does the projecting.
+   */
+  const band = (far, near, face) => ({
+    top: (a, b) => (b < 1 ? far : near),
+    side: (a, k, x) => face(Math.round(k) - 1, x),
     end: (b, k) => ['C', 'B', 'B', 'A', 'A'][clamp(Math.round(k) - 1, 0, 4)],
-  };
+  });
+  const ARCHITRAVE = band('C', 'D', (r) => (r <= 0 ? 'C' : r === 1 ? 'B' : 'A'));
+  const FRIEZE = band('B', 'C', (r, x) => (r <= 0 ? 'B' : (x & 3) < 2 ? 'B' : 'A'));
+  const CORONA = band('D', 'E', (r) => (r <= 0 ? 'D' : r === 1 ? 'C' : 'A'));
 
   /**
    * AN ARCADE IS A WALL WITH HOLES IN IT, and that is the whole reading.
@@ -1708,7 +1723,9 @@ function arcadeSolid() {
           if (!near) {
             // The swept surface you actually see is the INTRADOS, through the
             // opening on the left. Everything else is behind the near face.
-            return key(r < 1 ? 0.7 : n - 1.5);
+            // ...and the shaded face goes a further step down, so the two
+            // faces read as one solid mass turning a corner.
+            return r < 1 ? key(0.7) : tk(t - 3);
           }
           if (r < 1) {
             // THE ARCHIVOLT: the ring of voussoirs around the opening. An arch
@@ -1722,13 +1739,20 @@ function arcadeSolid() {
             if (inner < 1.09) v -= 1.1; // the arris at the opening's edge
             return key(v);
           }
-          // Plain ashlar over the spandrel: bed joints every five courses and
-          // perpends staggered between them.
-          const course = Math.floor((WALLTOP - c) / 5);
-          let v = n - 1.5;
-          if ((WALLTOP - c) % 5 === 0) v -= 1;
-          if ((Math.round(p * 2) + course * 3) % 9 === 0) v -= 0.8;
-          return key(v);
+          /**
+           * PIRANESI, FAULT II: *"Your whole piece is one pallid marble fog...
+           * Rome is white stone AND red brick; the mortar is the drama."*
+           *
+           * The spandrel is TERRACOTTA. It is the one loud warm band across the
+           * run, and everything that is dressed stone — the archivolt, the
+           * voussoirs, the columns, the cornice — stays marble. Brick is small,
+           * so the courses are three units where ashlar was five.
+           */
+          const course = Math.floor((WALLTOP - c) / 3);
+          let v = t - 0.6;
+          if ((WALLTOP - c) % 3 === 0) v -= 1; //                     bed joints
+          if ((Math.round(p * 2) + course * 3) % 7 === 0) v -= 0.7; // perpends
+          return tk(v);
         },
       },
       frame
@@ -1746,14 +1770,71 @@ function arcadeSolid() {
    * near faces meet at (C + Cb, D), which is the outer corner: the one place a
    * column belongs on a turn.
    */
+  /**
+   * PIRANESI, FAULT II: *"Each stands on a single mean shoe and simply stops...
+   * that is what makes stone look HEAVY rather than propped."*
+   *
+   * Three square courses, each narrower than the one below, and a torus roll
+   * where the top course meets the shaft. It comes to exactly 8 rows from the
+   * shaft's foot to the anchor — which is what `plinthH(16, 0)` was, so no
+   * other number in this family moves.
+   */
+  const BASE = [
+    [14, 2],
+    [17, 3],
+    [20, 3],
+  ];
+  const steppedBase = (g, cx, seatY) => {
+    let y = seatY;
+    const seats = BASE.map(([w, h]) => {
+      const at = y;
+      y += h;
+      return [w, h, at];
+    });
+    // BOTTOM UP: the widest course is the lowest and the farthest, so it goes
+    // down first and the narrow ones stack over it.
+    for (const [w, h, at] of seats.slice().reverse()) slabSquare(g, cx, at, w, h, MARBLE);
+    drum(g, cx, seatY, 6, 2, { ramp: MARBLE, rim: true }); // the torus roll
+    return y - seatY; //                                     8, and asserted below
+  };
+
+  /**
+   * PIRANESI, FAULT I: *"a plain tapering tube, a flat slab of an abacus, and
+   * nothing between... at this new scale the emptiness is the loudest thing."*
+   *
+   * A capital in three parts rather than one slab: a flaring BELL, two rounds
+   * of foliage nicked into it, and an ABACUS oversailing the lot. This is the
+   * arcade's own capital and not `doricCapital` — the colonnade is Doric on
+   * purpose, and an arcade wants the richer order over it.
+   */
+  const ARC_CAP_H = Math.round(2 * ABACUS_S + 9);
+  const arcadeCapital = (g, cx, y) => {
+    const bell = Math.round(y + 2 * ABACUS_S);
+    revolve(g, cx, bell, [9, 9, 8, 8, 7, 7, 6, 6, 6], { ramp: MARBLE });
+    // FOLIAGE: two rounds of nicks bitten out of the bell's silhouette and one
+    // step of light left on each lobe, so the edge bristles instead of curving.
+    for (const [row, pitch] of [
+      [1, 4],
+      [5, 3],
+    ]) {
+      for (let dx = -9; dx <= 9; dx++) {
+        if (((dx + 90) % pitch) !== 0) continue;
+        put(g, cx + dx, bell + row, MARBLE[0]);
+        put(g, cx + dx, bell + row + 1, MARBLE[dx < 0 ? 4 : 2]);
+      }
+    }
+    slabSquare(g, cx, y + ABACUS_S, ABACUS_W, 3, MARBLE);
+  };
+
   const columns = (g, { first, mask, project }) => {
     if (!first) return;
     const hasTx = Boolean(mask & 5) || !(mask & 10);
     const hasTy = Boolean(mask & 10);
     const [x, y] = project(hasTy ? C + Cb : C, hasTy && !hasTx ? Cb : D, CAP_C);
-    standOn(g, x, y + CAPITAL_H + COLH, 16, 0); // BOTTOM UP: base, shaft, cap
-    shaft(g, x, y + CAPITAL_H, COLH, MARBLE);
-    doricCapital(g, x, y, MARBLE);
+    // BOTTOM UP: base, shaft, capital. Higher is nearer.
+    steppedBase(g, x, y + ARC_CAP_H + COLH);
+    shaft(g, x, y + ARC_CAP_H, COLH, MARBLE);
+    arcadeCapital(g, x, y);
   };
 
   const spec = {
@@ -1764,7 +1845,14 @@ function arcadeSolid() {
     yTop,
     w: X0 + PAD + LINE_W + PAD + 3,
     h: TOP + PAD + Math.ceil(R) + D + H + 14,
-    layers: [{ studs: walls }, { studs: columns }, { c0: WALLTOP, c1: H, faces: CORNICE }],
+    layers: [
+      { studs: walls },
+      { studs: columns },
+      // Bottom up, and each course states its own projection.
+      { c0: WALLTOP, c1: WALLTOP + 2, faces: ARCHITRAVE },
+      { c0: WALLTOP + 2, c1: WALLTOP + 5, faces: FRIEZE, grow: -0.5 },
+      { c0: WALLTOP + 5, c1: H, faces: CORONA, grow: 1 },
+    ],
   };
   const tags = ['decor', 'architecture', 'marble', 'arch', 'column', 'enclosure'];
   const joins = Object.freeze(
