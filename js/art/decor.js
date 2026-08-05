@@ -832,6 +832,10 @@ function amphoraGrid(withPlinth) {
   const H = AMPHORA_PROFILE.length + (withPlinth ? 14 : 5) + 3;
   const g = grid(28, H);
   const cx = 13;
+  const base = AMPHORA_PROFILE.length + 1;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  if (withPlinth) standOn(g, cx, base, 20, 5);
   revolve(g, cx, 1, AMPHORA_PROFILE, { ramp: TERRA });
   // Handles: two arcs from the neck out to the shoulder. Terracotta handles are
   // thick and they SPRING — a handle drawn as a thin wire reads as a mistake.
@@ -849,11 +853,7 @@ function amphoraGrid(withPlinth) {
       put(g, x - side, y, 'P');
     }
   }
-  const base = AMPHORA_PROFILE.length + 1;
-  if (withPlinth) {
-    standOn(g, cx, base, 20, 5);
-    return { g, cx, ay: base + plinthH(20, 5) - 1 };
-  }
+  if (withPlinth) return { g, cx, ay: base + plinthH(20, 5) - 1 };
   // A small ring stand — a pointed amphora will not stand on grass by itself,
   // and drawing it leaning is a different object.
   for (let k = 0; k < 3; k++) {
@@ -945,14 +945,16 @@ function flutedUrnGrid() {
   const g = grid(30, URN_PROFILE.length + 22);
   const cx = 14;
   // Knop.
+  const base = 4 + URN_PROFILE.length;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  standOn(g, cx, base, 18, 3);
   revolve(g, cx, 0, [1, 2, 2, 1], { ramp: MARBLE });
   revolve(g, cx, 4, URN_PROFILE.slice(0, 6), { ramp: MARBLE });
   revolve(g, cx, 10, URN_PROFILE.slice(6, 16), { ramp: MARBLE, flutes: 3 });
   revolve(g, cx, 20, URN_PROFILE.slice(16), { ramp: MARBLE });
   hline(g, cx - 7, cx + 7, 8, 'B'); // the lid joint — an urn with no seam has no lid
   hline(g, cx - 8, cx + 8, 9, 'E');
-  const base = 4 + URN_PROFILE.length;
-  standOn(g, cx, base, 18, 3);
   return { g, cx, ay: base + plinthH(18, 3) - 1 };
 }
 {
@@ -968,6 +970,10 @@ export const FLUTED_URN = FURN;
 function sundialGrid() {
   const g = grid(28, 52);
   const cx = 13;
+  const base = 35;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  standOn(g, cx, base, 20, 4);
   const stem = [5, 5, 4, 4, 4, 4, 4, 5, 5, 6, 6, 6, 5, 5, 4, 4, 4, 4, 5, 6, 7];
   revolve(g, cx, 14, stem, { ramp: MARBLE, flutes: 3 });
   // Dial plate: a drum, seen at 2:1, which is what makes it a disc and not a
@@ -993,8 +999,6 @@ function sundialGrid() {
     put(g, cx - 4 + k * 0.5, 11 - k, 'U');
     put(g, cx - 5 + k * 0.5, 11 - k, 'T');
   }
-  const base = 35;
-  standOn(g, cx, base, 20, 4);
   return { g, cx, ay: base + plinthH(20, 4) - 1 };
 }
 {
@@ -1010,6 +1014,10 @@ export const SUNDIAL_PEDESTAL = SUND;
 function birdbathGrid() {
   const g = grid(30, 44);
   const cx = 14;
+  const base = 31;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  standOn(g, cx, base, 20, 3);
   const stem = [4, 4, 3, 3, 3, 3, 4, 5, 5, 5, 4, 4, 3, 3, 4, 5, 6];
   revolve(g, cx, 14, stem, { ramp: MARBLE, flutes: 3 });
   // The bowl. Water first, then the rim over it, so the rim reads as in front.
@@ -1022,8 +1030,6 @@ function birdbathGrid() {
     }
   }
   hline(g, cx - 5, cx + 2, 9, 'K'); // one glint, upper left
-  const base = 31;
-  standOn(g, cx, base, 20, 3);
   return { g, cx, ay: base + plinthH(20, 3) - 1 };
 }
 {
@@ -1322,10 +1328,12 @@ function columnGrid(capital, name) {
   const yCap = 1;
   const shaftTop = yCap + capH;
   const shaftH = H - shaftTop - 13;
+  const base = shaftTop + shaftH;
+  // BOTTOM UP: higher is nearer, so the plinth goes down first and the capital
+  // last. See §colonnade studs for why, and what it looks like when it is not.
+  standOn(g, cx, base, 18, 1);
   shaft(g, cx, shaftTop, shaftH, MARBLE);
   capital(g, cx, yCap, MARBLE);
-  const base = shaftTop + shaftH;
-  standOn(g, cx, base, 18, 1);
   return { g, cx, ay: base + plinthH(18, 1) - 1, name };
 }
 {
@@ -1352,6 +1360,10 @@ function brokenColumnGrid() {
   const g = grid(30, 40);
   const cx = 11;
   const H = 22;
+  const base = 5 + H;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  standOn(g, cx, base, 18, 1);
   shaft(g, cx, 5, H, MARBLE);
   // Fracture: a ragged top, dull B/A, stepping down to the right.
   for (let dx = -6; dx <= 6; dx++) {
@@ -1361,8 +1373,6 @@ function brokenColumnGrid() {
     put(g, cx + dx, top + 1, 'B');
     put(g, cx + dx, top + 2, 'A');
   }
-  const base = 5 + H;
-  standOn(g, cx, base, 18, 1);
   // The fallen drum beside it. It has to lie DOWN: a horizontal cylinder with
   // one circular end face turned toward the viewer and the flutes running
   // along its length. Take one used drum(), which draws an upright cylinder,
@@ -1468,11 +1478,22 @@ function colonnadeSolid() {
   };
 
   const studs = (g, { axis, t0, t1, at, project, mask }) => {
+    // BOTTOM UP, and this is the painter's rule for a stack of solids. Higher
+    // is NEARER here — depth is a + b + 2c — so the lowest member is drawn
+    // first and the highest last. The owner, on a colonnade corner: *"when
+    // overlapping things, place stuff at the bottom first and then add the
+    // stuff above it."*
+    //
+    // Drawn top-down, as this was, a plinth's top face covers the shaft's foot
+    // (its FAR half should be behind it) and a shaft covers the capital's
+    // underside. Bottom-up needs no second pass: the body drawn after the
+    // plinth naturally covers the far half of the plinth's top, and the near
+    // half survives because the body does not reach those rows.
     const post = (t) => {
       const [x, y] = project(...at(t), CAP_C);
-      doricCapital(g, x, y, MARBLE);
-      shaft(g, x, y + CAPH, COLH, MARBLE);
       standOn(g, x, y + CAPH + COLH, 16, 0);
+      shaft(g, x, y + CAPH, COLH, MARBLE);
+      doricCapital(g, x, y, MARBLE);
     };
     // A JUNCTION STANDS ITS COLUMN AT THE CORNER, and only there. A real
     // colonnade that turns has a column ON the turn; adding the tile's own
@@ -2028,6 +2049,10 @@ function obeliskGrid() {
   const g = grid(24, 64);
   const cx = 11;
   const H = 40;
+  const base = 8 + H;
+  // BOTTOM UP: the base goes down before the body, because higher is nearer
+  // here and the body must cover the FAR half of the plinth's top face.
+  standOn(g, cx, base, 20, 6);
   // The pyramidion first.
   for (let k = 0; k < 5; k++) {
     const w = k;
@@ -2042,8 +2067,6 @@ function obeliskGrid() {
     put(g, cx - hw, 8 + i, 'A');
     put(g, cx + hw, 8 + i, 'A');
   }
-  const base = 8 + H;
-  standOn(g, cx, base, 20, 6);
   return { g, cx, ay: base + plinthH(20, 6) - 1 };
 }
 {
