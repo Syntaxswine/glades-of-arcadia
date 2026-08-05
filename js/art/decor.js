@@ -1648,9 +1648,21 @@ function arcadeSolid() {
    * WX/WY is the opening, EX/EY the extrados; the band between them is the
    * archivolt. Centred on the column, so the pier lands on its own post.
    */
-  const WX = C - 2; //  the opening: 6.25 units of run either side of the crown
-  const WY = 13; //     ...and it rises thirteen, against the projection's four
-  const EX = WX + 3;
+  /**
+   * THE OWNER: *"the arches should terminate in the middle of the columns so
+   * the weight is carried down to the ground."*
+   *
+   * They did not. The extrados was `WX + 3 = C + 1`, so the ring's outer edge
+   * overshot the tile boundary by one unit while its SPRINGING sat two units
+   * inboard of it — the arch came down beside its column and the load went
+   * into air. The ring is measured from the boundary INWARD now: the extrados
+   * is exactly `C`, the column's own axis, and the opening is three units
+   * inside that. So the archivolt's foot is the top of the shaft, and a run
+   * reads as arch-column-arch with nothing hanging.
+   */
+  const EX = C; //      the extrados, ON the tile boundary = the column's axis
+  const WX = C - 3; //  ...and the opening, three units inboard: the archivolt
+  const WY = 13; //     it rises thirteen, against the projection's four
   const EY = WY + 3;
   const RI = WX; //     kept for the skin's arris test
   const RO = EX;
@@ -1696,14 +1708,72 @@ function arcadeSolid() {
    * So `inside` describes the WALL, and the opening is where it says no: a
    * straight-sided doorway up to the springing and a semicircle above it.
    */
+  /**
+   * THE BRICK BOND, hoisted out so the corner pier and the spandrels either
+   * side of it are one wall and not two. Courses of three, because brick is
+   * small and this is the one warm band in the piece.
+   */
+  const brick = (p, c) => {
+    const course = Math.floor((WALLTOP - c) / 3);
+    let v = t - 0.6;
+    if ((WALLTOP - c) % 3 === 0) v -= 1; //                       bed joints
+    if ((Math.round(p * 2) + course * 3) % 7 === 0) v -= 0.7; //   perpends
+    return tk(v);
+  };
+
+  /** A solid block of wall over one arm or over the crossing: no opening at all. */
+  const solidWall = (g, axis, frame, a0, a1, b0, b1) => {
+    const ty = axis === 'ty';
+    const [p0, p1] = ty ? [b0, b1] : [a0, a1];
+    extrudeInto(
+      g,
+      {
+        axis: ty ? 'ty' : 'tx',
+        inside: (p, c) => p >= p0 - 0.01 && p <= p1 + 0.01 && c >= CAP_C && c <= WALLTOP,
+        b0: ty ? a0 : b0,
+        b1: ty ? a1 : b1,
+        aRange: [p0, p1],
+        cRange: [CAP_C, WALLTOP],
+        skin: (p, c, s2, near) => (near ? brick(p, c) : tk(t - 3)),
+      },
+      frame
+    );
+  };
+
   const walls = (g, ctx) => {
-    const { axis, t1, mask, frame, a0, a1, b0, b1 } = ctx;
-    if (axis === 'hub') return;
+    const { axis, turning, frame, a0, a1, b0, b1 } = ctx;
+    /**
+     * THE CROSSING BLOCK, and its absence is why the owner's corners hung in
+     * the air. `walls` returned here on every mask — invisible on a straight
+     * piece, because the two arms already cover the tile between them, and
+     * FATAL on a turning one, where the arms cover an L and the crossing is
+     * the very stone the two runs hand their thrust to. The piers stood under
+     * a hole.
+     */
+    if (axis === 'hub') {
+      if (turning) solidWall(g, 'tx', frame, a0, a1, b0, b1);
+      return;
+    }
     // A BAY ONLY WHERE THERE IS A NEIGHBOUR TO MEET. Where the run stops there
     // is nothing on the other side to complete the span, and half an arch
     // standing in air is not a ruin, it is a mistake.
     const ty = axis === 'ty';
     const [p0, p1] = ty ? [b0, b1] : [a0, a1];
+    /**
+     * THE OWNER: *"worse still the corners are totally unsupported... you will
+     * likely have to redraw the corners without an arch for the corner
+     * segment."*
+     *
+     * Right, and the reason is that a corner tile's opening was centred on
+     * `hub` — which on a turning piece is the tile centre, WHICH IS WHERE THE
+     * CORNER COLUMN STANDS. The piece carved its arch through its own pier and
+     * then carried the return on the two tile edges, where nothing stood.
+     *
+     * A corner is a SOLID PIER. That is what a real arcade does when it turns:
+     * the bay stops, a mass of wall takes the thrust of both runs, and the
+     * arches on either side spring off it. No opening is carved here at all.
+     */
+    if (turning) return solidWall(g, axis, frame, a0, a1, b0, b1);
     /**
      * PIRANESI, ON A LONE ARCADE: *"A single column holding up a floating red
      * crate by one corner — this is not an arcade, it is an accident awaiting
@@ -1773,11 +1843,7 @@ function arcadeSolid() {
            * voussoirs, the columns, the cornice — stays marble. Brick is small,
            * so the courses are three units where ashlar was five.
            */
-          const course = Math.floor((WALLTOP - c) / 3);
-          let v = t - 0.6;
-          if ((WALLTOP - c) % 3 === 0) v -= 1; //                     bed joints
-          if ((Math.round(p * 2) + course * 3) % 7 === 0) v -= 0.7; // perpends
-          return tk(v);
+          return brick(p, c);
         },
       },
       frame
@@ -1849,8 +1915,17 @@ function arcadeSolid() {
     ]) {
       for (let dx = -9; dx <= 9; dx++) {
         if (((dx + 90) % pitch) !== 0) continue;
+        // ONLY WHERE THE BELL ALREADY IS. The nicks used to be laid over the
+        // full +/-9 whatever the bell's radius at that row, so the widest rows
+        // of leaf were painted onto bare grass — a scatter of light specks off
+        // the left of every capital, visible in the owner's screenshot of a
+        // five-bay run. A nick is a bite taken OUT of a silhouette; it cannot
+        // be drawn where there is no silhouette to bite.
+        const r0 = g[bell + row] && g[bell + row][cx + dx];
+        if (!r0 || r0 === '.') continue;
         put(g, cx + dx, bell + row, MARBLE[0]);
-        put(g, cx + dx, bell + row + 1, MARBLE[dx < 0 ? 4 : 2]);
+        const below = g[bell + row + 1] && g[bell + row + 1][cx + dx];
+        if (below && below !== '.') put(g, cx + dx, bell + row + 1, MARBLE[dx < 0 ? 4 : 2]);
       }
     }
     slabSquare(g, cx, y + ABACUS_S, ABACUS_W, 3, MARBLE);
@@ -1879,9 +1954,19 @@ function arcadeSolid() {
     arcadeCapital(g, x, y);
   };
 
+  /**
+   * WHERE THE PIERS STAND, and a corner needs THREE of them.
+   *
+   * A boundary only gets a column from the piece on its far side, which draws
+   * one at its own `t = 0`. That works down a straight run and fails at a
+   * turn: a corner's two arms both point AWAY from their neighbours, so
+   * neither shared boundary was anybody's `t = 0` and the return hung on
+   * nothing. Dropping the `!turning` guard is the whole fix — a turning piece
+   * stands one at each arm's outer end, plus the corner's own at the hub.
+   */
   const columns = (g, { axis, t0, t1, at, project, mask, turning }) => {
     if (axis === 'hub') return turning ? pier(g, project, at(0)) : undefined;
-    if (t0 < 1e-6 && !turning) pier(g, project, at(0)); // one per tile
+    if (t0 < 1e-6) pier(g, project, at(0)); //           one per tile, at its start
     // ...and one more where the run STOPS, so a lone bay has a pier at each end.
     if (t1 >= R - 1e-6 && !(mask & (axis === 'tx' ? 1 : 2))) pier(g, project, at(R));
   };

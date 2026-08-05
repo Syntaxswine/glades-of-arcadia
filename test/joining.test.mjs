@@ -463,13 +463,28 @@ test('a bend carries the same timber as the run it bends', async () => {
   // half a straight each, so a corner should weigh about what a straight
   // does — allow a wide band, because a hub post and the overlap at the bend
   // are both real and both add.
+  /**
+   * A SOLID CORNER WEIGHS MORE, and for the arcade that is the design.
+   *
+   * The owner: *"the corners are totally unsupported... you will likely have
+   * to redraw the corners without an arch for the corner segment."* An arcade
+   * that turns stops its bay and hands both runs' thrust to a mass of wall, so
+   * its corner is solid where its straight has an arch cut out of it — 1.77x,
+   * not the ~1.0 this guard assumes.
+   *
+   * The FLOOR is untouched at 0.55 for every family, and the floor is what
+   * this test is really for: a corner made by dropping half of each arm looks
+   * like a gap on screen and passes every geometric check. Only the ceiling
+   * moves, only for the one family whose corner is deliberately solid.
+   */
+  const SOLID_CORNER = { arcade: 1.9 };
   for (const [name, art] of await joiningFamilies()) {
     const ink = (m) => art.joins[m].rows.join('').split('').filter((c) => c !== '.').length;
     const straight = ink(1 | 4);
     for (const corner of [1 | 2, 4 | 8, 4 | 2, 1 | 8]) {
       const c = ink(corner);
       assert.ok(
-        c > straight * 0.55 && c < straight * 1.6,
+        c > straight * 0.55 && c < straight * (SOLID_CORNER[name] || 1.6),
         `${name}@${corner} weighs ${c} against a straight's ${straight}`
       );
     }
