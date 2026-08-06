@@ -1,9 +1,18 @@
 # BACKLOG — Glades of Arcadia
 
-Reconciled 2026-08-05 (FOURTEENTH pass, §4t). The solids arc now has FOUR
+Reconciled 2026-08-05 (FIFTEENTH pass, §4u). The solids arc now has FIVE
 handoffs and they are cumulative — read them in order:
 
-* **`HANDOFF-THE-ORDERS-AND-THE-ARCADE-2026-08-05.md`** — the newest. Read it
+* **`HANDOFF-GARDENSHOT-AND-THE-PIRANESI-REVIEW-2026-08-05.md`** — the newest.
+  Read it before photographing anything (`tools/gardenshot.mjs` runs the REAL
+  game headless), before touching the bridge (a joining family now: viaduct
+  chains, widening-by-extension, a ramp), the arcade (four commits of fixes,
+  all owner-diagnosed), or before working the §4u Piranesi queue below. It
+  also corrects a stale six-handoff caveat: the preview pane DOES boot this
+  game.
+* **`HANDOFF-THE-ORDERS-AND-THE-ARCADE-2026-08-05.md`** — note its arcade
+  sections describe geometry that `e878cfc..ba54e80` replaced; trust it for
+  `slabSquare`/`standOn` and bottom-up, not for the arcade's bay rhythm. Read it
   before touching a COLUMN of any kind, or before composing a sprite out of
   stacked parts. Carries `slabSquare` / `standOn`, the rule that a square of
   width `w` is `w / 2` tall here, *paint the stack bottom up because higher is
@@ -635,6 +644,27 @@ against HEAD found it. Run that check on any change to `solid.js`.
 Open: the arcade's corner seam and its corner column; Doric where the reference
 is Corinthian; `stepped-terrace-wall` still cannot bend; the mirror's light
 inversion; the one-pixel elbow seam shared by hedge, balustrade and colonnade.
+
+## 4u · THE PIRANESI QUEUE — round 1 done, loop OPEN (2026-08-05)
+
+The owner: *"keep looping and updating all the sprites until a subagent styled
+after Giovanni Battista Piranesi approves all the designs."* Round 1: 47
+sprites reviewed, 17 approved, 30 rejected; the arcade and bridge rejections
+are FIXED (`e878cfc..4b1661e`). The remaining ~26, worst first per batch —
+full critiques and the smallest-change prescriptions are in the 08-05
+gardenshot handoff §5, which also lists what he ordered LEFT ALONE:
+
+* palisade-fence · exedra · dry-stone-wall (walls/seats batch)
+* shell-fountain · grotto-basin · votive-shelf (water batch)
+* seated-maiden · sleeping-satyr · mask-idol (figures batch)
+* then: ruined-arch rubble, archway impost, colonnade cornice split,
+  corinthian flare, balustrade bulge, stone-bench, tumulus far kerb,
+  grave-stele, pergola vine, arbour-seat, palisade-gate, stone-fountain,
+  sundial shadow, pan-nymph-altar, axe-marker, krater, wide-krater,
+  pithos handle, fallen-torso.
+
+Method: gardenshot render → fix from his prescription → re-render → batch
+re-critique → repeat until ALL APPROVED. Do not stop after one pass.
 
 ## 4s · LAYERS, STUDS, AND THE VAULT ✅ (2026-08-05)
 
