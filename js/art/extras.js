@@ -175,9 +175,15 @@ function palisadeRows(mask) {
   // Rails first, so the stakes draw over them and read as in front. Each is
   // 2px deep — a rail seen very nearly edge-on, which is all a rail is here.
   // They run one pixel PAST the half-tile so two pieces meet rail to rail.
+  // A RAIL ENDS AT ITS LAST POST. Piranesi, round 2: *"a rail that continues
+  // past its last post carries nothing."* An arm with a real neighbour runs
+  // its rail one pixel past the half-tile so two pieces meet rail to rail; an
+  // arm drawn only for symmetry (a lone piece, an end) stops flush with the
+  // outer face of its terminal stake at STAKE_AT[2].
   for (const drop of [4, 9]) {
-    for (const [dtx, dty] of use) {
-      for (let i = 0; i <= HALF + 1; i++) {
+    for (const [dtx, dty, bit] of use) {
+      const lim = mask & bit ? HALF + 1 : STAKE_AT[STAKE_AT.length - 1] + 1;
+      for (let i = 0; i <= lim; i++) {
         const { x, y } = armStep(dtx, dty, i);
         put(x, y - drop, 't');
         put(x, y - drop + 1, 'r');
@@ -315,16 +321,39 @@ function fieldGateRows() {
   rail(9, ['t', 'r']); // the leaf's top bar
   rail(4, ['s', 'q']); // ...and its lower one
 
-  // One diagonal brace, rising from the hanging post — the detail that says
-  // "a gate that swings" rather than "two bars nailed across a gap". It runs
-  // in SCREEN space on purpose: a brace is a piece of timber lying against the
-  // gate's own plane, not along a ground axis.
-  for (let i = -GATE_AT; i <= GATE_AT; i++) {
-    const p = at(i);
-    const t = (i + GATE_AT) / (2 * GATE_AT);
-    const y = p.y - 4 - Math.round(t * 5);
-    put(p.x, y, 's');
-    put(p.x, y + 1, 'q');
+  // One diagonal brace, corner to corner INSIDE the leaf's frame. It runs in
+  // SCREEN space on purpose: a brace is a piece of timber lying against the
+  // gate's own plane, not along a ground axis. Piranesi, round 2: *"a brace
+  // works only corner to corner"* — the old one started mid-air and its lower
+  // pixel row dipped a drop below the bottom rail, which is a brace carrying
+  // nothing. This one rises from the bottom hinge corner (flush on the lower
+  // bar, drop 5) to the top latch corner (under the leaf's top bar, drop 8),
+  // and its second row never leaves the frame.
+  // ONE TIMBER, UNBROKEN. Round 3: the brace read as "a tangle of three or
+  // four overlapping diagonal strands" — the run's own pitch (a drop every
+  // second column) plus the brace's rise made two-row jumps that broke the
+  // line into strands. Tracking the previous row and filling every skipped
+  // pixel keeps it one continuous 2px member, and nothing is drawn below its
+  // own line into the bottom rail.
+  {
+    let prev = null;
+    for (let i = -GATE_AT; i <= GATE_AT; i++) {
+      const p = at(i);
+      const t = (i + GATE_AT) / (2 * GATE_AT);
+      // ON THE OPPOSING DIAGONAL. Round 4 counted "four diagonals where I
+      // ordered one": in this projection the three rails already lie at the
+      // run's own pitch, so a brace rising WITH the pitch was a fourth
+      // parallel strand. Descending against it — top of the hinge side to the
+      // bottom latch corner — is the one slope that visibly CROSSES the rails.
+      const y = p.y - 9 + Math.round(t * 4);
+      const lo = Math.min(prev === null ? y : prev, y);
+      const hi = Math.max(prev === null ? y : prev, y);
+      for (let yy = lo; yy <= hi; yy++) {
+        put(p.x, yy, 's');
+        put(p.x, yy + 1, 'q');
+      }
+      prev = y;
+    }
   }
 
   return g.map((r) => r.join(''));
@@ -387,34 +416,40 @@ export const SEATED_MAIDEN = sprite(
   'seated-maiden',
   [0, 3],
   [
-    '......BAAB......',
-    '.....BADDAB.....', // hair, parted, dark against the face
-    '.....ADEEDA.....',
-    '.....ADEEDA.....', // face, lit from the upper left
-    '.....BACCAB.....', // neck in shadow — the notch that makes it a head
-    '....BCDDDCCB....',
-    '...BCDEEDDCCB...', // shoulders
-    '...ACDEEDDCCBA..',
-    '...ACDEEEDDCBA..',
-    '...ACDDEDDDCBA..',
-    '...ABCDEDDCCBA..', // arms held in, drapery folds start
-    '...ABCDEDDCCBA..',
-    '...ABCDDDDCCBA..',
-    '..ABCDDEDDCCCBA.', // waist
-    '..ABCDDEDDDCCBA.',
-    '..ABCDDDDDDCCBA.',
-    '.ABCDDEEDDDCCBBA', // the lap breaks forward to the right
-    '.ABCDDEEEDDCCBBA',
-    '.ABCDDEEEDDDCBBA',
-    '.AABCCDDDDDCCBAA',
-    '..AABBCCCCCBBAA.', // hem of the drapery, in shadow
-    '...AABBBBBBBAA..',
-    '..ABCDDDDDDDCBA.', // the block: top face lit
-    '..ABCDDDDDDDCBA.',
-    '..ABBCCCCCCCBBA.',
-    '..ABBBBBBBBBBAA.', // front face of the block, a step darker
-    '...AAAAAAAAAA...', // the anchor row: the base diamond's centre line
-    ...foot(10, MARBLE, 3), // ...and its front half, in the ground plane
+    // ROUND 2 REBUILD. Piranesi: *"a pawn from a chess set nobody finished...
+    // no lap — the profile falls in one unbroken taper... and she still sits
+    // on grass, not on stone."* Two structural events answer him: a LAP SHELF
+    // at mid-height — a highlight plane breaking forward to the right, a full
+    // shadow row beneath it, then a vertical drop of skirt — and a proper 2:1
+    // plinth, twenty wide with a lighter top edge, under everything.
+    '.........BAAB.........',
+    '........BADDAB........', // hair, parted, dark against the face
+    '........ADEEDA........',
+    '........ADEEDA........', // face, lit from the upper left
+    '........BACCAB........', // neck in shadow — the notch that makes it a head
+    '.......BCDDDCCB.......',
+    '......BCDEEDDCCB......', // shoulders
+    '......ACDEEDDCCBA.....',
+    '......ACDEEEDDCBA.....',
+    '......ACDDEDDDCBA.....',
+    '......ABCDEDDCCBA.....', // arms held in, drapery folds start
+    '......ABCDEDDCCBA.....',
+    '......ABCDDDDCCBA.....',
+    '.....ABCDDEEEEEEEDBA..', // THE LAP: knees break forward, a lit shelf
+    '.....ABCDDEEEEEEEDCBA.',
+    '.....ABCDAAAAAAAADCBA.', // ...and the undercut shadow that makes it real
+    '.....ABCDDEDDDCCBA....', // the skirt drops vertically from the knees
+    '.....ABCDDEDDDCCBA....',
+    '.....AABCCDDDCCBAA....',
+    '......AABBCCCBBAA.....',
+    '.......AABBBBBAA......', // hem of the drapery, in shadow
+    '.AEEEEEEEEEEEEEEEEEEA.', // THE PLINTH: lighter top edge...
+    '.ADDDDDDDDDDDDDDDDDDA.', // ...top face...
+    '.ACCCCCCCCCCCCCCCCCCA.',
+    '.ABBBBBBBBBBBBBBBBBBA.', // ...front face, a step darker
+    '.AABBBBBBBBBBBBBBBBAA.',
+    '..AAAAAAAAAAAAAAAAAA..', // the anchor row: the base diamond's centre line
+    ...foot(14, MARBLE, 3), // ...and its front half, in the ground plane
   ],
   { tags: ['sculpture', 'marble', 'maiden'] }
 );

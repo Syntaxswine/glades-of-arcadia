@@ -1584,6 +1584,11 @@ const SCULPTURE = [
     zone: ARCH,
     register: 'archaic',
     flatFooting: false,
+    // A LYING fragment: its whole length touches the ground, so the measured
+    // contact radius is half the sprite and the auto shadow came out "an
+    // enormous near-black ellipse consuming half the sprite" (Piranesi,
+    // round 3). Stated radius instead: a pool that hugs the torso.
+    shadow: 5,
     deposits: dep({ maturity: 3, wildness: 2, order: -1, seclusion: 1 }),
     tags: ['sculpture', 'stone', 'old-growth', 'wild', 'quiet', 'ruin', 'archaic'],
     unlockedBy: 'unicorn',

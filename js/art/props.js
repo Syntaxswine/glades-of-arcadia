@@ -270,7 +270,11 @@ export const SLEEPING_SATYR = sprite(
     '.ABDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDBA.',
     'ABDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDBA',
     'ACDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDCA',
-    'ACCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
+    // THE SEAM: the dark joint where the cap course meets the lower course —
+    // Piranesi, round 2: *"the slab is a bare wedge... masonry is courses;
+    // give me the lip."* The four rows above it read as the cap, oversailing
+    // by the width of this shadow.
+    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     'ACCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA',
     'ACCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAA',
     '.AACCCCCCCCCCCCCCCCCCCCCCCBBBBBBBBBBBBBBBBBBBBBBBAA.',
@@ -400,48 +404,28 @@ export const MARBLE_TORSO = sprite(
     // the light the way a polished shoulder does, and that difference is the
     // only thing in the sprite that says "antique fragment" rather than
     // "unfinished carving".
-    '..........AABBAA..........',
-    '.........ABBBBBBA.........',
-    '.........ABBBBBBA.........',
-    // The ARM STUMPS have to break the silhouette sideways. Without them the
-    // shoulders and the hips make the same width and the whole thing turns on
-    // a lathe — take two of this sprite read as a chess pawn.
-    '..AABBAAABBBBBBAAABBAA....',
-    '.ABBBBBBABCCCCCCBABBBBBA..',
-    'ABCCCCBBBCDDDDDDCBBBCCCBA.',
-    'ABCDDCBABCDDEEEEDDCBABCCBA',
-    'AABBBAAABCDDEEEEDDCBAABBAA',
-    '...AA...ABCDDEEEEDDCBA..AA',
-    '........ABCDDEEEEDDCBA....',
-    '........ABBCDDDDDDCBBA....',
-    '........AABBCCCCCCBBAA....',
-    '.........ABCDDDDDDCBA.....',
-    '.........ABCDDEEDDCBA.....',
-    '.........ABCDDEEDDCBA.....',
-    '.........ABCDDDDDDCBA.....',
-    '.........AABCDDDDCBAA.....',
-    '..........ABCDDDDCBA......',
-    '..........ABCDDDDCBA......',
-    '.........ABCDDDDDDCBA.....',
-    '........ABCDDDDDDDDCBA....',
-    '........ABCDDDDDDDDCBA....',
-    '........ABBCDDDDDDCBBA....',
-    '........AABBCCCCCCBBAA....',
-    '.........AABBBBBBBBAA.....',
-    '..........AAAAAAAAAA......',
-    '.....ABBBBBBBBBBBA........',
-    '....ABCCCCCCCCCCCBA.......',
-    '...ABDDDDDDDDDDDDDBA......',
-    '...ADDDDDDDDDDDDDDDA......',
-    '...ADDDDDDDDDDDDDDDA......',
-    '...ACCCCCCCCBBBBBBBA......',
-    '...ACCCCCCCBBBBBBBBA......',
-    '...ACCCCCCBBBBBBBBAA......',
-    '...ABBBBBBBBBBBBBAA.......',
-    '....ACCCCCCBBBBBBA........',
-    '......ACCCCBBBBA..........',
-    '........ACCBBA............',
-    '..........AA..............',
+    // ROUND 2 REBUILD. Piranesi: *"this torso has not fallen; it stands at
+    // parade rest, dead-centred atop a tidy boulder like a trophy... a fallen
+    // fragment LIES, and it lies where chance dropped it."* So it lies: long
+    // axis on the 2:1 diagonal, shoulders to the upper right, offset right of
+    // tile centre, straight on the grass. The neck break at the top end and
+    // the hip break at the bottom are FLAT 'A'/'B' faces with no highlight —
+    // fractured stone does not catch the light — and the broken pelvis lies
+    // apart at the lower left, its break edge stepped, not straight.
+    '......................AABBAA......',
+    '.....................ABBBBBBA.....',
+    '...................ABDDEEDDBBA....',
+    '..................ABDEEEEDDBBA....',
+    '...............AABDDEEEEDDBA......',
+    '..............ABBDDEEEDDCBA.......',
+    '............ABDDEEEDDCCBA.........',
+    '..........ABDDEEDDDCCBA...........',
+    '.........ABDDEDDDCCBA.............',
+    '........ABDDDDDCCBA...............',
+    'ABBA...ABBDDDCCBA.................',
+    'ABCCBA.ABBBBBBA...................',
+    'ABCCBA..AABBA.....................',
+    '.AABA.............................',
   ],
   { tags: ['sculpture', 'marble', 'order', 'maturity'] }
 );
@@ -540,10 +524,12 @@ export const KRATER = sprite(
   [
     '..PPPP........PPPP..',
     '.PQRRQP......PQRRQP.',
+    // THE MOUTH IS OPEN. Piranesi, round 2: *"a krater that cannot receive
+    // wine is a boulder."* Lit upper-left arc, dark void below it.
     'PQRSSRQPPPPPPQRSSRQP',
-    'PQRSPQRSSSSSSSRQPSRQ',
-    'PQRQPQRSSSSSSSSRQPRQ',
-    'PQRQPPQRRRRRRRRQPPRQ',
+    'PQRSPSSSSSSPPPPQPSRQ',
+    'PQRQPPPPPPPPPPPQPQRQ',
+    'PQRQPPQPPPPPPQQPPQRQ',
     'PQRRQPPPPPPPPPPPPQRQ',
     '.PQRRQPPPPPPPPPQRRQP',
     '..PQRSSRRRRRRSSRRQP.',
@@ -561,9 +547,13 @@ export const KRATER = sprite(
     '...PQRRRSSSSSRRQP...',
     '....PQRRRRRRRQP.....',
     '.....PPQQQQQPP......',
+    // THE FOOT SPREADS. Round 2: *"the stem meets the ground at its
+    // narrowest, the opposite of how a vessel stands."*
     '......PQRRRQP.......',
     '.....PQRRRRRQP......',
-    '.....PQRRRRRQP......',
+    '...PQSSSSSSSSSQP....',
+    '..PQRRRRRRRRRRRQP...',
+    '...PPPRRRRRRRPPP....',
     '......PPPPPPP.......',
     '.....mmmmmmmmm......',
     '....mmmmmmmmmmm.....',
@@ -621,14 +611,23 @@ export const STONE_BASIN = sprite(
   'stone-basin',
   [0, 1],
   [
-    '.....vvvvvvvvvvvv.....',
-    '...vvyyyyyyyyyyyyvv...',
-    '..vyyyyyyyyyyyyyyyyv..',
-    '.vyyxJJJJJJJJJJJJxyyv.',
-    'vyyxJKKJJJIIIIJJJJxyyv',
-    'vyxJJKKJJIIIHHIIIJJxyv',
-    'vyxJJJJIIIHHHHHIIIJJxv',
-    'vyxJJIIIHHHHHHHHIIJJxv',
+    // THE JET. Piranesi, round 2: *"a fountain in name only: no source rises
+    // ... I decline to approve a birdbath wearing a fountain's title."* A 2px
+    // column of the pool's lightest water ('K', the glint key) rises from the
+    // centre, capped in the pale stone key, and lands in a ring of the same
+    // glint. The column overwrites the far rim's top rows — it stands nearer.
+    // The apex is WHITE — marble's lightest, not stone tan. Round 3: a tan cap
+    // read as "a pebble balanced on top, not water at apogee".
+    '...........E..........',
+    '..........EK..........',
+    '.....vvvvvKKvvvvv.....',
+    '...vvyyyyyKKyyyyyvv...',
+    '..vyyyyyyyKKyyyyyyyv..',
+    '.vyyxJJJJJKKJJJJJxyyv.',
+    'vyyxJKKJJJKKIIJJJJxyyv',
+    'vyxJJKKJJIKKHHIIIJJxyv',
+    'vyxJJJJIIIKKHHHIIIJJxv',
+    'vyxJJIIIHKKKKHHHIIJJxv',
     'vyyxJIIIHHHHHHHIIJxyyv',
     'vxyyxJIIIHHHHHIIJxyyxv',
     'vwxyyyxJJIIIIIJJxyyxwv',
@@ -857,25 +856,31 @@ export const SUNDIAL = sprite(
     // whole object is a column with a match on top. It is the widest thing in
     // the sprite, and the gnomon's shadow is drawn on it — a sundial with no
     // shadow is just a plate.
-    '...........TT.......',
+    // THE PLATE IS 4:1 AND THE GNOMON TELLS TIME. Piranesi, round 2: the old
+    // 11-row plate read "nearer 2:1... the instrument tilts toward the viewer
+    // like a served dish", and the gnomon cast nothing. The plate is now five
+    // visible rows on eighteen wide, the gnomon runs four rows taller and
+    // steeper to meet it, and a 'B' shadow steps from its foot toward the
+    // lower-right rim — the sun is upper-left, so the shadow is not optional.
+    '..........TT........',
     '..........TUV.......',
-    '.........TUVW.......',
-    '........TUVW........',
-    '.......TUVW.........',
-    '......TUVW..........',
-    '.....TUVW...........',
+    '.........TUV........',
+    '.........UVW........',
+    '........TUV.........',
+    '........UVW.........',
+    '.......TUV..........',
+    '.......UVW..........',
+    '......TUV...........',
+    '......UVW...........',
+    '.....TUV............',
     '.....UVW............',
     '...AAAAAAAAAAAAAA...',
     '.AAEEEEEEEEEEEEEEAA.',
-    'AEEEEEEEEEEEEEEEEEEA',
-    'ADDDEEEEEDDDDDDDDDDA',
-    'ADDBADDDDDDDDDDDDDCA',
-    'ACDDBADDDDDDDDDDDCCA',
-    'ACCDDBADDDDDDDDCCBBA',
-    'ABCCDDDBADDDDDCCBBBA',
-    'AABBCCCCCCCCCCBBBAAA',
-    '..AAABBBBBBBBBAAA...',
-    '.....AAAAAAAAA......',
+    'AEEEEEEBBEEEEEEEEEEA',
+    'ADDDDDDDDDBBBDDDDDCA',
+    'AACCDDDDDDDDDBBDCCAA',
+    '.AABBCCCCCCCCCCBBAA.',
+    '....AAAAAAAAAA......',
     '....CDEEDCCBA...',
     '....CDEEDCCBA...',
     '....CDEEDCCBA...',
@@ -1033,11 +1038,16 @@ export const SATYR_MASK_POLE = sprite(
     '.....qqstq......',
     '.....qqstq......',
     '.....qqstq......',
-    '....qqqstqq.....',
-    '....qqqqqqq.....',
-    '...mmmmmmmmm....',
-    '....mmmmmmm.....',
-    '.....mmmmm......',
+    // THE PLINTH, as ordered twice: *"copy the amphora's plinth verbatim...
+    // and set it under the pole so the pole's bottom 3px are occluded by the
+    // plinth's top face."* (Piranesi, rounds 1 and 2.) The 'm' shadow rows it
+    // replaces were also the last survivors of the skirt purge in this file.
+    '.vyyyyyyyyyyyyyv..',
+    'vxxxxxxxxxxxxxxxv.',
+    'vwwwwwwwwwwwwwwwv.',
+    '.vwwwwwwwwwwwwwv..',
+    '...vvwwwwwwwvv....',
+    '......vvvvv.......',
   ],
   { tags: ['prop', 'terracotta', 'satyr', 'wildness'] }
 );
@@ -1932,6 +1942,14 @@ export const HALF_BURIED_PITHOS = (() => {
     const w = Math.round(9 - Math.abs(y - 30) / 2.2);
     for (let x = 47; x < 47 + w; x++) put(g, x, y, x < 49 ? 'R' : x < 52 ? 'Q' : 'P');
   }
+  // DAYLIGHT BETWEEN LID AND JAR at mid-span. Piranesi read the leaning slab
+  // as a failed handle — *"one attachment, no void. A handle is defined by
+  // the hole you could pass a rope through"* — so the mid rows show soil
+  // through the gap and the slab touches only at its top and foot.
+  for (let y = 26; y <= 32; y++) {
+    put(g, 47, y, 's');
+    put(g, 48, y, 'r');
+  }
   // Spilled wine on the soil under the lip.
   for (let i = 0; i < 24; i++) {
     const sx = 20 + nz(i, 3) * 21;
@@ -2133,9 +2151,12 @@ export const VOTIVE_SHELF = (() => {
   boulder(g, 29, 22, 27, 17, STONE, { seed: 6.3 });
   // The ledge: a cut shelf with a lit top face and a shadowed undercut. The
   // undercut is what makes it a shelf rather than a stripe.
+  // Three rows of lit TOP FACE, then the arris, then the undercut. Piranesi,
+  // round 2: *"the candles stand upon a grey front face, which is to say upon
+  // nothing"* — one row of 'y' was a stripe, not a plane a base can sit on.
   for (let x = 6; x < 53; x++) {
     const y0 = 30 + Math.round(nz(x * 0.4, 2) * 1.5);
-    for (let k = 0; k < 4; k++) put(g, x, y0 + k, k === 0 ? 'y' : k === 1 ? 'x' : 'w');
+    for (let k = 0; k < 4; k++) put(g, x, y0 + k, k < 3 ? 'y' : 'x');
     put(g, x, y0 + 4, 'v');
     put(g, x, y0 + 5, 'v');
   }
@@ -2171,6 +2192,32 @@ export const VOTIVE_SHELF = (() => {
       }
     }
   }
+  // THE ROCK REACHES THE GROUND. Piranesi, round 2: *"a band of open grass and
+  // two ferns lie between the shelf's underside and its own shadow, as though
+  // the boulder were levitating."* The boulder's silhouette stops ten rows
+  // above the anchor line; every column that carries rock is extended down to
+  // an elliptical foot just short of it, in the ramp's shaded low values.
+  {
+    const STONE_KEYS = new Set(['v', 'w', 'x', 'y']);
+    for (let x = 3; x < 55; x++) {
+      let low = -1;
+      for (let y = g.length - 1; y >= 0; y--) {
+        if (STONE_KEYS.has(g[y][x])) {
+          low = y;
+          break;
+        }
+      }
+      if (low < 0) continue;
+      const u = (x - 29) / 27;
+      if (Math.abs(u) >= 1) continue;
+      const ybot = 48 - Math.round(u * u * 7);
+      for (let y = low + 1; y <= ybot; y++) {
+        if (g[y][x] !== '.') continue;
+        put(g, x, y, y >= ybot - 1 ? 'v' : 'w');
+      }
+    }
+  }
+
   // One fallen, and knucklebones scattered on the ledge and on the ground.
   for (let k = 0; k < 6; k++) put(g, 49 + Math.round(k * 0.6), 27 + k % 2, k < 3 ? 'R' : 'Q');
   for (const kb of [[13, 33], [26, 34], [37, 33], [44, 34], [20, 45], [33, 47], [42, 44]]) {
@@ -2424,6 +2471,20 @@ export const GROTTO_MOUTH = (() => {
       put(g, x, s - rise - 1, 'y');
       put(g, x, s - rise - 2, 'x');
     }
+  }
+
+  // THE BASIN THE NAME PROMISES. Piranesi, round 2: *"the mouth of the grotto
+  // opens onto unrelieved black, a cave for bats, not for water."* A pool at
+  // the threshold: a low water ellipse across the mouth's floor in the shared
+  // water keys, a glint along its upper-left rim, and the upper half of the
+  // opening left black so the level reads as recessed under the vault.
+  for (let x = M_CX - 6; x <= M_CX + 6; x++) {
+    const t = (x - M_CX) / 6.5;
+    const h = Math.round(2.6 * Math.sqrt(Math.max(0, 1 - t * t)));
+    if (!h) continue;
+    const s = Math.round(sill(x)) - 5;
+    for (let y = s - h; y <= s - 1; y++) put(g, x, y, 'I');
+    if (x < M_CX + 2) put(g, x, s - h, 'K'); // the glint, upper-left
   }
 
   // Ivy over the lip. The first pass put two symmetric round clumps here and
@@ -2886,10 +2947,15 @@ export const ALTAR_PAN_NYMPHS = (() => {
   const CX = 30, CY = 20, HW = 19, HH = 9, H = 17; // top centre, half-w/h, height
   const topY = (x) => CY - (HH - (Math.abs(x - CX) * HH) / HW);
   const botY = (x) => CY + (HH - (Math.abs(x - CX) * HH) / HW);
-  // Rubble footing, one course proud all round.
+  // Rubble footing, one course proud all round — and CLIPPED FLAT below.
+  // Piranesi, round 2: *"the base tapers to a diamond point, so this altar
+  // balances on a knife-edge like a spinning top at rest."* The full diamond V
+  // ran twelve rows deep; capping the footing at a flat line leaves a shallow
+  // boat of rubble the block visibly stands on.
   for (let x = CX - HW - 3; x <= CX + HW + 3; x++) {
     const t = Math.max(0, HH + 1 - (Math.abs(x - CX) * (HH + 1)) / (HW + 3));
-    for (let y = CY + H - Math.round(t); y <= CY + H + Math.round(t) + 5; y++) {
+    const yEnd = Math.min(CY + H + Math.round(t) + 5, CY + H + 7);
+    for (let y = CY + H - Math.round(t); y <= yEnd; y++) {
       const n = nz(x * 1.3, y * 2.1);
       put(g, x, y, n > 0.66 ? 'x' : n > 0.3 ? 'w' : 'v');
     }
@@ -2899,14 +2965,19 @@ export const ALTAR_PAN_NYMPHS = (() => {
   for (let x = CX - HW; x <= CX + HW; x++) {
     const lit = x < CX;
     const base = Math.round(botY(x));
-    for (let y = base; y <= base + H; y++) {
+    // The faces stop at a FLAT line, not at the footprint diamond's near
+    // corner: base + H follows the diamond and put a nine-row V under the
+    // block — the "knife-edge" of round 2. The last rows the V would have
+    // taken belong to the rubble footing, which now shows beneath the cut.
+    const yStop = Math.min(base + H, CY + H + 4);
+    for (let y = base; y <= yStop; y++) {
       const k = y - base;
       let i = lit ? 3 : 2;
       if (k > H - 4) i -= 1;
       if (nz(x * 1.7, y * 1.1) > 0.76) i -= 1; // undressed: the surface is rough
       put(g, x, y, STONE[Math.max(0, Math.min(3, i))]);
     }
-    put(g, x, base + H + 1, 'v');
+    put(g, x, yStop + 1, 'v');
   }
   put(g, CX, Math.round(botY(CX)), 'y'); // the near arris catches the light
   // Top face: a diamond, dished, and BLACK with old libation. A clean altar is
@@ -3157,12 +3228,25 @@ function drystoneSkin(D, HIGH, X0) {
     return STONE[clampi(v)];
   };
 
-  /** The near face: courses of unmortared stone, dark slots between them. */
-  const course = (i, k, y) => {
-    const st = stoneAt(X0 + i - 2 * D, y);
-    let v = 2 + Math.round((nz(st.key * 1.3, st.row * 2.7) - 0.5) * 1.6);
-    if (k < 2) v += 1; // each course catches light on top
-    if (st.edgeX || y % (4 + Math.floor(nz(st.row, 7) * 3)) === 0) v = 0; // joint
+  /**
+   * The near face: courses of unmortared stone, dark slots between them.
+   *
+   * INDEXED BY `k`, THE FACE'S OWN HEIGHT — NOT BY SCREEN `y`. The old joints
+   * tested `y % courseHeight`, and a constant screen row on a sheared face is
+   * NOT a bed: the face drops one row every two columns, so screen-horizontal
+   * joints climbed the wall diagonally. Piranesi, round 2: *"long diagonal
+   * slashes... read as strapping or ribbon-binding, not as courses; dry stone
+   * is horizontal beds with staggered vertical joints."* Beds at constant k
+   * run parallel to the coping, which is what a bed is.
+   */
+  const course = (i, k) => {
+    const row = Math.floor(k / 5); //             which course, top down
+    const w = 8 + Math.floor(nz(row, 11) * 5); // this course's stone length, 8-12
+    const iw = Math.floor(i) + row * 5; //        head joints stagger per course
+    let v = 2 + Math.round((nz(Math.floor(iw / w) * 31, row * 2.7) - 0.5) * 1.6);
+    if (k % 5 === 0) v = 0; //                    the bed joint
+    else if (iw % w === 0) v = 0; //              the head joint
+    else if (k % 5 === 1) v += 1; //              each course catches light on top
     if (k / HIGH > 0.82) v -= 1;
     return STONE[clampi(v)];
   };
@@ -3408,8 +3492,11 @@ export const DRYSTONE_WALL = (() => {
       // THE CUT END, one step darker: it turns down-RIGHT, away from the light,
       // where the near face turns down-left toward it. Shading them alike is
       // what made the old bend read as folded paper.
+      // FULL HEIGHT, NO TRIM. Piranesi, round 2: the end "tapers, sags, and
+      // melts into a rounded snout that no waller ever laid" — the trim that
+      // gives the near face its wandering foot has no business on a cut end,
+      // which is the one place a waller squares up.
       end: (b, k, x, y) => {
-        if (k >= skin.faceH(0)) return null;
         const c = skin.course(0, k, y);
         return STONE[Math.max(0, STONE.indexOf(c) - 1)];
       },
@@ -3895,6 +3982,39 @@ export const TUMULUS = (() => {
       lit: 2,
       dark: 1,
     });
+  }
+
+  // ...AND THE FAR ARC ANSWERS IT. Piranesi, round 2: *"a kerb that stops is
+  // not a kerb; it is debris. The ring must be read as continuous even where
+  // the mound occludes most of it."* Six more stones on the far arc, drawn
+  // only into empty cells BEHIND the mound's silhouette, so just their heads
+  // — two or three rows — stand above the far edge line. Held one step darker
+  // still than the near ring: they are against the sky, not in the light.
+  // ON THE RIM, IN PLAN COORDINATES — the same coordinates the mound itself is
+  // painted in, with the same lopsidedness terms, because the far edge on
+  // screen is the plan rim (the dome height is zero there) and nothing else.
+  // Two earlier attempts seated the stones on "the top of the ink", and the
+  // ink up there is the PLOT's own meadow-coloured grass: they floated.
+  // ...AND ROUND THE TIPS, which is where "continuous" can honestly be shown:
+  // the crown hides the whole far arc (plan rows paint far-to-near, the crown
+  // overwrites), so heads pasted along the far silhouette float — tried twice,
+  // rim and horizon both. What the eye actually needs is the ring VISIBLY
+  // turning behind the mound: three more stones per side, in the near ring's
+  // own isoBox style, climbing round each tip to the point where the form
+  // takes them.
+  for (const side of [-1, 1]) {
+    for (const [j, u] of [0.92, 0.965, 0.995].entries()) {
+      const x = Math.round(cx + side * u * rx);
+      const p = prof(x);
+      if (!p) continue;
+      const sink = 2 + j;
+      isoBox(g, x, Math.round(p.bot) - sink, 0.05 + j * 0.012, 0.05, 3 + (j === 1 ? 1 : 0), STONE, {
+        rough: 0.3,
+        top: 2,
+        lit: 2,
+        dark: 1,
+      });
+    }
   }
 
   // THISTLE AND BRAMBLE, AND WHERE THEY MAY NOT GO.

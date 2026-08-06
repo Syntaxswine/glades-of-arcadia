@@ -109,7 +109,25 @@ test('a straight run is the same picture whichever way it was reached', async ()
   // the facing wheel decide which diagonal that is. Anything else would make
   // the first piece a player places look like a mistake until they placed the
   // second one.
-  assert.equal(j(0), j(1 | 4), 'an isolated piece should draw the straight run');
+  // REVERSED 2026-08-05, Piranesi round 2: *"a rail that continues past its
+  // last post carries nothing."* An isolated piece still draws the straight
+  // run's posts both ways, but its rails stop flush with the terminal stakes,
+  // while a mid-run piece (mask 5) runs them one pixel past the half-tile so
+  // neighbours meet rail to rail. So the lone piece is no longer the SAME
+  // picture as the mid-run piece — it is a SUBSET of it: every pixel of ink
+  // the lone piece has, the mid-run piece has identically, and the difference
+  // is only the rail overhang.
+  assert.notEqual(j(0), j(1 | 4), 'a lone piece now finishes its rail ends');
+  {
+    const lone = PALISADE_JOINS[0].rows;
+    const mid = PALISADE_JOINS[1 | 4].rows;
+    for (let y = 0; y < lone.length; y++) {
+      for (let x = 0; x < lone[y].length; x++) {
+        if (lone[y][x] === '.') continue;
+        assert.equal(lone[y][x], mid[y][x], `lone ink at ${x},${y} is not mid-run ink`);
+      }
+    }
+  }
   // ...and the mirror pair is the mirror pair: {N,S} is {E,W} turned, which
   // is the one case the facing model DOES cover and the reason the straight
   // never needed a second drawing.
@@ -140,10 +158,30 @@ test('a straight run is the same picture whichever way it was reached', async ()
   // there and there is no raw cut to see. The rule is only about the masks
   // with exactly one neighbour, which are the only ones with an end that meets
   // nothing. That is asserted below.
-  assert.equal(j(1), j(1 | 4), 'an end should draw the straight, filling its tile');
+  // ...AND ROUND 2 REFINES IT, without reopening the old fault: an end still
+  // draws BOTH arms — all six stakes, a full tile of fence — but the rail on
+  // its open side now stops flush with the terminal stake instead of running
+  // three pixels past it into air. So an end is not the same PICTURE as a
+  // mid-run piece any more; it is a subset of one, and the only ink it lacks
+  // is the overhang that "carries nothing" (Piranesi). The run-of-five
+  // regression this paragraph guards — ends at half the lone piece's ink —
+  // cannot recur through that: the subset check pins every remaining pixel.
+  const subset = (a, b, msg) => {
+    for (let y = 0; y < a.rows.length; y++) {
+      for (let x = 0; x < a.rows[y].length; x++) {
+        if (a.rows[y][x] === '.') continue;
+        assert.equal(a.rows[y][x], b.rows[y][x], `${msg}: ink at ${x},${y}`);
+      }
+    }
+  };
+  subset(PALISADE_JOINS[1], PALISADE_JOINS[1 | 4], 'an end is the straight, minus one overhang');
+  subset(PALISADE_JOINS[0], PALISADE_JOINS[1], 'a lone piece is an end, minus the other overhang');
   const ink = (rows) => rows.split('').filter((c) => c !== '.' && c !== '\n').length;
-  assert.equal(ink(j(1)), ink(j(1 | 4)), 'an end should carry the same timber as a full run');
-  assert.equal(j(0), j(1), 'a lone piece and an end are the same picture');
+  assert.ok(
+    ink(j(0)) < ink(j(1)) && ink(j(1)) < ink(j(1 | 4)),
+    'rail ink grows only with real neighbours'
+  );
+  assert.ok(ink(j(1)) > ink(j(1 | 4)) * 0.9, 'an end still carries nearly a full tile of timber');
   // ...and a CORNER is emphatically not the straight. If a future edit ever
   // generalises the end rule to every mask, this is what fails: it would turn
   // every L into a crossroads.

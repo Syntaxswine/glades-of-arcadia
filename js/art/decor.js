@@ -506,8 +506,12 @@ function exedraGrid(ramp = ROCK) {
       const x = cx + r * Math.cos(th);
       const y = SEAT + r * (RY / RX) * Math.sin(th);
       const near = (RX - r) / DEPTH;
-      // The wall's cast shadow along the back of the seat, then the seat top.
-      put(g, x, y, near < 0.22 ? ramp[1] : ramp[n]);
+      // From the wall outward: the shadow slot where wall meets base, then the
+      // PLINTH COURSE the wall stands on — a mid-value band the marble
+      // exedra's krepis promised this one — then the bright seat. Piranesi,
+      // round 2: *"the wall still springs from bare turf."* In a concave view
+      // the plinth's only visible run is exactly this band behind the seat.
+      put(g, x, y, near < 0.09 ? ramp[1] : near < 0.3 ? ramp[3] : ramp[n]);
     }
     const ri = RX - DEPTH;
     const xi = cx + ri * Math.cos(th);
@@ -515,6 +519,20 @@ function exedraGrid(ramp = ROCK) {
     put(g, xi, yi + 1, ramp[1]); // the seat's front edge: a slab has thickness
     put(g, xi, yi + 2, ramp[1]);
     put(g, xi, yi + 3, ramp[0]);
+  }
+
+  // THREE SUPPORTS under the seat's front edge — Piranesi, round 2: *"the
+  // bench within hangs as a curved shelf over pure shadow with nothing beneath
+  // it."* Squat blocks, held light against the drop shadow they stand in.
+  for (const a of [238, 270, 302]) {
+    const th = (a * Math.PI) / 180;
+    const ri = RX - DEPTH;
+    const x = cx + ri * Math.cos(th);
+    const y = SEAT + ri * (RY / RX) * Math.sin(th);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let k = 4; k <= 6; k++) put(g, x + dx, y + k, dx === 1 ? ramp[2] : ramp[3]);
+      put(g, x + dx, y + 7, ramp[0]);
+    }
   }
 
   // Back wall: low, dark, lit the OTHER way round because it is a concave
@@ -548,6 +566,22 @@ function exedraGrid(ramp = ROCK) {
       }
       put(g, x, foot - WALL - 2, ramp[0]);
       put(g, x, foot - WALL - 1, ramp[n]);
+      put(g, x, foot + 7, ramp[0]);
+    }
+    // The pier's STEPPED FOOT: two courses spreading outward into the ground,
+    // each with a lit top pixel, so the arm stands on a plinth rather than
+    // dropping straight into turf. Piranesi, round 2: the wall "springs from
+    // bare turf while its marble cousin stands on a proper krepis."
+    // Held LIGHT, not dark: the feet stand inside the drop shadow's ellipse,
+    // and a dark foot against a dark shadow is no foot at all.
+    for (const [wOut, kTop] of [
+      [5, 2],
+      [6, 4],
+      [7, 5],
+    ]) {
+      const x = x0 + wOut * dir;
+      put(g, x, foot + kTop, ramp[n]);
+      for (let k = kTop + 1; k <= 6; k++) put(g, x, foot + k, ramp[3]);
       put(g, x, foot + 7, ramp[0]);
     }
   }
@@ -894,19 +928,35 @@ const KRATER_PROFILE = [
   14, 14, 13, //                     flaring lip
   12, 12, 12, 11, 11, 11, 10, 10, 10, 9, 9, // the bowl, barely tapering: a
   8, 7, 5, 4, 3, 3, //               krater is WIDE, and a bowl drawn with a
-  5, 7, 9, 10, //                    steep taper reads as a trophy
+  5, 5, //                           the FILLET ring: the declared bowl/stem
+  //                                 joint — proud of the waist above AND the
+  //                                 neck below, or it is just a step in the
+  //                                 flare and reads as nothing (round 3)
+  3, //                              the neck under the fillet
+  7, 9, 10, //                       steep taper reads as a trophy
   10, 9,
 ];
 function kraterGrid() {
   const g = grid(32, KRATER_PROFILE.length + 6);
   const cx = 15;
   revolve(g, cx, 1, KRATER_PROFILE, { ramp: TERRA });
-  // The mouth: a dark elliptical well, so the bowl is empty rather than solid.
-  for (let dy = -3; dy <= 3; dy++) {
-    const hw = Math.round(11 * Math.sqrt(Math.max(0, 1 - (dy * dy) / 9)));
+  // The mouth: a dark 4:1 elliptical well with a lit lip along its upper-left
+  // arc. Round 2: *"the mouth is a flat horizontal bar, a table-edge where an
+  // ellipse must be"* — the well was 7 rows tall on 22 wide and its flat 'P'
+  // top read as a bar; 5 rows and a curved highlight read as an opening.
+  for (let dy = -2; dy <= 2; dy++) {
+    const hw = Math.round(11 * Math.sqrt(Math.max(0, 1 - (dy * dy) / 6.25)));
     for (let dx = -hw; dx <= hw; dx++) put(g, cx + dx, 3 + dy, dy < 0 ? 'P' : 'Q');
   }
+  for (let dx = -10; dx <= 1; dx++) {
+    const dy = -Math.round(2 * Math.sqrt(Math.max(0, 1 - (dx * dx) / 121)));
+    put(g, cx + dx, 3 + dy, 'S');
+  }
   hline(g, cx - 12, cx + 12, 1, 'Q');
+  // The fillet reads as a TURNED RING: a lit band across its full width and a
+  // dark line beneath, where the ring shades the neck (round 3's exact ask).
+  hline(g, cx - 5, cx + 5, 1 + 20, 'S');
+  hline(g, cx - 3, cx + 3, 1 + 22, 'P');
   // Volute handles.
   // Volute handles rise ABOVE the lip and scroll back down outside it. Drawn
   // below the lip, as in the first pass, they are invisible against the bowl.
@@ -1138,6 +1188,22 @@ function arbourSeatGrid() {
     const ly = SEAT + LINE_DROP(i) + (D - 2) + 4;
     for (let k = 0; k < 8; k++) hline(g, lx, lx + 7, ly + k, k === 0 ? 'E' : k === 7 ? 'A' : 'C');
   }
+  // The third leg, under the seat's near-right corner. Piranesi, round 2:
+  // *"its near-right end projects well past any support... a seat must not
+  // cantilever into faith."* Narrow, at the slab's own near depth, straight to
+  // the ground line the other legs stand on.
+  // At the FAR edge (b = 0), because that is the corner that hangs: a +tx slab
+  // reaches down-right at b = 0, so the projecting tip is the far-right one.
+  {
+    const lx = X0 + LEN - 5;
+    const ly = SEAT + LINE_DROP(LEN - 3) + 4;
+    for (let k = 0; k < 9; k++) {
+      put(g, lx, ly + k, 'C');
+      put(g, lx + 1, ly + k, 'C');
+      put(g, lx + 2, ly + k, 'A');
+    }
+    put(g, lx + 1, ly + 9, 'A');
+  }
   slabBackEdge(g, X0, SEAT, LEN, 'A');
   slab(g, X0, SEAT, LEN, D, (a, b) => (b < 1 ? 'D' : 'E'));
   slabFace(g, X0, SEAT, LEN, D, 3, (i, k) => (k === 2 ? 'A' : 'C'));
@@ -1306,11 +1372,17 @@ const CORINTH_ROWS = [
   '..AAAAAAAAAAAAAAAAAA..',
   '.AEEEEEEEEEEEEEEEEEEA.',
   '.ACCCCCCCCCCCCCCCCCCA.',
-  'AEEDAADEEDAADEEDAADEEA',
+  // The notch TOPS are 'EA', not 'AA': a leaf tip curls out into the light, so
+  // the topmost pixel of each dark mass is the capital's lightest value with a
+  // 1px undercut shadow beneath it. Piranesi, round 2: "leaves read
+  // light-over-dark, never dark-in-light" — dark-topped notches were sockets.
+  // BOTH notch-top pixels light, not one: 'EA' pairs left a dark column
+  // running tip-to-undercut and the leaves still read as sockets (round 3).
+  'AEEDEEDEEDEEDEEDEEDEEA',
   'ADEDABADEDABADEDABADEA',
   'ABDCABABDCABABDCABABDA',
   '.ABCAAABCCAAABCCAAABA.',
-  '.ADEEDAADEEDAADEEDDDA.',
+  '.ADEEDEEDEEDEEDEEDDDA.',
   '..ADEDABADEDABADEDDA..',
   '..ABDCABABDCABABDCBA..',
   '..AABCAAABCCAAABCBAA..',
@@ -1469,21 +1541,27 @@ function colonnadeSolid() {
   const x0 = X0 + PAD;
   const yTop = TOP + PAD;
 
-  // Architrave, then a cornice with its own oversail and a dentil course. The
-  // dentils have a period of 4 px in grid x and a tile step is 32, so they run
-  // on unbroken from one piece to the next in either axis.
-  const face = (k, x) => {
-    const r = Math.round(k) - 1;
-    if (r >= 4) return 'A';
-    if (r === 3) return (x & 3) < 2 ? 'C' : 'B'; // dentils
-    if (r === 2) return 'B'; //                    the shadow under the cornice
-    return r <= 0 ? 'D' : 'C';
+  // TWO COURSES, NOT ONE SLAB. Piranesi, round 2: *"one extruded plank with no
+  // cornice proud of a frieze... the beam floats rather than bears."* So the
+  // cornice is its own layer, grown 1 proud of the frieze (the arcade's CORONA
+  // move), its bottom row the drip shadow; and the lower block's bottom row is
+  // the darkest value — the soffit line where the beam's underside meets air
+  // and capitals. Dentils keep their 4 px period so they run on across pieces.
+  const ENTB_LOW = {
+    top: (a, b) => (b < 1 ? 'D' : 'E'), // seen only where the cornice stops
+    side: (a, k, x) => {
+      const r = Math.round(k) - 1;
+      if (r <= 0) return (x & 3) < 2 ? 'C' : 'B'; // dentils, right under the drip
+      return r === 1 ? 'C' : 'A'; //                 frieze, then the soffit line
+    },
+    end: (b, k) => ['B', 'B', 'A'][clamp(Math.round(k) - 1, 0, 2)],
   };
-  const ENTABLATURE = {
+  const CORNICE = {
     top: (a, b) => (b < 1 ? 'D' : 'E'),
-    side: (a, k, x) => face(k, x),
-    // The cut end, one step darker: it turns down-right, away from the light.
-    end: (b, k, x) => ['C', 'B', 'B', 'A', 'A'][clamp(Math.round(k) - 1, 0, 4)],
+    // The lit fillet, then the shadow it casts: two values darker than the
+    // frieze's C, which is what a 1 px oversail earns under upper-left light.
+    side: (a, k) => (Math.round(k) - 1 <= 0 ? 'E' : 'A'),
+    end: (b, k) => ['C', 'A'][clamp(Math.round(k) - 1, 0, 1)],
   };
 
   const studs = (g, { axis, t0, t1, at, project, mask }) => {
@@ -1539,7 +1617,11 @@ function colonnadeSolid() {
     yTop,
     w: X0 + PAD + LINE_W + PAD + 3,
     h: TOP + PAD + Math.ceil(R) + D + H + 14,
-    layers: [{ studs }, { c0: H - 5, c1: H, faces: ENTABLATURE }],
+    layers: [
+      { studs },
+      { c0: H - 5, c1: H - 2, faces: ENTB_LOW },
+      { c0: H - 2, c1: H, faces: CORNICE, grow: 1 },
+    ],
   };
   const tags = ['decor', 'architecture', 'marble', 'neoclassical', 'column'];
   const joins = Object.freeze(
@@ -2121,9 +2203,14 @@ function balustradeSolid() {
    * that actually show under the handrail.
    */
   const HIDDEN = [1, 1, 1, 1, 1, 1, 1, 1]; //          c 17..10, up inside the rail
-  const TURNED = [1, 1, 2, 2, 2, 1, 1, 2]; //          c  9.. 2, neck belly waist base
+  // NECK 1, BELLY 3, WAIST 1, BASE 2-3 — a baluster swells because it works.
+  // Piranesi, round 2: *"thin drips of uniform width... a baluster is a small
+  // column with a belly."* The old belly (2 against a neck of 1) never read at
+  // game scale; and the foot now ends in a stepped base block so every shaft
+  // visibly LANDS on the bottom rail instead of dissolving above it.
+  const TURNED = [1, 1, 3, 3, 2, 1, 2, 3]; //          c  9.. 2, neck belly waist base
   const PROFILE = [...HIDDEN, ...TURNED];
-  const NEWEL = [...HIDDEN, 2, 2, 3, 3, 3, 2, 2, 3]; // stouter: a corner post
+  const NEWEL = [...HIDDEN, 2, 2, 4, 4, 3, 2, 3, 4]; // stouter: a corner post
   const studs = (g, { axis, t0, t1, at, project, turning }) => {
     if (axis === 'hub') {
       // ONLY WHERE IT REALLY TURNS. `solidJoins` used to gate this and now
@@ -2155,7 +2242,10 @@ function balustradeSolid() {
     layers: [
       { c0: 0, c1: 2, faces: rail('C', 'D', ['C', 'A'], ['B', 'A']) }, // plinth
       { studs }, //                                                     turned stone
-      { c0: 14, c1: 17, faces: rail('D', 'E', ['D', 'B', 'A'], ['C', 'B', 'A']) }, // handrail
+      // One row deeper than the hand version, and the extra row is 'A': the
+      // undercut shadow directly beneath the handrail, which is what makes the
+      // rail sit ON the balusters rather than hover over them.
+      { c0: 13, c1: 17, faces: rail('D', 'E', ['D', 'B', 'A', 'A'], ['C', 'B', 'A', 'A']) }, // handrail
     ],
   };
   const tags = ['decor', 'architecture', 'marble', 'neoclassical', 'enclosure', 'nullifier'];
@@ -2301,11 +2391,16 @@ function archwayGrid({ ruined, ramp, seed }) {
   // WHERE THE RING IS GONE. Ragged rather than clean, and it leaves a short
   // stub standing on the springing — a break that stops exactly at the impost
   // reads as a design, not as a collapse.
+  // SQUARED, NOT RAGGED. Piranesi, round 2: *"ruin as erasure... stone does
+  // not sag, it snaps."* A break that wanders with a hash reads as dough; a
+  // real collapse breaks along the radial joints, so the break line is STEPPED
+  // — the outer half of the ring lets go one voussoir later than the inner
+  // half, two square steps and nothing in between.
   const BREAK = 1.15;
+  const breakAt = (r) => BREAK + (r > (RI + RO) / 2 ? 0.18 : 0);
   const gone = (th, r) => {
     if (!ruined) return false;
-    const ragged = BREAK + (hash(Math.round(r * 3), Math.round(th * 20), seed + 3) - 0.5) * 0.3;
-    return th < ragged && th > 0.3;
+    return th < breakAt(r) && th > 0.3;
   };
 
   const inside = (a, c) => {
@@ -2316,8 +2411,11 @@ function archwayGrid({ ruined, ramp, seed }) {
       // THE IMPOST, and it is what stops this reading as a staple. A pier the
       // same width as the ring it carries has no visible moment of "the arch
       // starts here"; every real one is a projecting course at the springing
-      // over a pier slightly stouter than the arch. Two pixels of each.
-      const outer = c > SPRING - 2.5 ? RO + 1.1 : RO + 0.5;
+      // over a pier slightly stouter than the arch. Piranesi, round 2: the old
+      // 0.6 of projection "melts into the pier" — 1.1 proud of the pier face
+      // reads as a band, and the skin below lights its top row and darkens its
+      // seat so the moment of bearing is drawn, not implied.
+      const outer = c > SPRING - 2.6 ? RO + 1.6 : RO + 0.5;
       if (w < RI || w > outer) return false;
       // The ruin loses courses off the top of its broken pier, and both piers
       // lose their arrises. Never below c = 3: a pier eaten at the ground reads
@@ -2350,8 +2448,18 @@ function archwayGrid({ ruined, ramp, seed }) {
       const seg = above ? (th / Math.PI) * 7 : c / 5;
       const joint = Math.abs(seg - Math.round(seg)) < (above ? 0.11 : 0.13);
       v = n - 1.1 - ((r - RI) / (RO - RI)) * 0.8;
+      // THE FACE TURNS TOO. Piranesi, round 2: *"an arch turning through 180
+      // degrees under upper-left light cannot show one flat lightness"* — the
+      // ring's face takes the same angular term as the extrados, gentler,
+      // so the crown-left lightens and the right-descending third darkens.
+      if (above) v += (Math.sin(th) - Math.cos(th) / 2) * 0.9 - 0.4;
       if (joint) v -= 1.8;
       if (r > RO - 0.9 || r < RI + 0.7) v -= 1; // the arrises
+      // The impost band: lit fillet over a seated shadow.
+      if (!above && c > SPRING - 2.6) v = c > SPRING - 1.3 ? n - 0.4 : v - 1.2;
+      // The break FACE, where the ring snapped: the exposed radial cut turns
+      // away from the light and reads two values darker than the ring face.
+      if (ruined && above && th > 0.3 && th < breakAt(r) + 0.28) v -= 1.8;
     } else if (r > MID) {
       // THE EXTRADOS. Lit by ANGLE, not by a constant: the light is upper left,
       // +a runs down-right and +c is up, so a surface whose outward normal is
@@ -2381,6 +2489,25 @@ function archwayGrid({ ruined, ramp, seed }) {
     },
     { x0, yTop, lift: H }
   );
+
+  // WHAT FELL IS RECORDED. Piranesi, round 2: *"the grass below is swept clean
+  // as a ballroom; nothing that fell is anywhere recorded."* Two voussoir
+  // blocks lie in the opening where the broken springing would have dropped
+  // them: lit top course, mid flank, and a dark contact row into the turf.
+  if (ruined) {
+    const gx = x0 + 16 - D;
+    const gy = yTop + LINE_DROP(16) + D + H - 1;
+    const block = (bx, by, w, h) => {
+      for (let dy = 0; dy <= h; dy++) {
+        for (let dx = 0; dx <= w - (dy === 0 ? 1 : 0); dx++) {
+          put(g, bx + dx, by + dy, dy === h ? ramp[1] : dy === 0 ? key(n - 1) : key(n - 2.2));
+        }
+      }
+      put(g, bx + ((w / 2) | 0), by + 1, ramp[1]); // one radial joint line
+    };
+    block(gx - 9, gy - 4, 6, 3);
+    block(gx + 1, gy - 3, 7, 3);
+  }
 
   // Moss in the shaded joints, on the ruin only. Archaic register: nothing here
   // is allowed to be clean.
@@ -4890,6 +5017,10 @@ function axeMarkerGrid() {
       // very square one, so the highlight sits a third in from the lit edge
       // and the shadow side keeps two full steps.
       let k = roundKey(dx, hw + 0.5, ROCK);
+      // The left flank answers the sun. Piranesi, round 2: *"the left flank
+      // also ignores the upper-left sun, sitting nearly as dark as the right"*
+      // — one palette step up across the lit third, cap to base.
+      if (dx < -hw * 0.33) k = ROCK[clamp('vwxy'.indexOf(k) + 1, 0, 3)];
       // Rough-hewn: the tool marks are horizontal, because that is how a
       // stone is dressed, and they are broken, because it was done by hand.
       if (hash(Math.round(dx / 2), y, 311) > 0.88) k = ROCK[clamp('vwxy'.indexOf(k) - 1, 0, 3)];
@@ -4950,7 +5081,10 @@ function axeMarkerGrid() {
       const y = PY + 1 + j;
       if (peek(g, x, y) === '.') continue;
       const edge = !solid(i - 1, j) || !solid(i + 1, j) || !solid(i, j - 1) || !solid(i, j + 1);
-      put(g, x, y, edge ? ROCK[0] : ROCK[1]);
+      // The BLADE rows (the top six) cut a step deeper than the haft: without
+      // that mass the glyph read as "two crossed scratches... an X of erasure"
+      // (Piranesi, round 2). The lit arris below keeps it a carving, not a stain.
+      put(g, x, y, edge || j < 6 ? ROCK[0] : ROCK[1]);
       if (edge && !solid(i - 1, j - 1) && peek(g, x - 1, y - 1) === ROCK[2]) put(g, x - 1, y - 1, ROCK[3]);
     }
   }

@@ -645,26 +645,43 @@ Open: the arcade's corner seam and its corner column; Doric where the reference
 is Corinthian; `stepped-terrace-wall` still cannot bend; the mirror's light
 inversion; the one-pixel elbow seam shared by hedge, balustrade and colonnade.
 
-## 4u · THE PIRANESI QUEUE — round 1 done, loop OPEN (2026-08-05)
+## 4u · THE PIRANESI QUEUE ✅ ALL APPROVED (2026-08-05, evening — five rounds)
 
 The owner: *"keep looping and updating all the sprites until a subagent styled
-after Giovanni Battista Piranesi approves all the designs."* Round 1: 47
-sprites reviewed, 17 approved, 30 rejected; the arcade and bridge rejections
-are FIXED (`e878cfc..4b1661e`). The remaining ~26, worst first per batch —
-full critiques and the smallest-change prescriptions are in the 08-05
-gardenshot handoff §5, which also lists what he ordered LEFT ALONE:
+after Giovanni Battista Piranesi approves all the designs."* DONE — the loop
+ran to the condition. Round 2 re-critiqued the whole queue fresh (4 sprites
+had already earned approval: shell-fountain, stone-bench, grave-stele,
+pergola); rounds 3-5 fixed and re-submitted the remaining 24 until every
+verdict read APPROVED. Highlights of what changed, per batch:
 
-* palisade-fence · exedra · dry-stone-wall (walls/seats batch)
-* shell-fountain · grotto-basin · votive-shelf (water batch)
-* seated-maiden · sleeping-satyr · mask-idol (figures batch)
-* then: ruined-arch rubble, archway impost, colonnade cornice split,
-  corinthian flare, balustrade bulge, stone-bench, tumulus far kerb,
-  grave-stele, pergola vine, arbour-seat, palisade-gate, stone-fountain,
-  sundial shadow, pan-nymph-altar, axe-marker, krater, wide-krater,
-  pithos handle, fallen-torso.
+* ARCHITECTURE: ruined-arch — squared stepped radial break, darker break
+  faces, two fallen voussoirs on the grass; archway — proud impost band,
+  ring face lit by angle; colonnade — cornice layer grown 1 proud with drip
+  shadow + dark soffit line; corinthian — light-over-dark leaf tips (both
+  notch pixels, 'EA' pairs still read as sockets); balustrade — 3px bellies,
+  base blocks, undercut row (handrail c0 14→13).
+* WALLS/SEATS: palisade rails stop at terminal stakes (ends are now a strict
+  SUBSET of mid-run pieces — test reversal recorded in joining.test.mjs);
+  exedra — stepped pier feet, plinth band, three seat supports; drystone —
+  courses indexed by k not screen y (screen-horizontal joints on a sheared
+  face ARE the diagonal slashes), end faces untrimmed; tumulus — kerb wraps
+  both tips (far-arc heads float — tried rim AND horizon, the crown occludes
+  both); arbour third leg at the far-b corner; gate brace on the OPPOSING
+  diagonal (with-pitch braces read as a fourth rail).
+* WATER/MARKERS: grotto pool + glint; votive shelf top face + boulder
+  grounded; stone-fountain jet with WHITE apex ('E', not stone 'y');
+  sundial 4:1 plate + cast shadow; altar footing clipped flat (the faces'
+  own diamond V was the knife-edge); axe blade mass + lit left flank.
+* FIGURES/VESSELS: maiden rebuilt (lap shelf + 2:1 plinth); satyr slab seam
+  course; mask-idol plinth (also the last 'm' skirt in props.js); krater
+  mouth opened + spreading foot; wide-krater 4:1 mouth + fillet ring (a
+  fillet not proud of BOTH neighbours is invisible); pithos daylight gap;
+  fallen-torso rebuilt lying on the diagonal + `shadow: 5` stated radius
+  (a lying fragment's measured contact radius is half the sprite).
 
-Method: gardenshot render → fix from his prescription → re-render → batch
-re-critique → repeat until ALL APPROVED. Do not stop after one pass.
+Two iso-ground catches during the pass (krater base, idol plinth) were the
+guard working — flat bottoms rounded. What he ordered LEFT ALONE is still
+listed in the 08-05 gardenshot handoff §5; it still stands.
 
 ## 4s · LAYERS, STUDS, AND THE VAULT ✅ (2026-08-05)
 
